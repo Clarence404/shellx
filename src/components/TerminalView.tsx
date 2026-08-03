@@ -20,16 +20,37 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     let cancelled = false;
 
     const term = new Terminal({
-      fontFamily: "var(--font-mono)",
+      fontFamily: '"JetBrains Mono", "SF Mono", Consolas, monospace',
       fontSize: 13,
+      lineHeight: 1.2,
+      cursorBlink: true,
+      cursorStyle: "block",
+      cursorInactiveStyle: "outline",
+      convertEol: false,
+      scrollback: 5000,
       theme: {
         background: "#1e1c24",
         foreground: "#d4d0dc",
         cursor: "#7c5cff",
+        cursorAccent: "#ffffff",
         selectionBackground: "rgba(124,92,255,0.3)",
+        black: "#2a2830",
+        red: "#f28779",
+        green: "#a6e3a1",
+        yellow: "#f2c8a2",
+        blue: "#58d3fc",
+        magenta: "#7c5cff",
+        cyan: "#89dceb",
+        white: "#d4d0dc",
+        brightBlack: "#8b869a",
+        brightRed: "#ff9080",
+        brightGreen: "#b8ecb0",
+        brightYellow: "#f5d1af",
+        brightBlue: "#68dcf9",
+        brightMagenta: "#a08bff",
+        brightCyan: "#95e5f0",
+        brightWhite: "#eeeaef",
       },
-      convertEol: false,
-      cursorBlink: true,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
