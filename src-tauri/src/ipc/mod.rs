@@ -2,6 +2,7 @@
 //! forwards each session's byte stream to the frontend as events.
 
 pub mod events;
+pub mod hosts;
 
 use crate::error::Result;
 use crate::protocol::{AuthConfig, AuthMethod};

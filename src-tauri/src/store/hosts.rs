@@ -37,17 +37,17 @@ pub struct HostUpdate {
     pub host: Option<String>,
     pub port: Option<u16>,
     pub username: Option<String>,
-    #[serde(default, deserialize_with = "double_option::deserialize")]
+    #[serde(default, deserialize_with = "double_option_deserialize")]
     pub notes: Option<Option<String>>,  // None = leave unchanged; Some(None) = clear; Some(Some(s)) = set
 }
 
-// Serde support for triple-state Option<Option<T>>
-mod double_option {
-    use serde::{Deserialize, Deserializer};
-    pub fn deserialize<'de, T, D>(d: D) -> Result<Option<Option<T>>, D::Error>
-    where T: Deserialize<'de>, D: Deserializer<'de> {
-        Deserialize::deserialize(d).map(Some)
-    }
+// Serde support for triple-state Option<Option<T>>.
+// Note: this is `std::result::Result` (two generic params), not the crate's
+// `Result<T>` alias imported above — the deserializer's error type is
+// `D::Error`, unrelated to `crate::error::Error`.
+pub fn double_option_deserialize<'de, T, D>(d: D) -> std::result::Result<Option<Option<T>>, D::Error>
+where T: serde::Deserialize<'de>, D: serde::Deserializer<'de> {
+    serde::Deserialize::deserialize(d).map(Some)
 }
 
 pub struct HostStore {
