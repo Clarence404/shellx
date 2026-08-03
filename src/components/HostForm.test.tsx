@@ -10,6 +10,7 @@ vi.mock("../state/hosts", () => ({
       addHost: vi.fn().mockResolvedValue({
         id: "id-1", label: "l", host: "h", port: 22, username: "u",
         notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
+        password_stored: true,
       }),
       updateHostById: vi.fn(),
     }),

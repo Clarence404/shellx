@@ -37,14 +37,33 @@ describe("hosts store", () => {
     (ipc.saveHost as any).mockResolvedValue({
       id: "b", label: "new", host: "h", port: 22, username: "u",
       notes: null, created_at: 200, last_connected_at: null, sort_order: 200,
+      password_stored: true,
     });
 
-    await useHostsStore.getState().addHost({
+    const result = await useHostsStore.getState().addHost({
       label: "new", host: "h", port: 22, username: "u",
     });
     expect(ipc.saveHost).toHaveBeenCalledOnce();
     expect(useHostsStore.getState().hosts).toHaveLength(1);
     expect(useHostsStore.getState().hosts[0].id).toBe("b");
+    expect(result.password_stored).toBe(true);
+  });
+
+  it("addHost() surfaces password_stored=false without dropping the saved host from state", async () => {
+    (ipc.saveHost as any).mockResolvedValue({
+      id: "c", label: "new2", host: "h", port: 22, username: "u",
+      notes: null, created_at: 300, last_connected_at: null, sort_order: 300,
+      password_stored: false,
+    });
+
+    const result = await useHostsStore.getState().addHost({
+      label: "new2", host: "h", port: 22, username: "u", password: "secret",
+    });
+    expect(result.password_stored).toBe(false);
+    expect(useHostsStore.getState().hosts).toHaveLength(1);
+    expect(useHostsStore.getState().hosts[0].id).toBe("c");
+    // password_stored must not leak into stored HostInfo
+    expect((useHostsStore.getState().hosts[0] as any).password_stored).toBeUndefined();
   });
 
   it("deleteHostById() removes from state", async () => {

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { HostInfo, SaveHostArgs, UpdateHostArgs } from "../types/host";
+import type { HostInfo, HostSaveResult, SaveHostArgs, UpdateHostArgs } from "../types/host";
 import * as ipc from "../ipc/hosts";
 
 interface HostsState {
@@ -8,8 +8,8 @@ interface HostsState {
   loaded: boolean;
 
   load: () => Promise<void>;
-  addHost: (args: SaveHostArgs) => Promise<HostInfo>;
-  updateHostById: (args: UpdateHostArgs) => Promise<HostInfo>;
+  addHost: (args: SaveHostArgs) => Promise<HostSaveResult>;
+  updateHostById: (args: UpdateHostArgs) => Promise<HostSaveResult>;
   deleteHostById: (id: string) => Promise<void>;
   setKeychainAvailable: (b: boolean) => void;
 }
@@ -28,17 +28,19 @@ export const useHostsStore = create<HostsState>((set) => ({
   },
 
   addHost: async (args) => {
-    const inserted = await ipc.saveHost(args);
-    set((st) => ({ hosts: [...st.hosts, inserted] }));
-    return inserted;
+    const result = await ipc.saveHost(args);
+    const { password_stored, ...host } = result;
+    set((st) => ({ hosts: [...st.hosts, host] }));
+    return result;
   },
 
   updateHostById: async (args) => {
-    const updated = await ipc.updateHost(args);
+    const result = await ipc.updateHost(args);
+    const { password_stored, ...host } = result;
     set((st) => ({
-      hosts: st.hosts.map((h) => (h.id === updated.id ? updated : h)),
+      hosts: st.hosts.map((h) => (h.id === host.id ? host : h)),
     }));
-    return updated;
+    return result;
   },
 
   deleteHostById: async (id) => {

@@ -40,6 +40,17 @@ pub struct GetHostPasswordArgs {
     pub id: Uuid,
 }
 
+/// Wraps a `HostRecord` with a flag indicating whether the intended
+/// keychain password state (set/deleted/unchanged) was actually achieved.
+/// `#[serde(flatten)]` keeps the JSON shape identical to `HostRecord` plus
+/// one extra `password_stored: boolean` field.
+#[derive(serde::Serialize)]
+pub struct HostSaveResult {
+    #[serde(flatten)]
+    pub host: HostRecord,
+    pub password_stored: bool,
+}
+
 #[tauri::command]
 pub async fn list_hosts(store: State<'_, HostStore>) -> Result<Vec<HostRecord>> {
     store.list().await
@@ -50,7 +61,7 @@ pub async fn save_host(
     args: SaveHostArgs,
     store: State<'_, HostStore>,
     keychain: State<'_, KeychainStore>,
-) -> Result<HostRecord> {
+) -> Result<HostSaveResult> {
     let record = store
         .insert(NewHost {
             label: args.label,
@@ -60,11 +71,13 @@ pub async fn save_host(
             notes: args.notes,
         })
         .await?;
-    if let Some(pw) = args.password.filter(|p| !p.is_empty()) {
-        // If keychain unavailable, ignore silently — the host was saved without password
-        let _ = keychain.set_password(record.id, &pw);
-    }
-    Ok(record)
+    let password_stored = match args.password.filter(|p| !p.is_empty()) {
+        // Keychain write attempted — success reflects whether it actually landed.
+        Some(pw) => keychain.set_password(record.id, &pw).is_ok(),
+        // No password was supplied, so there is nothing to store — trivially satisfied.
+        None => true,
+    };
+    Ok(HostSaveResult { host: record, password_stored })
 }
 
 #[tauri::command]
@@ -72,7 +85,7 @@ pub async fn update_host(
     args: UpdateHostArgs,
     store: State<'_, HostStore>,
     keychain: State<'_, KeychainStore>,
-) -> Result<HostRecord> {
+) -> Result<HostSaveResult> {
     let updated = store
         .update(
             args.id,
@@ -85,18 +98,20 @@ pub async fn update_host(
             },
         )
         .await?;
-    match args.password {
-        None => {} // absent — leave keychain unchanged
+    // `password_stored` means "the intended keychain state was achieved" —
+    // it is false only when a keychain write/delete we attempted failed.
+    let password_stored = match args.password {
+        None => true, // absent — leave keychain unchanged, nothing to do
         Some(None) => {
-            // null — delete
-            let _ = keychain.delete_password(args.id);
+            // null — delete the stored password
+            keychain.delete_password(args.id).is_ok()
         }
         Some(Some(pw)) if !pw.is_empty() => {
-            let _ = keychain.set_password(args.id, &pw);
+            keychain.set_password(args.id, &pw).is_ok()
         }
-        Some(Some(_)) => {} // empty string — treat as no-op
-    }
-    Ok(updated)
+        Some(Some(_)) => true, // empty string — treat as no-op, unchanged
+    };
+    Ok(HostSaveResult { host: updated, password_stored })
 }
 
 #[tauri::command]

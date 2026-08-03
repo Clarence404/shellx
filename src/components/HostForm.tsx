@@ -44,11 +44,15 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     try {
       if (mode === "edit" && initial) {
         // Edit: save DB + optionally keychain, do NOT reconnect
-        await updateHostById({
+        const result = await updateHostById({
           id: initial.id,
           label, host, port: Number(port), username,
           password: password.length > 0 ? password : undefined, // undefined = leave unchanged
         });
+        if (!result.password_stored) {
+          setErr("Host saved, but password storage failed. Try again or connect manually.");
+          return;
+        }
         onDone("saved");
       } else {
         // Create mode
@@ -58,6 +62,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             label, host, port: pn, username,
             password: (rememberPassword && canRememberPw) ? password : undefined,
           });
+          if (!inserted.password_stored) {
+            setErr("Host saved, but password storage failed. Try again or connect manually.");
+            return;
+          }
           // Connect using the saved host
           const info = await openSshSession({
             host, port: pn, username, password, label,
