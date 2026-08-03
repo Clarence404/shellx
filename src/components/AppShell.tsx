@@ -5,17 +5,19 @@ import { TabBar, type Tab } from "./TabBar";
 
 export function AppShell({
   tabs = [], activeTabId = null, onTabSelect = () => {}, onTabClose = () => {},
+  onNewConnection,
   children,
 }: {
   tabs?: Tab[]; activeTabId?: string | null;
   onTabSelect?: (id: string) => void; onTabClose?: (id: string) => void;
+  onNewConnection?: () => void;
   children?: ReactNode;
 }) {
   const [view, setView] = useState<RailView>("hosts");
   return (
     <div style={{ height: "100vh", display: "flex" }}>
       <ActivityRail activeView={view} onSelect={setView} />
-      <Drawer view={view} />
+      <Drawer view={view} onNewConnection={onNewConnection} />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--panel-2)" }}>
         <TabBar tabs={tabs} activeTabId={activeTabId}
           onSelect={onTabSelect} onClose={onTabClose} />
