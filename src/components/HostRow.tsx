@@ -1,0 +1,83 @@
+import { MoreHorizontal } from "lucide-react";
+import { useState } from "react";
+import { HostContextMenu } from "./HostContextMenu";
+import type { HostInfo } from "../types/host";
+
+interface Props {
+  host: HostInfo;
+  isConnected: boolean;
+  onConnect: () => void;
+  onEdit: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}
+
+export function HostRow({ host, isConnected, onConnect, onEdit, onDuplicate, onDelete }: Props) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [hovered, setHovered] = useState(false);
+
+  const items = [
+    { label: "Connect", onClick: onConnect },
+    { label: "Edit", onClick: onEdit },
+    { label: "Duplicate", onClick: onDuplicate },
+    { label: "Delete", onClick: onDelete, variant: "danger" as const },
+  ];
+
+  function handleContextMenu(e: React.MouseEvent) {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
+  }
+
+  function handleMoreClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setMenu({ x: rect.right, y: rect.bottom + 4 });
+  }
+
+  return (
+    <>
+      <button
+        aria-label={host.label}
+        aria-describedby={isConnected ? `conn-status-${host.id}` : undefined}
+        onClick={onConnect}
+        onContextMenu={handleContextMenu}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          width: "100%", padding: "6px 8px", borderRadius: 5,
+          fontSize: 12, color: "var(--text-1)",
+          display: "flex", alignItems: "center", gap: 8,
+          background: hovered ? "var(--border)" : "transparent",
+          textAlign: "left",
+        }}>
+        <span
+          data-testid={`conn-status-${host.id}`}
+          data-connected={String(isConnected)}
+          style={{
+            width: 6, height: 6, borderRadius: "50%",
+            background: "var(--accent)",
+            opacity: isConnected ? 1 : 0.3,
+          }} />
+        <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {host.label}
+        </span>
+        <span
+          onClick={handleMoreClick}
+          style={{
+            color: "var(--text-3)",
+            opacity: hovered ? 1 : 0,
+            transition: "opacity 0.1s",
+            padding: "0 2px",
+          }}>
+          <MoreHorizontal size={12} strokeWidth={2} />
+        </span>
+      </button>
+      {menu && (
+        <HostContextMenu
+          x={menu.x} y={menu.y} items={items}
+          onClose={() => setMenu(null)}
+        />
+      )}
+    </>
+  );
+}
