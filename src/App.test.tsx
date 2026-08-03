@@ -7,6 +7,6 @@ describe("App shell", () => {
     render(<App />);
     expect(screen.getByRole("navigation", { name: "activity rail" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
-    expect(screen.getByText(/no connections yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/a tiny, pretty terminal client/i)).toBeInTheDocument();
   });
 });

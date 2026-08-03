@@ -27,7 +27,7 @@ export function App() {
         {activeId ? (
           <TerminalView sessionId={activeId} />
         ) : (
-          <EmptyState title="No connections yet" description="Click ＋ to connect to a host." />
+          <EmptyState onNewConnection={() => setDialogOpen(true)} />
         )}
       </AppShell>
       <ConnectDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
