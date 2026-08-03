@@ -101,11 +101,11 @@ impl client::Handler for ClientHandler {
     }
 }
 
-// Shared russh-server test fixture. `pub(crate)` for now so `session::manager`'s
-// tests can reuse it too; Task 11 promotes this to `pub` (still behind the
-// `test-fixtures` feature) so out-of-crate integration tests can reach it.
+// Shared russh-server test fixture. Promoted to `pub` (Task 11, still behind
+// the `test-fixtures` feature) so out-of-crate integration tests can reach
+// it; `session::manager`'s in-crate tests also use it.
 #[cfg(any(test, feature = "test-fixtures"))]
-pub(crate) mod testing {
+pub mod testing {
     use russh::server::{self as srv, Auth, Server as _, Session as SrvSession};
     use russh::{ChannelId, MethodKind, MethodSet};
     use std::sync::Arc;
