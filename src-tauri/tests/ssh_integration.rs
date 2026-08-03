@@ -9,7 +9,7 @@ async fn e2e_open_write_read_close() {
         username: "chen".into(),
         method: AuthMethod::Password("pw".into()),
     };
-    let info = mgr.open_ssh("127.0.0.1", port, auth, "e2e".into()).await.unwrap();
+    let info = mgr.open_ssh("127.0.0.1", port, auth, "e2e".into(), None).await.unwrap();
     let mut rx = mgr.subscribe(info.id).await.unwrap();
     mgr.write(info.id, b"ping\n").await.unwrap();
     let chunk = tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv())
