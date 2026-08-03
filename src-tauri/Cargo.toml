@@ -28,6 +28,15 @@ async-trait = "0.1"
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Windows dev boxes without NASM can't build the default aws-lc-rs backend
+# (aws-lc-sys needs NASM for its assembly routines). Use the pure-Rust `ring`
+# backend instead of aws-lc-rs.
+russh = { version = "0.62.5", default-features = false, features = ["ring", "flate2", "rsa"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+bytes = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
+# Must match the rand_core major version that ssh-key/signature (russh's
+# key crates) pull in, or `PrivateKey::random`'s `CryptoRng` bound fails.
+rand = "0.10"
