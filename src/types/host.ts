@@ -28,3 +28,9 @@ export interface UpdateHostArgs {
   notes?: string | null;
   password?: string | null; // null = delete keychain entry
 }
+
+// Response for save_host/update_host: the saved/updated host plus whether the
+// intended keychain write (set/delete/unchanged) actually succeeded.
+export interface HostSaveResult extends HostInfo {
+  password_stored: boolean;
+}
