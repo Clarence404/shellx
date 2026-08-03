@@ -68,9 +68,11 @@ impl SessionManager {
     }
 
     pub async fn write(&self, id: SessionId, data: &[u8]) -> Result<()> {
-        let map = self.inner.lock().await;
-        let s = map.get(&id).ok_or(Error::Closed)?;
-        s.writer
+        let writer = {
+            let map = self.inner.lock().await;
+            map.get(&id).ok_or(Error::Closed)?.writer.clone()
+        };
+        writer
             .send(WriteCmd::Bytes(data.to_vec()))
             .await
             .map_err(|_| Error::Closed)?;
@@ -78,9 +80,11 @@ impl SessionManager {
     }
 
     pub async fn resize(&self, id: SessionId, cols: u16, rows: u16) -> Result<()> {
-        let map = self.inner.lock().await;
-        let s = map.get(&id).ok_or(Error::Closed)?;
-        s.writer
+        let writer = {
+            let map = self.inner.lock().await;
+            map.get(&id).ok_or(Error::Closed)?.writer.clone()
+        };
+        writer
             .send(WriteCmd::Resize(cols, rows))
             .await
             .map_err(|_| Error::Closed)?;
@@ -99,9 +103,9 @@ impl SessionManager {
     }
 
     pub async fn close(&self, id: SessionId) -> Result<()> {
-        let mut map = self.inner.lock().await;
-        if let Some(s) = map.remove(&id) {
-            let _ = s.writer.send(WriteCmd::Close).await;
+        let writer = self.inner.lock().await.remove(&id).map(|s| s.writer);
+        if let Some(writer) = writer {
+            let _ = writer.send(WriteCmd::Close).await;
         }
         self.subs.lock().await.remove(&id);
         Ok(())
@@ -150,7 +154,8 @@ async fn driver_loop(
                     // that happen before anyone calls subscribe() are
                     // dropped -- an explicit v0.1 simplification.
                     let chunk = std::mem::take(&mut read_buf);
-                    if let Some(tx) = subs.lock().await.get(&id) {
+                    let tx = subs.lock().await.get(&id).cloned();
+                    if let Some(tx) = tx {
                         let _ = tx.send(chunk).await;
                     }
                 }
@@ -181,5 +186,33 @@ mod tests {
         assert_eq!(info.label, "test");
         mgr.close(info.id).await.unwrap();
         assert_eq!(mgr.list().await.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn write_is_forwarded_to_subscriber() {
+        let (port, _handle) = crate::protocol::ssh::testing::start_echo_ssh_server().await;
+        let mgr = SessionManager::new();
+        let auth = AuthConfig {
+            username: "chen".into(),
+            method: AuthMethod::Password("pw".into()),
+        };
+        let info = mgr
+            .open_ssh("127.0.0.1", port, auth, "test".into())
+            .await
+            .unwrap();
+
+        let mut rx = mgr.subscribe(info.id).await.unwrap();
+        mgr.write(info.id, b"hello\n").await.unwrap();
+
+        let chunk = tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv())
+            .await
+            .expect("timed out waiting for echoed data")
+            .expect("subscription channel closed unexpectedly");
+        assert!(
+            chunk.windows(5).any(|w| w == b"hello"),
+            "expected chunk to contain b\"hello\", got {chunk:?}"
+        );
+
+        mgr.close(info.id).await.unwrap();
     }
 }
