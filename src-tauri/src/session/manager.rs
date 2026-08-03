@@ -1,3 +1,11 @@
+//! Owns live sessions keyed by UUID; drives byte pumping between the
+//! underlying protocol session and subscribers.
+//!
+//! Note: v0.1 talks to `SshProtocol` concretely rather than through a
+//! `Protocol` trait. The seam is deferred to v0.2 when a second protocol
+//! (SFTP, FTP) forces the abstraction. Callers should expect the API to
+//! shift when that lands.
+
 use crate::error::{Error, Result};
 use crate::protocol::{
     ssh::{SshProtocol, SshSession},
@@ -55,7 +63,8 @@ impl SessionManager {
         };
         let (write_tx, write_rx) = mpsc::channel::<WriteCmd>(64);
         let subs = self.subs.clone();
-        tokio::spawn(driver_loop(id, session, write_rx, subs));
+        let inner = self.inner.clone();
+        tokio::spawn(driver_loop(id, session, write_rx, subs, inner));
         let mut map = self.inner.lock().await;
         map.insert(
             id,
@@ -130,6 +139,7 @@ async fn driver_loop(
     mut session: SshSession,
     mut writes: mpsc::Receiver<WriteCmd>,
     subs: Arc<Mutex<HashMap<SessionId, mpsc::Sender<Vec<u8>>>>>,
+    inner: Arc<Mutex<HashMap<SessionId, LiveSession>>>,
 ) {
     let mut read_buf = Vec::with_capacity(4096);
     loop {
@@ -163,6 +173,14 @@ async fn driver_loop(
             },
         }
     }
+    // Every exit path above (remote EOF, I/O error, explicit Close, or the
+    // write sender being dropped) lands here. Release this session's entry
+    // from both maps so the IPC bridge's `rx.recv()` loop terminates (letting
+    // it emit `EV_CLOSED`) and `list()` stops reporting a dead session as
+    // live. `close()` already removes from `inner` itself; the second
+    // removal here is a harmless no-op in that case.
+    subs.lock().await.remove(&id);
+    inner.lock().await.remove(&id);
 }
 
 #[cfg(test)]
@@ -214,5 +232,42 @@ mod tests {
         );
 
         mgr.close(info.id).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn session_closes_when_driver_exits() {
+        let (port, _handle) = crate::protocol::ssh::testing::start_echo_ssh_server().await;
+        let mgr = SessionManager::new();
+        let auth = AuthConfig {
+            username: "chen".into(),
+            method: AuthMethod::Password("pw".into()),
+        };
+        let info = mgr
+            .open_ssh("127.0.0.1", port, auth, "test".into())
+            .await
+            .unwrap();
+
+        let mut rx = mgr.subscribe(info.id).await.unwrap();
+
+        // Drive the loop to its Close exit path (stands in for a remote EOF
+        // / I/O-error exit -- all three converge on the same cleanup code).
+        mgr.close(info.id).await.unwrap();
+
+        // The subscription channel's Sender must have been dropped from
+        // `subs` by the driver loop, so recv() resolves to None instead of
+        // hanging forever (the bug this test guards against: the IPC
+        // bridge's `while let Some(chunk) = rx.recv().await` never seeing
+        // a close and staying parked forever).
+        let closed = tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv())
+            .await
+            .expect("timed out waiting for subscription channel to close");
+        assert!(closed.is_none(), "expected subscription channel to close");
+
+        // `inner` must also have released the id so list() stops reporting
+        // a dead session as alive.
+        assert!(
+            mgr.list().await.is_empty(),
+            "expected no live sessions after driver exit"
+        );
     }
 }

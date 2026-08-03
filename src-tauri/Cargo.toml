@@ -33,8 +33,6 @@ tauri-plugin-log = "2"
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 thiserror = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Windows dev boxes without NASM can't build the default aws-lc-rs backend
 # (aws-lc-sys needs NASM for its assembly routines). Use the pure-Rust `ring`
 # backend instead of aws-lc-rs.

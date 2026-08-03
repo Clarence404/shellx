@@ -24,7 +24,7 @@ export function ActivityRail({
           style={{
             width: 24, height: 24, borderRadius: 5,
             background: activeView === it.id ? "var(--accent)" : "transparent",
-            color: activeView === it.id ? "#fff" : "var(--text-2)",
+            color: activeView === it.id ? "var(--text-on-accent)" : "var(--text-2)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 13,
           }}

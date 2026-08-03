@@ -53,7 +53,7 @@ export function ConnectDialog({ open, onClose }: { open: boolean; onClose: () =>
           </button>
           <button type="submit" disabled={busy || !host || !username}
             style={{ flex: 1, padding: "6px 10px", borderRadius: 5,
-              background: "var(--accent)", color: "#fff", fontWeight: 600 }}>
+              background: "var(--accent)", color: "var(--text-on-accent)", fontWeight: 600 }}>
             {busy ? "Connecting…" : "Connect"}
           </button>
         </div>
