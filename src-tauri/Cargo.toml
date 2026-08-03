@@ -44,7 +44,10 @@ bytes = "1"
 # Optional + gated behind `test-fixtures` so it's not part of the shipped
 # binary; pulled in unconditionally for `cfg(test)` builds via dev-dependencies.
 rand = { version = "0.10", optional = true }
+rusqlite = { version = "0.31", features = ["bundled"] }
+directories = "5"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
 rand = "0.10"
+tempfile = "3"
