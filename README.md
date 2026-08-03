@@ -6,6 +6,8 @@ A tiny, pretty, extensible terminal + file-transfer client.
 
 Not yet functional. See `docs/superpowers/specs/2026-08-03-shellx-design.md`.
 
+> **Security note (v0.1)**: shellx does not verify SSH host keys — every server is trusted on first connection. Do not use over untrusted networks yet. Host-key verification lands in v0.2.
+
 ## Build
 
 Requires: Node 20+, pnpm 9+, Rust 1.77+.
