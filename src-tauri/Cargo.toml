@@ -1,0 +1,50 @@
+[package]
+name = "shellx"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "shellx"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[features]
+# Exposes protocol::ssh::testing publicly so integration tests (see Task 11)
+# outside this crate can reuse the in-process echo SSH server fixture.
+# Pulls in the optional `rand` dep too, since that module needs it and
+# out-of-crate integration test binaries build the lib without `cfg(test)`.
+test-fixtures = ["dep:rand"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.3", features = [] }
+tauri-plugin-log = "2"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+thiserror = "1"
+# Windows dev boxes without NASM can't build the default aws-lc-rs backend
+# (aws-lc-sys needs NASM for its assembly routines). Use the pure-Rust `ring`
+# backend instead of aws-lc-rs.
+russh = { version = "0.62.5", default-features = false, features = ["ring", "flate2", "rsa"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+bytes = "1"
+# Must match the rand_core major version that ssh-key/signature (russh's
+# key crates) pull in, or `PrivateKey::random`'s `CryptoRng` bound fails.
+# Optional + gated behind `test-fixtures` so it's not part of the shipped
+# binary; pulled in unconditionally for `cfg(test)` builds via dev-dependencies.
+rand = { version = "0.10", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+rand = "0.10"

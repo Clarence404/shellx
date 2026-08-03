@@ -1,0 +1,26 @@
+:root {
+  /* Warm Minimal — from spec §5.2 */
+  --bg: #16151a;
+  --panel-1: #1a181f;
+  --panel-2: #1e1c24;
+  --accent: #7c5cff;
+  --accent-fade: rgba(124, 92, 255, 0.15);
+  --accent-shadow: rgba(124, 92, 255, 0.4);
+  --text-on-accent: #ffffff;
+  --text-1: #d4d0dc;
+  --text-2: #8b869a;
+  --text-3: #6b6874;
+  --border: #26242c;
+  --border-hi: #2a2830;
+  --success: #a6e3a1;
+  --warn: #f2c8a2;
+  --error: #f28779;
+
+  --font-ui: -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", Consolas, monospace;
+
+  --rail-w: 32px;
+  --drawer-w: 220px;
+  --tab-h: 30px;
+  --titlebar-h: 28px;
+}
