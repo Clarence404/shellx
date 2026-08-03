@@ -3,7 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import { onSessionData, onSessionClosed } from "../ipc/events";
-import { writeSessionInput, resizeSession, closeSession } from "../ipc/commands";
+import { writeSessionInput, resizeSession } from "../ipc/commands";
 import type { SessionId } from "../types/session";
 
 export function TerminalView({ sessionId }: { sessionId: SessionId }) {
@@ -85,7 +85,6 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       unlistenData?.();
       unlistenClosed?.();
       term.dispose();
-      void closeSession(sessionId);
     };
   }, [sessionId]);
 
