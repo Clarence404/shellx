@@ -14,6 +14,11 @@ rust-version = "1.77.2"
 name = "shellx"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Exposes protocol::ssh::testing publicly so integration tests (see Task 11)
+# outside this crate can reuse the in-process echo SSH server fixture.
+test-fixtures = []
+
 [build-dependencies]
 tauri-build = { version = "2.6.3", features = [] }
 

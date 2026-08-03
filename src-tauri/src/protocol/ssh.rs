@@ -101,11 +101,14 @@ impl client::Handler for ClientHandler {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// Shared russh-server test fixture. `pub(crate)` for now so `session::manager`'s
+// tests can reuse it too; Task 11 promotes this to `pub` (still behind the
+// `test-fixtures` feature) so out-of-crate integration tests can reach it.
+#[cfg(any(test, feature = "test-fixtures"))]
+pub(crate) mod testing {
     use russh::server::{self as srv, Auth, Server as _, Session as SrvSession};
     use russh::{ChannelId, MethodKind, MethodSet};
+    use std::sync::Arc;
     use std::time::Duration;
 
     struct TestServer;
@@ -157,8 +160,10 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn ssh_password_auth_and_echo() {
+    /// Spins up an in-process SSH server (password auth "chen"/"pw", echoes
+    /// whatever it receives back to the client) on an ephemeral port and
+    /// returns that port plus the JoinHandle of the task serving it.
+    pub async fn start_echo_ssh_server() -> (u16, tokio::task::JoinHandle<()>) {
         let cfg = Arc::new(srv::Config {
             keys: vec![russh::keys::PrivateKey::random(
                 &mut rand::rng(),
@@ -176,9 +181,20 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let mut sh = TestServer;
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let _ = sh.run_on_socket(cfg, &listener).await;
         });
+        (port, handle)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn ssh_password_auth_and_echo() {
+        let (port, _handle) = testing::start_echo_ssh_server().await;
 
         let auth = AuthConfig {
             username: "chen".into(),
