@@ -15,4 +15,5 @@ pub struct SessionInfo {
     pub id: SessionId,
     pub label: String,
     pub kind: SessionKind,
+    pub host_id: Option<uuid::Uuid>,
 }

@@ -19,6 +19,7 @@ pub struct OpenSshArgs {
     pub username: String,
     pub password: String,
     pub label: String,
+    pub host_id: Option<uuid::Uuid>,
 }
 
 /// Opens an SSH session, then spawns a background task that pumps bytes
@@ -29,14 +30,20 @@ pub async fn open_ssh_session(
     args: OpenSshArgs,
     app: AppHandle,
     mgr: State<'_, SessionManager>,
+    host_store: State<'_, crate::store::HostStore>,
 ) -> Result<SessionInfo> {
     let auth = AuthConfig {
         username: args.username,
         method: AuthMethod::Password(args.password),
     };
     let info = mgr
-        .open_ssh(&args.host, args.port, auth, args.label)
+        .open_ssh(&args.host, args.port, auth, args.label, args.host_id)
         .await?;
+
+    // Best-effort: record that this saved host was just connected to.
+    if let Some(hid) = args.host_id {
+        let _ = host_store.touch_last_connected(hid).await;
+    }
 
     let id = info.id;
     let mut rx = mgr.subscribe(id).await?;
