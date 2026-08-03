@@ -5,10 +5,6 @@ use shellx::ipc;
 use shellx::session::manager::SessionManager;
 
 fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
-
     tauri::Builder::default()
         .setup(|app| {
             if cfg!(debug_assertions) {
