@@ -3,6 +3,7 @@ import { AppShell } from "./components/AppShell";
 import { EmptyState } from "./components/EmptyState";
 import { TerminalView } from "./components/TerminalView";
 import { ConnectDialog } from "./components/ConnectDialog";
+import { CommandPalette } from "./components/CommandPalette";
 import { useSessions } from "./state/sessions";
 import { useHostsStore } from "./state/hosts";
 import { closeSession, openSshSession } from "./ipc/commands";
@@ -24,8 +25,21 @@ export function App() {
     | { mode: "edit"; initial: HostInfo }
     | null
   >(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => { void loadHosts(); }, [loadHosts]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, []);
 
   useTabHotkeys({
     onNewTab: () => setDialog({ mode: "create" }),
@@ -95,6 +109,11 @@ export function App() {
         mode={dialog?.mode ?? "create"}
         initial={dialog?.mode === "edit" ? dialog.initial : undefined}
         onClose={() => setDialog(null)}
+      />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onConnect={(host) => void handleConnectSavedHost(host)}
       />
     </>
   );
