@@ -1,5 +1,6 @@
 pub mod error;
 pub mod protocol;
+pub mod session;
 pub mod transport;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
