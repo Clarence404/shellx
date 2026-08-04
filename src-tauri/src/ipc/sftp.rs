@@ -84,3 +84,17 @@ pub struct SftpMkdirArgs {
 pub async fn sftp_mkdir(args: SftpMkdirArgs, mgr: State<'_, SessionManager>) -> Result<()> {
     mgr.sftp_mkdir(args.conn_id, &args.path).await
 }
+
+#[derive(Deserialize)]
+pub struct SftpRealpathArgs {
+    pub conn_id: ConnectionId,
+    pub path: String,
+}
+
+#[tauri::command]
+pub async fn sftp_realpath(
+    args: SftpRealpathArgs,
+    mgr: State<'_, SessionManager>,
+) -> Result<String> {
+    mgr.sftp_realpath(args.conn_id, &args.path).await
+}

@@ -318,6 +318,17 @@ impl SessionManager {
         self.put_live(id, live).await;
         result
     }
+
+    pub async fn sftp_realpath(&self, id: ConnectionId, path: &str) -> Result<String> {
+        let mut live = self.take_live(id).await?;
+        let result = async {
+            Self::ensure_sftp(&mut live).await?;
+            live.sftp.as_ref().unwrap().realpath(path).await
+        }
+        .await;
+        self.put_live(id, live).await;
+        result
+    }
 }
 
 impl Default for SessionManager {
