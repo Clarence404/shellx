@@ -3,6 +3,7 @@ import { AppShell } from "./components/AppShell";
 import { EmptyState } from "./components/EmptyState";
 import { TerminalView } from "./components/TerminalView";
 import { ActivityToolbar } from "./components/ActivityToolbar";
+import { FileBrowserView } from "./components/FileBrowserView";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { useSessions } from "./state/sessions";
@@ -112,8 +113,7 @@ export function App() {
                 <TerminalView sessionId={activeId} />
               </div>
               <div style={{ display: activeActivity === "files" ? "block" : "none", height: "100%" }}>
-                {/* FileBrowserView is added in Task 8 — for now a placeholder */}
-                <div style={{ padding: 20, color: "var(--text-3)" }}>Files view (Task 8 fills this in)</div>
+                <FileBrowserView connectionId={activeId} />
               </div>
             </div>
           </div>
