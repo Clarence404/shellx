@@ -1,42 +1,55 @@
-//! Owns live sessions keyed by UUID; drives byte pumping between the
-//! underlying protocol session and subscribers.
+//! Owns live connections keyed by UUID; drives byte pumping between the
+//! underlying shell channel and subscribers.
 //!
-//! Note: v0.1 talks to `SshProtocol` concretely rather than through a
-//! `Protocol` trait. The seam is deferred to v0.2 when a second protocol
-//! (SFTP, FTP) forces the abstraction. Callers should expect the API to
-//! shift when that lands.
+//! Note: v0.3 introduces the `Connection` trait (`protocol::Connection`) so
+//! a single connection can host both a shell channel and (from Task 2) an
+//! SFTP subsystem. `open_connection` establishes the transport-level
+//! connection only; `open_shell` lazily opens the shell channel and spawns
+//! the byte-pumping driver task. The IPC layer currently calls both back to
+//! back to preserve the v0.2 UX (connect always opens a terminal).
 
 use crate::error::{Error, Result};
-use crate::protocol::{
-    ssh::{SshProtocol, SshSession},
-    AuthConfig,
-};
-use crate::session::{SessionId, SessionInfo, SessionKind};
+use crate::protocol::{AuthConfig, Connection, ShellHandle, SftpHandle, SshProtocol};
+use crate::session::{ConnectionId, ConnectionInfo, ConnectionKind, ConnectionState};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
+use uuid::Uuid;
 
-struct LiveSession {
-    info: SessionInfo,
-    writer: mpsc::Sender<WriteCmd>,
+struct LiveConnection {
+    info: ConnectionInfo,
+    conn: Box<dyn Connection>,
+    shell: Option<ShellDriver>,
+    sftp: Option<SftpHandle>,
 }
 
-enum WriteCmd {
+/// Handle to the background task pumping bytes for this connection's shell
+/// channel. Dropping the `Sender` (e.g. by removing the owning
+/// `LiveConnection` from the map without sending `Close`) causes
+/// `shell_driver_loop`'s `writes.recv()` to resolve to `None`, which the
+/// loop treats the same as an explicit `Close`.
+struct ShellDriver {
+    writer: mpsc::Sender<ShellCmd>,
+}
+
+enum ShellCmd {
     Bytes(Vec<u8>),
     Resize(u16, u16),
     Close,
 }
 
-/// Owns every live session (currently just SSH) keyed by `SessionId`. Each
-/// session is driven by its own background task (`driver_loop`) that pumps
-/// bytes between the underlying transport and whatever subscriber is
-/// listening; the manager itself never touches the transport directly once
-/// `open_ssh` hands it off, so its mutex is never held across I/O.
+/// Owns every live connection (currently just SSH) keyed by `ConnectionId`.
+/// Each connection's shell, once opened, is driven by its own background
+/// task (`shell_driver_loop`) that pumps bytes between the underlying
+/// transport and whatever subscriber is listening; the manager itself never
+/// touches the transport directly once `open_shell` hands it off, so its
+/// mutex is never held across I/O.
 pub struct SessionManager {
-    inner: Arc<Mutex<HashMap<SessionId, LiveSession>>>,
-    // For subscribe(): map id -> channel to forward read bytes to. v0.1
-    // supports a single consumer per session (see driver_loop invariant 5).
-    subs: Arc<Mutex<HashMap<SessionId, mpsc::Sender<Vec<u8>>>>>,
+    inner: Arc<Mutex<HashMap<ConnectionId, LiveConnection>>>,
+    // For subscribe(): map id -> channel to forward read bytes to. Only a
+    // single consumer per connection is supported (see driver_loop invariant
+    // carried over from v0.1/v0.2).
+    subs: Arc<Mutex<HashMap<ConnectionId, mpsc::Sender<Vec<u8>>>>>,
 }
 
 impl SessionManager {
@@ -47,62 +60,101 @@ impl SessionManager {
         }
     }
 
-    pub async fn open_ssh(
+    /// Establishes the transport-level SSH connection and authenticates,
+    /// but does not open any channel (shell or SFTP) yet.
+    pub async fn open_connection(
         &self,
         host: &str,
         port: u16,
         auth: AuthConfig,
         label: String,
-        host_id: Option<uuid::Uuid>,
-    ) -> Result<SessionInfo> {
-        let session = SshProtocol::connect(host, port, auth).await?;
-        let id = uuid::Uuid::new_v4();
-        let info = SessionInfo {
+        host_id: Option<Uuid>,
+    ) -> Result<ConnectionInfo> {
+        let connection = SshProtocol::connect(host, port, auth).await?;
+        let id = Uuid::new_v4();
+        let info = ConnectionInfo {
             id,
             label,
-            kind: SessionKind::Ssh,
+            kind: ConnectionKind::Ssh,
             host_id,
+            state: ConnectionState::Active,
         };
-        let (write_tx, write_rx) = mpsc::channel::<WriteCmd>(64);
-        let subs = self.subs.clone();
-        let inner = self.inner.clone();
-        tokio::spawn(driver_loop(id, session, write_rx, subs, inner));
-        let mut map = self.inner.lock().await;
-        map.insert(
-            id,
-            LiveSession {
-                info: info.clone(),
-                writer: write_tx,
-            },
-        );
+        let live = LiveConnection {
+            info: info.clone(),
+            conn: Box::new(connection),
+            shell: None,
+            sftp: None,
+        };
+        self.inner.lock().await.insert(id, live);
         Ok(info)
     }
 
-    pub async fn write(&self, id: SessionId, data: &[u8]) -> Result<()> {
-        let writer = {
-            let map = self.inner.lock().await;
-            map.get(&id).ok_or(Error::Closed)?.writer.clone()
+    /// Lazily opens the shell channel on an already-established connection
+    /// and spawns the byte-pumping driver task. Idempotent: calling it again
+    /// once a shell is already open is a no-op.
+    pub async fn open_shell(&self, id: ConnectionId) -> Result<()> {
+        // Take the LiveConnection out of the map so we can await on it
+        // (channel_open_session, request_pty, request_shell) without
+        // holding the map mutex across that I/O.
+        let mut live = {
+            let mut map = self.inner.lock().await;
+            map.remove(&id).ok_or(Error::Closed)?
         };
+        if live.shell.is_some() {
+            // Already open — put back and return.
+            self.inner.lock().await.insert(id, live);
+            return Ok(());
+        }
+        let shell_handle = match live.conn.open_shell().await {
+            Ok(h) => h,
+            Err(e) => {
+                // Put the connection back so it isn't silently dropped on a
+                // failed attempt; the caller can retry or close it.
+                self.inner.lock().await.insert(id, live);
+                return Err(e);
+            }
+        };
+        let (writer_tx, writer_rx) = mpsc::channel::<ShellCmd>(64);
+        let subs_arc = self.subs.clone();
+        let inner_arc = self.inner.clone();
+        tokio::spawn(shell_driver_loop(
+            id,
+            shell_handle,
+            writer_rx,
+            subs_arc,
+            inner_arc,
+        ));
+        live.shell = Some(ShellDriver { writer: writer_tx });
+        self.inner.lock().await.insert(id, live);
+        Ok(())
+    }
+
+    pub async fn write(&self, id: ConnectionId, data: &[u8]) -> Result<()> {
+        let writer = self.shell_writer(id).await?;
         writer
-            .send(WriteCmd::Bytes(data.to_vec()))
+            .send(ShellCmd::Bytes(data.to_vec()))
             .await
             .map_err(|_| Error::Closed)?;
         Ok(())
     }
 
-    pub async fn resize(&self, id: SessionId, cols: u16, rows: u16) -> Result<()> {
-        let writer = {
-            let map = self.inner.lock().await;
-            map.get(&id).ok_or(Error::Closed)?.writer.clone()
-        };
+    pub async fn resize(&self, id: ConnectionId, cols: u16, rows: u16) -> Result<()> {
+        let writer = self.shell_writer(id).await?;
         writer
-            .send(WriteCmd::Resize(cols, rows))
+            .send(ShellCmd::Resize(cols, rows))
             .await
             .map_err(|_| Error::Closed)?;
         Ok(())
     }
 
-    pub async fn subscribe(&self, id: SessionId) -> Result<mpsc::Receiver<Vec<u8>>> {
+    async fn shell_writer(&self, id: ConnectionId) -> Result<mpsc::Sender<ShellCmd>> {
+        let map = self.inner.lock().await;
+        let live = map.get(&id).ok_or(Error::Closed)?;
+        let shell = live.shell.as_ref().ok_or(Error::Closed)?;
+        Ok(shell.writer.clone())
+    }
+
+    pub async fn subscribe(&self, id: ConnectionId) -> Result<mpsc::Receiver<Vec<u8>>> {
         let map = self.inner.lock().await;
         if !map.contains_key(&id) {
             return Err(Error::Closed);
@@ -113,17 +165,31 @@ impl SessionManager {
         Ok(rx)
     }
 
-    pub async fn close(&self, id: SessionId) -> Result<()> {
-        let writer = self.inner.lock().await.remove(&id).map(|s| s.writer);
-        if let Some(writer) = writer {
-            let _ = writer.send(WriteCmd::Close).await;
+    pub async fn close(&self, id: ConnectionId) -> Result<()> {
+        let live = self.inner.lock().await.remove(&id);
+        if let Some(mut live) = live {
+            if let Some(shell) = live.shell.take() {
+                // Shell driver owns the transport; tell it to close, which
+                // makes it call `ShellHandle::close()` (closes channel +
+                // disconnects) before breaking out of its loop.
+                let _ = shell.writer.send(ShellCmd::Close).await;
+            } else {
+                // No shell was ever opened on this connection — disconnect
+                // the transport directly.
+                let _ = live.conn.disconnect().await;
+            }
         }
         self.subs.lock().await.remove(&id);
         Ok(())
     }
 
-    pub async fn list(&self) -> Vec<SessionInfo> {
-        self.inner.lock().await.values().map(|s| s.info.clone()).collect()
+    pub async fn list(&self) -> Vec<ConnectionInfo> {
+        self.inner
+            .lock()
+            .await
+            .values()
+            .map(|s| s.info.clone())
+            .collect()
     }
 }
 
@@ -133,38 +199,39 @@ impl Default for SessionManager {
     }
 }
 
-/// Per-session background task. Owns the `SshSession` exclusively (the
+/// Per-connection background task. Owns the `ShellHandle` exclusively (the
 /// `SessionManager`'s mutex is never held while this runs) and pumps bytes
 /// between it and whichever channel is currently registered.
-async fn driver_loop(
-    id: SessionId,
-    mut session: SshSession,
-    mut writes: mpsc::Receiver<WriteCmd>,
-    subs: Arc<Mutex<HashMap<SessionId, mpsc::Sender<Vec<u8>>>>>,
-    inner: Arc<Mutex<HashMap<SessionId, LiveSession>>>,
+async fn shell_driver_loop(
+    id: ConnectionId,
+    mut shell: ShellHandle,
+    mut writes: mpsc::Receiver<ShellCmd>,
+    subs: Arc<Mutex<HashMap<ConnectionId, mpsc::Sender<Vec<u8>>>>>,
+    inner: Arc<Mutex<HashMap<ConnectionId, LiveConnection>>>,
 ) {
     let mut read_buf = Vec::with_capacity(4096);
     loop {
         tokio::select! {
             cmd = writes.recv() => match cmd {
-                Some(WriteCmd::Bytes(b)) => {
-                    let _ = session.write_input(&b).await;
+                Some(ShellCmd::Bytes(b)) => {
+                    let _ = shell.write_input(&b).await;
                 }
-                Some(WriteCmd::Resize(c, r)) => {
-                    let _ = session.resize(c, r).await;
+                Some(ShellCmd::Resize(c, r)) => {
+                    let _ = shell.resize(c, r).await;
                 }
-                Some(WriteCmd::Close) | None => {
-                    let _ = session.close().await;
+                Some(ShellCmd::Close) | None => {
+                    let _ = shell.close().await;
                     break;
                 }
             },
-            read = session.read_output(&mut read_buf) => match read {
+            read = shell.read_output(&mut read_buf) => match read {
                 Ok(0) => break,
                 Ok(_) => {
                     // Take the accumulated bytes and forward them if (and
                     // only if) a subscriber is currently registered. Reads
                     // that happen before anyone calls subscribe() are
-                    // dropped -- an explicit v0.1 simplification.
+                    // dropped -- an explicit v0.1 simplification, carried
+                    // forward.
                     let chunk = std::mem::take(&mut read_buf);
                     let tx = subs.lock().await.get(&id).cloned();
                     if let Some(tx) = tx {
@@ -176,11 +243,11 @@ async fn driver_loop(
         }
     }
     // Every exit path above (remote EOF, I/O error, explicit Close, or the
-    // write sender being dropped) lands here. Release this session's entry
-    // from both maps so the IPC bridge's `rx.recv()` loop terminates (letting
-    // it emit `EV_CLOSED`) and `list()` stops reporting a dead session as
-    // live. `close()` already removes from `inner` itself; the second
-    // removal here is a harmless no-op in that case.
+    // write sender being dropped) lands here. Release this connection's
+    // entry from both maps so the IPC bridge's `rx.recv()` loop terminates
+    // (letting it emit `EV_CLOSED`) and `list()` stops reporting a dead
+    // connection as live. `close()` already removes from `inner` itself;
+    // the second removal here is a harmless no-op in that case.
     subs.lock().await.remove(&id);
     inner.lock().await.remove(&id);
 }
@@ -190,18 +257,28 @@ mod tests {
     use super::*;
     use crate::protocol::{AuthConfig, AuthMethod};
 
-    #[tokio::test]
-    async fn open_and_close_ssh_session_tracks_state() {
-        let (port, _handle) = crate::protocol::ssh::testing::start_echo_ssh_server().await;
-        let mgr = SessionManager::new();
+    async fn open_ssh_with_shell(
+        mgr: &SessionManager,
+        port: u16,
+        label: &str,
+    ) -> ConnectionInfo {
         let auth = AuthConfig {
             username: "chen".into(),
             method: AuthMethod::Password("pw".into()),
         };
         let info = mgr
-            .open_ssh("127.0.0.1", port, auth, "test".into(), None)
+            .open_connection("127.0.0.1", port, auth, label.into(), None)
             .await
             .unwrap();
+        mgr.open_shell(info.id).await.unwrap();
+        info
+    }
+
+    #[tokio::test]
+    async fn open_and_close_ssh_session_tracks_state() {
+        let (port, _handle) = crate::protocol::ssh::testing::start_echo_ssh_server().await;
+        let mgr = SessionManager::new();
+        let info = open_ssh_with_shell(&mgr, port, "test").await;
         assert_eq!(mgr.list().await.len(), 1);
         assert_eq!(info.label, "test");
         mgr.close(info.id).await.unwrap();
@@ -212,14 +289,7 @@ mod tests {
     async fn write_is_forwarded_to_subscriber() {
         let (port, _handle) = crate::protocol::ssh::testing::start_echo_ssh_server().await;
         let mgr = SessionManager::new();
-        let auth = AuthConfig {
-            username: "chen".into(),
-            method: AuthMethod::Password("pw".into()),
-        };
-        let info = mgr
-            .open_ssh("127.0.0.1", port, auth, "test".into(), None)
-            .await
-            .unwrap();
+        let info = open_ssh_with_shell(&mgr, port, "test").await;
 
         let mut rx = mgr.subscribe(info.id).await.unwrap();
         mgr.write(info.id, b"hello\n").await.unwrap();
@@ -240,14 +310,7 @@ mod tests {
     async fn session_closes_when_driver_exits() {
         let (port, _handle) = crate::protocol::ssh::testing::start_echo_ssh_server().await;
         let mgr = SessionManager::new();
-        let auth = AuthConfig {
-            username: "chen".into(),
-            method: AuthMethod::Password("pw".into()),
-        };
-        let info = mgr
-            .open_ssh("127.0.0.1", port, auth, "test".into(), None)
-            .await
-            .unwrap();
+        let info = open_ssh_with_shell(&mgr, port, "test").await;
 
         let mut rx = mgr.subscribe(info.id).await.unwrap();
 
@@ -266,26 +329,18 @@ mod tests {
         assert!(closed.is_none(), "expected subscription channel to close");
 
         // `inner` must also have released the id so list() stops reporting
-        // a dead session as alive.
+        // a dead connection as alive.
         assert!(
             mgr.list().await.is_empty(),
-            "expected no live sessions after driver exit"
+            "expected no live connections after driver exit"
         );
     }
 
     #[tokio::test]
     async fn driver_loop_cleans_up_on_remote_eof() {
-        use crate::protocol::{AuthConfig, AuthMethod};
         let (port, server_handle) = crate::protocol::ssh::testing::start_echo_ssh_server().await;
         let mgr = SessionManager::new();
-        let auth = AuthConfig {
-            username: "chen".into(),
-            method: AuthMethod::Password("pw".into()),
-        };
-        let info = mgr
-            .open_ssh("127.0.0.1", port, auth, "eof-test".into(), None)
-            .await
-            .unwrap();
+        let info = open_ssh_with_shell(&mgr, port, "eof-test").await;
         let mut rx = mgr.subscribe(info.id).await.unwrap();
 
         // Force the server to drop the connection -- simulates remote EOF.

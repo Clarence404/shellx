@@ -6,7 +6,7 @@ import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { useSessions } from "./state/sessions";
 import { useHostsStore } from "./state/hosts";
-import { closeSession, openSshSession } from "./ipc/commands";
+import { closeSession, openConnection } from "./ipc/commands";
 import { getHostPassword } from "./ipc/hosts";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
 import type { HostInfo } from "./types/host";
@@ -70,7 +70,7 @@ export function App() {
       return;
     }
     try {
-      const info = await openSshSession({
+      const info = await openConnection({
         host: host.host, port: host.port,
         username: host.username, password,
         label: host.label,
