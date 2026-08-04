@@ -42,12 +42,12 @@ jobs:
 
     steps:
       - name: Check out
+        # Default behaviour: check out the ref that triggered this run.
+        # Push-tag trigger → checks out the tag. workflow_dispatch → checks
+        # out whichever branch/tag you picked in the UI's "Use workflow from"
+        # dropdown, so to build a specific tag manually, select that tag from
+        # that dropdown when firing the workflow.
         uses: actions/checkout@v4
-        with:
-          # push-tag runs on the tag ref; workflow_dispatch runs on the branch
-          # you triggered from — override with the tag input so the build is
-          # always taken from the tagged commit.
-          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
