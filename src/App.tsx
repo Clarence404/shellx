@@ -126,6 +126,12 @@ export function App() {
   });
 
   async function handleConnectSavedHost(host: HostInfo) {
+    // Ignore double-clicks during an in-flight handshake for the same host.
+    // Two openConnection calls to the same server would both succeed but only
+    // one tab would win the fight for activeId — the other is orphaned.
+    const st = useSessions.getState();
+    if (st.connecting[host.id]) return;
+
     // Try to fetch password from keychain; if missing, prompt via ConnectDialog
     const password = await getHostPassword(host.id);
     if (!password) {
@@ -133,6 +139,7 @@ export function App() {
       setDialog({ mode: "edit", initial: host });
       return;
     }
+    st.beginConnecting(host.id);
     try {
       const info = await openConnection({
         host: host.host, port: host.port,
@@ -140,8 +147,9 @@ export function App() {
         label: host.label,
         host_id: host.id,
       });
-      addSession(info);
+      addSession(info);  // clears the connecting flag as part of the same set
     } catch (e) {
+      useSessions.getState().endConnecting(host.id);
       alert(`Connection failed: ${e}`);
     }
   }

@@ -11,6 +11,14 @@ body {
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 input { font: inherit; color: inherit; }
 
+/* Pulsing dot for host rows mid-connect. Fades 0.3→1 and expands the accent-fade
+   halo so the user sees immediate feedback while the SSH handshake (1-2s over
+   password auth) is in flight. */
+@keyframes hostrow-pulse {
+  0%, 100% { opacity: 0.4; box-shadow: 0 0 0 0 var(--accent-shadow); }
+  50%      { opacity: 1;   box-shadow: 0 0 0 4px transparent; }
+}
+
 /* Warm-Minimal scrollbar — the WebView2 default is nearly invisible on dark. */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }

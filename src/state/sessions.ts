@@ -5,11 +5,17 @@ interface SessionsState {
   sessions: ConnectionInfo[];
   activeId: ConnectionId | null;
   activeActivity: Record<ConnectionId, ActivityKind>;
+  /** Host ids currently mid-connect (SSH handshake in flight). Kept as an
+   * object-map rather than a Set so shallow-compare selectors work correctly.
+   */
+  connecting: Record<string, true>;
 
   addSession: (s: ConnectionInfo) => void;
   removeSession: (id: ConnectionId) => void;
   setActive: (id: ConnectionId | null) => void;
   hostIsConnected: (hostId: string) => boolean;
+  beginConnecting: (hostId: string) => void;
+  endConnecting: (hostId: string) => void;
 
   setActivity: (id: ConnectionId, activity: ActivityKind) => void;
   markSessionClosed: (id: ConnectionId) => void;
@@ -19,13 +25,18 @@ export const useSessions = create<SessionsState>((set, get) => ({
   sessions: [],
   activeId: null,
   activeActivity: {},
+  connecting: {},
 
   addSession: (s) =>
-    set((st) => ({
-      sessions: [...st.sessions, s],
-      activeId: s.id,
-      activeActivity: { ...st.activeActivity, [s.id]: "terminal" },
-    })),
+    set((st) => {
+      const { [s.host_id ?? ""]: _dropped, ...restConnecting } = st.connecting;
+      return {
+        sessions: [...st.sessions, s],
+        activeId: s.id,
+        activeActivity: { ...st.activeActivity, [s.id]: "terminal" },
+        connecting: restConnecting,
+      };
+    }),
   removeSession: (id) =>
     set((st) => {
       const remaining = st.sessions.filter((x) => x.id !== id);
@@ -39,6 +50,14 @@ export const useSessions = create<SessionsState>((set, get) => ({
   setActive: (id) => set({ activeId: id }),
   hostIsConnected: (hostId) =>
     get().sessions.some((s) => s.host_id === hostId),
+  beginConnecting: (hostId) =>
+    set((st) => (st.connecting[hostId] ? {} : { connecting: { ...st.connecting, [hostId]: true } })),
+  endConnecting: (hostId) =>
+    set((st) => {
+      if (!st.connecting[hostId]) return {};
+      const { [hostId]: _dropped, ...rest } = st.connecting;
+      return { connecting: rest };
+    }),
 
   setActivity: (id, activity) =>
     set((st) => ({ activeActivity: { ...st.activeActivity, [id]: activity } })),
