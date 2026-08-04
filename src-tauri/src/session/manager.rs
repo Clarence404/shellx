@@ -169,15 +169,12 @@ impl SessionManager {
         let live = self.inner.lock().await.remove(&id);
         if let Some(mut live) = live {
             if let Some(shell) = live.shell.take() {
-                // Shell driver owns the transport; tell it to close, which
-                // makes it call `ShellHandle::close()` (closes channel +
-                // disconnects) before breaking out of its loop.
+                // Tell the driver to close the channel + exit its loop.
                 let _ = shell.writer.send(ShellCmd::Close).await;
-            } else {
-                // No shell was ever opened on this connection — disconnect
-                // the transport directly.
-                let _ = live.conn.disconnect().await;
             }
+            // Whole-connection teardown: send SSH_MSG_DISCONNECT gracefully.
+            // Runs whether or not a shell was ever opened.
+            let _ = live.conn.disconnect().await;
         }
         self.subs.lock().await.remove(&id);
         Ok(())
