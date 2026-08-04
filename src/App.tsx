@@ -160,12 +160,12 @@ export function App() {
         onConnectHost={(host) => void handleConnectSavedHost(host)}
       >
         {activeId ? (
-          <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
             <ActivityToolbar
               activity={activeActivity}
               onChange={(a) => setActivity(activeId, a)}
             />
-            <div style={{ flex: 1, position: "relative" }}>
+            <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
               {/* Both mounted; only one visible — keeps xterm state alive across tab switches */}
               <div style={{ display: activeActivity === "terminal" ? "block" : "none", height: "100%" }}>
                 <TerminalView sessionId={activeId} />

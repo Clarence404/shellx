@@ -3,7 +3,7 @@ import { RefreshCw, Upload, FolderPlus } from "lucide-react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useFilesStore } from "../state/files";
-import { sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir } from "../ipc/sftp";
+import { sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir, sftpRealpath } from "../ipc/sftp";
 import { sftpUpload, sftpDownload } from "../ipc/transfers";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow } from "./FileRow";
@@ -27,9 +27,22 @@ export function FileBrowserView({ connectionId }: Props) {
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [mkdirName, setMkdirName] = useState("");
 
-  // Initial load for this connection's cwd
+  // Initial load: resolve "." to the login shell's home as an absolute path so
+  // the breadcrumb, goUp, and joinPath all speak in absolute paths from the
+  // start. Without this, the breadcrumb renders "." as target "/." and clicking
+  // it jumps to root — the reported bug.
   useEffect(() => {
-    if (!state) void loadDir(connectionId, ".");
+    if (state) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const home = await sftpRealpath(connectionId, ".");
+        if (!cancelled) void loadDir(connectionId, home);
+      } catch {
+        if (!cancelled) void loadDir(connectionId, "/");
+      }
+    })();
+    return () => { cancelled = true; };
   }, [connectionId, state, loadDir]);
 
   // Native Tauri drag-drop listener (scoped to this component's lifetime).
@@ -120,7 +133,7 @@ export function FileBrowserView({ connectionId }: Props) {
   }
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100%", minHeight: 0, display: "flex", flexDirection: "column" }}>
       <div style={{
         height: 32, padding: "0 10px", background: "var(--panel-1)",
         borderBottom: "1px solid var(--border)",
@@ -146,7 +159,7 @@ export function FileBrowserView({ connectionId }: Props) {
           <Upload size={12} /> Upload
         </button>
       </div>
-      <div role="list" style={{ flex: 1, overflow: "auto" }}>
+      <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {state.error && (
           <div style={{ padding: "8px 10px", color: "var(--error)", fontSize: 11 }}>{state.error}</div>
         )}

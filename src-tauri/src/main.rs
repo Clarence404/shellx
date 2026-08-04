@@ -49,6 +49,7 @@ fn main() {
             ipc::sftp::sftp_remove_file,
             ipc::sftp::sftp_remove_dir,
             ipc::sftp::sftp_mkdir,
+            ipc::sftp::sftp_realpath,
             ipc::transfer::sftp_upload,
             ipc::transfer::sftp_download,
             ipc::transfer::transfer_list,

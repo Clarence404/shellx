@@ -18,3 +18,6 @@ export const sftpRemoveDir = (conn_id: string, path: string) =>
 
 export const sftpMkdir = (conn_id: string, path: string) =>
   invoke<void>("sftp_mkdir", { args: { conn_id, path } });
+
+export const sftpRealpath = (conn_id: string, path: string) =>
+  invoke<string>("sftp_realpath", { args: { conn_id, path } });

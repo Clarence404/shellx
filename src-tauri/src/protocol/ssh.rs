@@ -224,6 +224,13 @@ impl SftpHandle {
             .map_err(|e| Error::Protocol(format!("sftp mkdir: {e}")))
     }
 
+    pub async fn realpath(&self, path: &str) -> Result<String> {
+        self.inner
+            .canonicalize(path)
+            .await
+            .map_err(|e| Error::Protocol(format!("sftp realpath: {e}")))
+    }
+
     pub async fn open_read_stream(&self, path: &str) -> Result<russh_sftp::client::fs::File> {
         self.inner
             .open(path)
