@@ -76,10 +76,7 @@ export function App() {
         label: host.label,
         host_id: host.id,
       });
-      addSession({
-        id: info.id, label: info.label,
-        kind: "ssh", host_id: info.host_id,
-      });
+      addSession(info);
     } catch (e) {
       alert(`Connection failed: ${e}`);
     }

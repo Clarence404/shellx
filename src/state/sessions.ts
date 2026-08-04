@@ -1,22 +1,30 @@
 import { create } from "zustand";
-import type { SessionId, SessionInfo } from "../types/session";
+import type { ActivityKind, ConnectionId, ConnectionInfo } from "../types/connection";
 
 interface SessionsState {
-  sessions: SessionInfo[];
-  activeId: SessionId | null;
-  addSession: (s: SessionInfo) => void;
-  removeSession: (id: SessionId) => void;
-  setActive: (id: SessionId | null) => void;
+  sessions: ConnectionInfo[];
+  activeId: ConnectionId | null;
+  activeActivity: Record<ConnectionId, ActivityKind>;
+
+  addSession: (s: ConnectionInfo) => void;
+  removeSession: (id: ConnectionId) => void;
+  setActive: (id: ConnectionId | null) => void;
   hostIsConnected: (hostId: string) => boolean;
+
+  setActivity: (id: ConnectionId, activity: ActivityKind) => void;
+  markSessionClosed: (id: ConnectionId) => void;
 }
 
 export const useSessions = create<SessionsState>((set, get) => ({
   sessions: [],
   activeId: null,
+  activeActivity: {},
+
   addSession: (s) =>
     set((st) => ({
       sessions: [...st.sessions, s],
       activeId: s.id,
+      activeActivity: { ...st.activeActivity, [s.id]: "terminal" },
     })),
   removeSession: (id) =>
     set((st) => {
@@ -25,9 +33,18 @@ export const useSessions = create<SessionsState>((set, get) => ({
         st.activeId === id
           ? remaining[remaining.length - 1]?.id ?? null
           : st.activeId;
-      return { sessions: remaining, activeId: nextActive };
+      const { [id]: _removed, ...restActivity } = st.activeActivity;
+      return { sessions: remaining, activeId: nextActive, activeActivity: restActivity };
     }),
   setActive: (id) => set({ activeId: id }),
   hostIsConnected: (hostId) =>
     get().sessions.some((s) => s.host_id === hostId),
+
+  setActivity: (id, activity) =>
+    set((st) => ({ activeActivity: { ...st.activeActivity, [id]: activity } })),
+
+  markSessionClosed: (id) =>
+    set((st) => ({
+      sessions: st.sessions.map((s) => (s.id === id ? { ...s, state: "closed" } : s)),
+    })),
 }));
