@@ -26,7 +26,7 @@ export function ConnectDialog({ open, mode = "create", initial, onClose }: Props
           if (action === "connected" && session) {
             addSession({
               id: session.id, label: session.label,
-              kind: "ssh", host_id: session.host_id,
+              kind: "ssh", host_id: session.host_id, state: "active",
             });
           }
           onClose();
