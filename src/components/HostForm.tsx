@@ -25,6 +25,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   const [password, setPassword] = useState("");
   const [saveHost, setSaveHost] = useState(true);
   const [rememberPassword, setRememberPassword] = useState(true);
+  const [forgetPassword, setForgetPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -47,7 +48,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
         const result = await updateHostById({
           id: initial.id,
           label, host, port: Number(port), username,
-          password: password.length > 0 ? password : undefined, // undefined = leave unchanged
+          // undefined = leave unchanged; null = delete the keychain entry
+          // (forgetPassword wins over a typed password — you can't ask to
+          // both forget and remember one in the same edit).
+          password: forgetPassword ? null : (password.length > 0 ? password : undefined),
         });
         if (!result.password_stored) {
           setErr("Host saved, but password storage failed. Try again or connect manually.");
@@ -110,6 +114,17 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       <Field label="Password" type="password" value={password}
         onChange={setPassword}
         placeholder={mode === "edit" ? "leave blank to keep current" : ""} />
+
+      {mode === "edit" && keychainAvailable && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-2)" }}>
+          <input type="checkbox" checked={forgetPassword}
+            onChange={(e) => setForgetPassword(e.target.checked)} />
+          Forget stored password
+          <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+            Removes the saved password. You'll need to type it next connection.
+          </span>
+        </label>
+      )}
 
       {mode === "create" && (
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-2)" }}>

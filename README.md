@@ -58,6 +58,18 @@ pnpm tauri:dev
 - Compiles `src-tauri/` and launches the native window (auto-restart on Rust changes).
 - Close the window to exit cleanly.
 
+### Keyboard shortcuts
+
+| Action              | Windows / Linux    | macOS         |
+| -------------------- | ------------------- | ------------- |
+| New tab              | `Ctrl+Shift+T`       | `Cmd+T`        |
+| Close tab            | `Ctrl+Shift+W`       | `Cmd+W`        |
+| Next / previous tab | `Ctrl+Tab` / `Ctrl+Shift+Tab` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
+| Command palette      | `Ctrl+K`             | `Cmd+K`        |
+
+Windows/Linux require Shift on New/Close tab (v0.3) so they don't collide with terminal-inside-terminal
+muscle memory (`Ctrl+T`/`Ctrl+W` are common shell/tmux bindings); tab switching is unaffected.
+
 ### Type-check the frontend
 
 ```bash

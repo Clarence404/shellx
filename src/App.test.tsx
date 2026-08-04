@@ -1,6 +1,22 @@
-import { render, screen, within, cleanup } from "@testing-library/react";
+import { render, screen, within, cleanup, act } from "@testing-library/react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { App } from "./App";
+import { useSessions } from "./state/sessions";
+
+let capturedClosedHandler: ((e: { id: string; reason: string }) => void) | null = null;
+
+vi.mock("./ipc/events", () => ({
+  onConnectionClosed: vi.fn((h: (e: { id: string; reason: string }) => void) => {
+    capturedClosedHandler = h;
+    return Promise.resolve(() => {});
+  }),
+}));
+
+// TerminalView/FileBrowserView are heavy (real xterm.js / real Tauri IPC calls
+// on mount) and irrelevant to the App-level wiring under test here — stub them
+// out, same spirit as FileBrowserView.test.tsx stubbing its own Tauri deps.
+vi.mock("./components/TerminalView", () => ({ TerminalView: () => null }));
+vi.mock("./components/FileBrowserView", () => ({ FileBrowserView: () => null }));
 
 const mockHostsState = {
   hosts: [] as Array<{ id: string; label: string; host: string; port: number; username: string; notes: string | null; created_at: number; last_connected_at: number | null; sort_order: number }>,
@@ -53,8 +69,13 @@ vi.mock("./ipc/transfers", () => ({
 
 describe("App shell", () => {
   afterEach(() => {
-    mockHostsState.hosts = [];
+    // Unmount first — resetting the (real, shared) sessions store while a
+    // previous test's <App/> is still mounted and subscribed would trigger a
+    // React state update outside of act().
     cleanup();
+    mockHostsState.hosts = [];
+    useSessions.setState({ sessions: [], activeId: null, activeActivity: {} });
+    capturedClosedHandler = null;
   });
 
   it("renders the activity rail, an empty drawer, and an empty state in the main area", () => {
@@ -87,5 +108,33 @@ describe("App shell", () => {
     // The primary "New connection" button in the empty state is gone from the main region.
     // Drawer footer and TabBar ＋ still have it — that's the design (they remain accessible).
     expect(within(main).queryByRole("button", { name: /new connection/i })).toBeNull();
+  });
+
+  it("onConnectionClosed fades the tab (marks it closed) then removes it 300ms later", async () => {
+    render(<App />);
+
+    await act(async () => {
+      useSessions.getState().addSession({ id: "s1", label: "server-a", kind: "ssh", host_id: null, state: "active" });
+    });
+    // Flush the microtask queue so the async onConnectionClosed(...).then(...) in
+    // App's effect has run and captured the handler.
+    await act(async () => {});
+    expect(capturedClosedHandler).not.toBeNull();
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        capturedClosedHandler!({ id: "s1", reason: "eof" });
+      });
+      expect(useSessions.getState().sessions.find((s) => s.id === "s1")?.state).toBe("closed");
+      expect(useSessions.getState().sessions.map((s) => s.id)).toContain("s1");
+
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(useSessions.getState().sessions.find((s) => s.id === "s1")).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

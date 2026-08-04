@@ -29,4 +29,27 @@ describe("HostRow", () => {
     expect(screen.getByRole("button", { name: /prod-1/i })).toHaveAttribute("aria-describedby", "conn-status-id-1");
     expect(screen.getByTestId("conn-status-id-1")).toHaveAttribute("data-connected", "true");
   });
+
+  it("More button is keyboard-focusable and Enter opens menu", () => {
+    render(<HostRow host={HOST} isConnected={false}
+      onConnect={() => {}} onEdit={() => {}} onDuplicate={() => {}} onDelete={() => {}} />);
+    const moreBtn = screen.getByRole("button", { name: /host options/i });
+    expect(moreBtn.tagName).toBe("BUTTON");
+    expect(moreBtn).toHaveAttribute("tabindex", "0");
+    // Not nested inside the row's own connect button — a sibling instead.
+    expect(screen.getByRole("button", { name: /prod-1/i })).not.toContainElement(moreBtn);
+
+    moreBtn.focus();
+    expect(moreBtn).toHaveFocus();
+    fireEvent.keyDown(moreBtn, { key: "Enter" });
+    expect(screen.getByRole("menuitem", { name: /connect/i })).toBeInTheDocument();
+  });
+
+  it("More button opens menu on Space too", () => {
+    render(<HostRow host={HOST} isConnected={false}
+      onConnect={() => {}} onEdit={() => {}} onDuplicate={() => {}} onDelete={() => {}} />);
+    const moreBtn = screen.getByRole("button", { name: /host options/i });
+    fireEvent.keyDown(moreBtn, { key: " " });
+    expect(screen.getByRole("menuitem", { name: /delete/i })).toBeInTheDocument();
+  });
 });
