@@ -18,6 +18,10 @@ jobs:
   publish-tauri:
     permissions:
       contents: write
+    # Any single platform can fail without turning the workflow red — you'll
+    # still get a Draft release with the installers that DID build. Check the
+    # per-job logs in the Actions tab to see which platform bailed out.
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
