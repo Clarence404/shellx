@@ -2,11 +2,14 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.1 (foundation)
+## Status: v0.2
 
-v0.1 is functional: you can open a single SSH session (password auth) and get a working xterm.js terminal inside a native Tauri window. Multi-tab session management, key auth, SFTP, FTP, and light theme are on the v0.2+ roadmap. See [`docs/superpowers/specs/2026-08-03-shellx-design.md`](docs/superpowers/specs/2026-08-03-shellx-design.md) for the full design.
+v0.2 adds a persistent connection manager (SQLite hosts + OS keychain passwords), multi-tab
+SSH with Ctrl+T/W/Tab shortcuts, a minimal ⌘K palette to search saved hosts, and a first UI
+polish pass (Lucide icons, JetBrains Mono terminal with a Custom Warm ANSI palette, a real
+`>_` app icon). See [docs/superpowers/specs/2026-08-04-shellx-v0.2-design.md](docs/superpowers/specs/2026-08-04-shellx-v0.2-design.md) for the full design.
 
-> **Security note (v0.1)**: shellx does not verify SSH host keys — every server is trusted on first connection. Do not use over untrusted networks yet. Host-key verification lands in v0.2.
+> **Security note (v0.2)**: shellx does not verify SSH host keys — every server is trusted on first connection. Do not use over untrusted networks yet. Host-key verification lands in v0.3.
 
 ---
 
@@ -163,19 +166,19 @@ shellx/
 The Rust side is split into three trait-bounded layers, each independently testable:
 
 - **Transport** (`transport::Transport` trait) — bytes only. Currently `TcpTransport`; future `SerialTransport` (RS-232 / RS-485), `UsbCdcTransport`, `WsTransport` slot in here without touching upper layers.
-- **Protocol** (currently `SshProtocol` concrete; `Protocol` trait deferred to v0.2 when SFTP/FTP force the abstraction) — turns bytes into semantic operations (auth, channels, PTY, resize).
+- **Protocol** (currently `SshProtocol` concrete; `Protocol` trait deferred to v0.3 when SFTP/FTP force the abstraction) — turns bytes into semantic operations (auth, channels, PTY, resize).
 - **SessionManager** (`session::manager::SessionManager`) — owns live sessions keyed by UUID; runs a per-session tokio task that pumps writes / reads / subscription forwarding. Exposed to the frontend via Tauri IPC commands + events (`session:data`, `session:closed`).
 
 Adding a new physical channel (e.g. RS-485) means writing one `Transport` impl. Adding a new application protocol (e.g. Modbus, MQTT) means writing a session type that plugs into `SessionManager`. Adding a new UI view (e.g. a Modbus register table) means writing one React component and one command dispatch. See spec §5 for the planned extension timeline.
 
 ---
 
-## Sizes (v0.1)
+## Sizes (v0.2)
 
 Measured from a `pnpm tauri:build` release build on Windows 11 (MSVC toolchain):
 
-- Windows MSI: 4.0 MB (`shellx_0.1.0_x64_en-US.msi`, 4,235,264 bytes)
-- Windows NSIS setup: 2.8 MB (`shellx_0.1.0_x64-setup.exe`, 2,917,231 bytes)
+- Windows MSI: 6.1 MB (`shellx_0.2.0_x64_en-US.msi`, 6,352,896 bytes)
+- Windows NSIS setup: 3.8 MB (`shellx_0.2.0_x64-setup.exe`, 3,956,675 bytes)
 - macOS DMG: not yet measured (no macOS build machine in this pass)
 - Linux AppImage: not yet measured (no Linux build machine in this pass)
 
@@ -210,10 +213,9 @@ If downloads fail with `os error 2` file rename mid-transfer, that's Defender ra
 
 The next natural steps (roughly the order of the spec's milestone roadmap):
 
-- **v0.2** — multi-tab connection management, persisted host list (SQLite), key-based SSH auth, host-key verification, `Protocol` trait extraction, light theme.
-- **v0.3** — SFTP (rides the SSH channel — file browser view, transfer queue).
+- **v0.3** — SFTP (rides SSH channel), SSH key-based auth, host-key verification (known_hosts), `Protocol` trait extraction.
 - **v0.4** — traditional FTP / FTPS.
-- **v0.5+** — credentials double-track (OS keychain + master password), command palette (⌘K), signed installers, cross-platform CI.
+- **v0.5+** — optional master-password double-track for credentials, signed installers, cross-platform CI, light theme.
 - **Future** — RS-232 / RS-485 transport, Modbus RTU/TCP protocol, custom register-table views (spec §4 shows exactly which layer each addition touches).
 
 The design spec and implementation plan directories under `docs/superpowers/` are the source of truth for how each milestone is scoped; the SDD ledger under `.superpowers/sdd/` is the retrospective for how each was built.

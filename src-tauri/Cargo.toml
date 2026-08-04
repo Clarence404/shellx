@@ -1,6 +1,6 @@
 [package]
 name = "shellx"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -44,7 +44,26 @@ bytes = "1"
 # Optional + gated behind `test-fixtures` so it's not part of the shipped
 # binary; pulled in unconditionally for `cfg(test)` builds via dev-dependencies.
 rand = { version = "0.10", optional = true }
+rusqlite = { version = "0.31", features = ["bundled"] }
+directories = "5"
+# keyring 3.x has no default platform backend: without one of the feature
+# flags below it silently falls back to the in-memory mock store (writes
+# "succeed" but nothing is ever persisted or readable back). Backend choice
+# is per-OS, so it's set via target-specific dependency sections below;
+# cargo unions the features declared here with whichever target section
+# matches the build platform.
+keyring = "3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
 rand = "0.10"
+tempfile = "3"
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }

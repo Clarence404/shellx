@@ -7,9 +7,10 @@ interface SessionsState {
   addSession: (s: SessionInfo) => void;
   removeSession: (id: SessionId) => void;
   setActive: (id: SessionId | null) => void;
+  hostIsConnected: (hostId: string) => boolean;
 }
 
-export const useSessions = create<SessionsState>((set) => ({
+export const useSessions = create<SessionsState>((set, get) => ({
   sessions: [],
   activeId: null,
   addSession: (s) =>
@@ -27,4 +28,6 @@ export const useSessions = create<SessionsState>((set) => ({
       return { sessions: remaining, activeId: nextActive };
     }),
   setActive: (id) => set({ activeId: id }),
+  hostIsConnected: (hostId) =>
+    get().sessions.some((s) => s.host_id === hostId),
 }));
