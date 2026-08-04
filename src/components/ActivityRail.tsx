@@ -14,7 +14,7 @@ export function ActivityRail({
 }: { activeView: RailView; onSelect: (v: RailView) => void }) {
   return (
     <nav aria-label="activity rail" style={{
-      width: "var(--rail-w)", background: "var(--panel-1)",
+      width: "var(--rail-w)", flexShrink: 0, background: "var(--panel-1)",
       borderRight: "1px solid var(--border)", display: "flex",
       flexDirection: "column", alignItems: "center", gap: 8, padding: "8px 0",
     }}>

@@ -68,15 +68,15 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
     <>
       <div
         role="listitem"
-        onDoubleClick={disabled ? undefined : onOpen}
+        onDoubleClick={onOpen}
         onContextMenu={handleContextMenu}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
           display: "flex", alignItems: "center", gap: 8,
           padding: "5px 10px", fontSize: 12, color: disabled ? "var(--text-3)" : "var(--text-1)",
-          background: hovered && !disabled ? "var(--border)" : "transparent",
-          cursor: disabled ? "default" : "pointer",
+          background: hovered ? "var(--border)" : "transparent",
+          cursor: "pointer",
         }}
       >
         {kind === "directory"

@@ -34,7 +34,7 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
 
   return (
     <aside aria-label="drawer" style={{
-      width: "var(--drawer-w)", background: "var(--panel-1)",
+      width: "var(--drawer-w)", flexShrink: 0, background: "var(--panel-1)",
       borderRight: "1px solid var(--border)", padding: "10px 12px",
       display: "flex", flexDirection: "column",
     }}>
