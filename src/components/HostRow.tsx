@@ -6,13 +6,14 @@ import type { HostInfo } from "../types/host";
 interface Props {
   host: HostInfo;
   isConnected: boolean;
+  isConnecting?: boolean;
   onConnect: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }
 
-export function HostRow({ host, isConnected, onConnect, onEdit, onDuplicate, onDelete }: Props) {
+export function HostRow({ host, isConnected, isConnecting, onConnect, onEdit, onDuplicate, onDelete }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -67,10 +68,13 @@ export function HostRow({ host, isConnected, onConnect, onEdit, onDuplicate, onD
           <span
             data-testid={`conn-status-${host.id}`}
             data-connected={String(isConnected)}
+            data-connecting={String(!!isConnecting)}
             style={{
               width: 6, height: 6, borderRadius: "50%",
               background: "var(--accent)",
-              opacity: isConnected ? 1 : 0.3,
+              opacity: isConnected ? 1 : (isConnecting ? 1 : 0.3),
+              animation: isConnecting ? "hostrow-pulse 900ms ease-in-out infinite" : undefined,
+              boxShadow: isConnecting ? "0 0 0 0 var(--accent-shadow)" : undefined,
             }} />
           <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {host.label}

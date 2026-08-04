@@ -17,6 +17,7 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
   const deleteHostById = useHostsStore((s) => s.deleteHostById);
   const addHost = useHostsStore((s) => s.addHost);
   const hostIsConnected = useSessions((s) => s.hostIsConnected);
+  const connecting = useSessions((s) => s.connecting);
 
   async function handleDelete(host: HostInfo) {
     if (!confirm(`Delete "${host.label}"?`)) return;
@@ -48,6 +49,7 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
             key={h.id}
             host={h}
             isConnected={hostIsConnected(h.id)}
+            isConnecting={!!connecting[h.id]}
             onConnect={() => onConnectHost?.(h)}
             onEdit={() => onEditHost?.(h)}
             onDuplicate={() => handleDuplicate(h)}
