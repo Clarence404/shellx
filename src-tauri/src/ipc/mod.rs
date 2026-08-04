@@ -43,7 +43,15 @@ pub async fn open_connection(
     let info = mgr
         .open_connection(&args.host, args.port, auth, args.label, args.host_id)
         .await?;
-    mgr.open_shell(info.id).await?;
+    if let Err(e) = mgr.open_shell(info.id).await {
+        // open_connection already parked a LiveConnection (with its
+        // authenticated transport + keepalive) in the map; without this,
+        // a shell-open failure (e.g. sshd rejecting the shell subsystem)
+        // leaks it there for the process lifetime since the frontend never
+        // receives an `info.id` to call close_connection with.
+        let _ = mgr.close(info.id).await;
+        return Err(e);
+    }
 
     // Best-effort: record that this saved host was just connected to.
     if let Some(hid) = args.host_id {
