@@ -42,6 +42,16 @@ fn main() {
             ipc::hosts::delete_host,
             ipc::hosts::get_host_password,
             ipc::hosts::keychain_available,
+            ipc::sftp::sftp_list_dir,
+            ipc::sftp::sftp_stat,
+            ipc::sftp::sftp_rename,
+            ipc::sftp::sftp_remove_file,
+            ipc::sftp::sftp_remove_dir,
+            ipc::sftp::sftp_mkdir,
+            ipc::transfer::sftp_upload,
+            ipc::transfer::sftp_download,
+            ipc::transfer::transfer_list,
+            ipc::transfer::transfer_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("shellx failed to start");

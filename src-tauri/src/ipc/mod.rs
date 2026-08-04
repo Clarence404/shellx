@@ -3,6 +3,8 @@
 
 pub mod events;
 pub mod hosts;
+pub mod sftp;
+pub mod transfer;
 
 use crate::error::Result;
 use crate::protocol::{AuthConfig, AuthMethod};
@@ -26,7 +28,7 @@ pub struct OpenSshArgs {
 /// v0.2's UX, where connecting always lands you in a terminal), then spawns
 /// a background task that pumps bytes read from the shell into
 /// `session:data` events until the driver loop exits, at which point a
-/// single `session:closed` event is emitted.
+/// single `connection:closed` event is emitted.
 #[tauri::command]
 pub async fn open_connection(
     args: OpenSshArgs,
