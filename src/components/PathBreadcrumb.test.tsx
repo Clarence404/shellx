@@ -3,9 +3,9 @@ import { describe, it, expect, vi } from "vitest";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 
 describe("PathBreadcrumb", () => {
-  it("splits /home/chen/apps into 3 clickable segments", () => {
+  it("splits /home/chen/apps into 3 clickable segments; first segment carries leading '/'", () => {
     render(<PathBreadcrumb path="/home/chen/apps" onNavigate={() => {}} />);
-    expect(screen.getByText("home")).toBeInTheDocument();
+    expect(screen.getByText("/home")).toBeInTheDocument();
     expect(screen.getByText("chen")).toBeInTheDocument();
     expect(screen.getByText("apps")).toBeInTheDocument();
   });
