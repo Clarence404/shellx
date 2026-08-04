@@ -3,4 +3,5 @@ pub mod ipc;
 pub mod protocol;
 pub mod session;
 pub mod store;
+pub mod transfer;
 pub mod transport;
