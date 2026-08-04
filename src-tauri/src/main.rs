@@ -25,6 +25,7 @@ fn main() {
             }
             Ok(())
         })
+        .plugin(tauri_plugin_dialog::init())
         .manage(SessionManager::new())
         .manage(TransferManager::new())
         .manage(host_store)
