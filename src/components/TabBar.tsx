@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
 
-export type Tab = { id: string; title: string };
+export type Tab = { id: string; title: string; state?: "active" | "closed" };
 
 export function TabBar({
   tabs, activeTabId, onSelect, onClose, onNewConnection,
@@ -29,6 +29,10 @@ export function TabBar({
             display: "flex", alignItems: "center", gap: 6,
             cursor: "pointer", flexShrink: 0,
             whiteSpace: "nowrap",
+            opacity: t.state === "closed" ? 0.4 : 1,
+            filter: t.state === "closed" ? "grayscale(0.6)" : "none",
+            transition: "opacity 300ms, filter 300ms",
+            pointerEvents: t.state === "closed" ? "none" : "auto",
           }}>
           {t.title}
           <span
