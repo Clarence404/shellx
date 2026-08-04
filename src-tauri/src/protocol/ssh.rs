@@ -132,10 +132,6 @@ impl ShellHandle {
 
     pub async fn close(&mut self) -> Result<()> {
         let _ = self.channel.close().await;
-        let _ = self
-            .handle
-            .disconnect(russh::Disconnect::ByApplication, "", "")
-            .await;
         Ok(())
     }
 }
