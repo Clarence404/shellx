@@ -37,6 +37,7 @@ thiserror = "1"
 # (aws-lc-sys needs NASM for its assembly routines). Use the pure-Rust `ring`
 # backend instead of aws-lc-rs.
 russh = { version = "0.62.5", default-features = false, features = ["ring", "flate2", "rsa"] }
+russh-sftp = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 bytes = "1"
 # Must match the rand_core major version that ssh-key/signature (russh's
@@ -58,6 +59,12 @@ keyring = "3"
 tokio = { version = "1", features = ["full", "test-util"] }
 rand = "0.10"
 tempfile = "3"
+# russh-sftp 2.x ships both server and client code unconditionally (no
+# "server" feature exists to gate) — see russh-sftp/Cargo.toml on crates.io.
+# The dev-dependency just documents that the integration test needs it too
+# (it's already a normal dependency, but Cargo requires an explicit entry
+# to use it from `tests/`).
+russh-sftp = "2"
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
