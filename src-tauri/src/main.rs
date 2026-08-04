@@ -5,6 +5,7 @@ use directories::ProjectDirs;
 use shellx::ipc;
 use shellx::session::manager::SessionManager;
 use shellx::store::{HostStore, KeychainStore};
+use shellx::transfer::TransferManager;
 
 fn main() {
     let dirs = ProjectDirs::from("", "", "shellx").expect("cannot resolve project directory");
@@ -25,6 +26,7 @@ fn main() {
             Ok(())
         })
         .manage(SessionManager::new())
+        .manage(TransferManager::new())
         .manage(host_store)
         .manage(keychain)
         .invoke_handler(tauri::generate_handler![

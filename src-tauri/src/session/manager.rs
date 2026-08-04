@@ -9,6 +9,7 @@
 //! back to preserve the v0.2 UX (connect always opens a terminal).
 
 use crate::error::{Error, Result};
+use crate::protocol::sftp_types::Entry;
 use crate::protocol::{AuthConfig, Connection, ShellHandle, SftpHandle, SshProtocol};
 use crate::session::{ConnectionId, ConnectionInfo, ConnectionKind, ConnectionState};
 use std::collections::HashMap;
@@ -44,6 +45,15 @@ enum ShellCmd {
 /// transport and whatever subscriber is listening; the manager itself never
 /// touches the transport directly once `open_shell` hands it off, so its
 /// mutex is never held across I/O.
+///
+/// `Clone`: both fields are already `Arc<Mutex<...>>`, so cloning a
+/// `SessionManager` is cheap and every clone shares the same underlying
+/// connection map. This lets `TransferManager`'s spawned upload/download
+/// tasks (which must outlive the IPC call that started them, and therefore
+/// need an owned handle) capture a clone without requiring the Tauri-managed
+/// `SessionManager` itself to be wrapped in `Arc` — `State<'_, SessionManager>`
+/// in IPC handlers is unaffected.
+#[derive(Clone)]
 pub struct SessionManager {
     inner: Arc<Mutex<HashMap<ConnectionId, LiveConnection>>>,
     // For subscribe(): map id -> channel to forward read bytes to. Only a
@@ -187,6 +197,126 @@ impl SessionManager {
             .values()
             .map(|s| s.info.clone())
             .collect()
+    }
+
+    // --- SFTP delegation -------------------------------------------------
+    //
+    // Same "take the LiveConnection out of the map, await on it, put it
+    // back" pattern `open_shell` established above — never hold the map's
+    // MutexGuard across an unrelated `.await`. `LiveConnection.sftp` starts
+    // `None`; `ensure_sftp` lazily opens the subsystem on first use and
+    // every method below reuses the same handle afterwards.
+
+    async fn take_live(&self, id: ConnectionId) -> Result<LiveConnection> {
+        self.inner.lock().await.remove(&id).ok_or(Error::Closed)
+    }
+
+    async fn put_live(&self, id: ConnectionId, live: LiveConnection) {
+        self.inner.lock().await.insert(id, live);
+    }
+
+    async fn ensure_sftp(live: &mut LiveConnection) -> Result<()> {
+        if live.sftp.is_none() {
+            let sftp = live.conn.open_sftp().await?;
+            live.sftp = Some(sftp);
+        }
+        Ok(())
+    }
+
+    pub async fn sftp_open_write(
+        &self,
+        id: ConnectionId,
+        path: &str,
+    ) -> Result<russh_sftp::client::fs::File> {
+        let mut live = self.take_live(id).await?;
+        let result = async {
+            Self::ensure_sftp(&mut live).await?;
+            live.sftp.as_ref().unwrap().open_write_stream(path).await
+        }
+        .await;
+        self.put_live(id, live).await;
+        result
+    }
+
+    pub async fn sftp_open_read(
+        &self,
+        id: ConnectionId,
+        path: &str,
+    ) -> Result<russh_sftp::client::fs::File> {
+        let mut live = self.take_live(id).await?;
+        let result = async {
+            Self::ensure_sftp(&mut live).await?;
+            live.sftp.as_ref().unwrap().open_read_stream(path).await
+        }
+        .await;
+        self.put_live(id, live).await;
+        result
+    }
+
+    pub async fn sftp_list_dir(&self, id: ConnectionId, path: &str) -> Result<Vec<Entry>> {
+        let mut live = self.take_live(id).await?;
+        let result = async {
+            Self::ensure_sftp(&mut live).await?;
+            live.sftp.as_ref().unwrap().list_dir(path).await
+        }
+        .await;
+        self.put_live(id, live).await;
+        result
+    }
+
+    pub async fn sftp_stat(&self, id: ConnectionId, path: &str) -> Result<Entry> {
+        let mut live = self.take_live(id).await?;
+        let result = async {
+            Self::ensure_sftp(&mut live).await?;
+            live.sftp.as_ref().unwrap().stat(path).await
+        }
+        .await;
+        self.put_live(id, live).await;
+        result
+    }
+
+    pub async fn sftp_rename(&self, id: ConnectionId, from: &str, to: &str) -> Result<()> {
+        let mut live = self.take_live(id).await?;
+        let result = async {
+            Self::ensure_sftp(&mut live).await?;
+            live.sftp.as_ref().unwrap().rename(from, to).await
+        }
+        .await;
+        self.put_live(id, live).await;
+        result
+    }
+
+    pub async fn sftp_remove_file(&self, id: ConnectionId, path: &str) -> Result<()> {
+        let mut live = self.take_live(id).await?;
+        let result = async {
+            Self::ensure_sftp(&mut live).await?;
+            live.sftp.as_ref().unwrap().remove_file(path).await
+        }
+        .await;
+        self.put_live(id, live).await;
+        result
+    }
+
+    pub async fn sftp_remove_dir(&self, id: ConnectionId, path: &str) -> Result<()> {
+        let mut live = self.take_live(id).await?;
+        let result = async {
+            Self::ensure_sftp(&mut live).await?;
+            live.sftp.as_ref().unwrap().remove_dir(path).await
+        }
+        .await;
+        self.put_live(id, live).await;
+        result
+    }
+
+    pub async fn sftp_mkdir(&self, id: ConnectionId, path: &str) -> Result<()> {
+        let mut live = self.take_live(id).await?;
+        let result = async {
+            Self::ensure_sftp(&mut live).await?;
+            live.sftp.as_ref().unwrap().mkdir(path).await
+        }
+        .await;
+        self.put_live(id, live).await;
+        result
     }
 }
 
