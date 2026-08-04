@@ -383,6 +383,7 @@ async fn shell_driver_loop(
 mod tests {
     use super::*;
     use crate::protocol::{AuthConfig, AuthMethod};
+    use async_trait::async_trait;
 
     async fn open_ssh_with_shell(
         mgr: &SessionManager,
@@ -490,6 +491,73 @@ mod tests {
         assert!(
             mgr.list().await.is_empty(),
             "list should be empty after driver_loop cleans up inner"
+        );
+    }
+
+    /// Fake `Connection` whose `open_shell` always fails -- stands in for an
+    /// sshd that authenticates but rejects the shell subsystem (e.g.
+    /// `ForceCommand internal-sftp`, unusual `PermitOpen` policy). Used by
+    /// the regression test below for the `open_connection` IPC leak: driving
+    /// a real SSH test fixture into refusing `request_shell` would hang
+    /// waiting on a reply the fixture's default handler never sends, so this
+    /// stubs the failure directly instead (acceptable per the fix brief).
+    struct ShellRejectingConnection;
+
+    #[async_trait]
+    impl Connection for ShellRejectingConnection {
+        async fn open_shell(&mut self) -> Result<ShellHandle> {
+            Err(Error::Protocol("shell rejected".into()))
+        }
+        async fn open_sftp(&mut self) -> Result<SftpHandle> {
+            Err(Error::Protocol("sftp rejected".into()))
+        }
+        async fn disconnect(&mut self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn open_shell_failure_leaves_connection_for_caller_to_close() {
+        // Regression test for the open_connection IPC leak (final-fixes
+        // brief, finding 2). open_shell's own failure path intentionally
+        // puts the LiveConnection back into `inner` (so a caller can retry
+        // instead of silently losing the transport) -- which is exactly why
+        // the authenticated transport used to leak for the process lifetime
+        // when the IPC handler's `?` just propagated the error without ever
+        // calling `close()`. This test proves both halves: the connection is
+        // still live right after the failed open_shell, and `close()` (what
+        // ipc::open_connection's error path now calls) removes it.
+        let mgr = SessionManager::new();
+        let id = Uuid::new_v4();
+        let info = ConnectionInfo {
+            id,
+            label: "shell-rejecting".into(),
+            kind: ConnectionKind::Ssh,
+            host_id: None,
+            state: ConnectionState::Active,
+        };
+        mgr.inner.lock().await.insert(
+            id,
+            LiveConnection {
+                info,
+                conn: Box::new(ShellRejectingConnection),
+                shell: None,
+                sftp: None,
+            },
+        );
+
+        let result = mgr.open_shell(id).await;
+        assert!(result.is_err(), "open_shell should surface the fake failure");
+        assert_eq!(
+            mgr.list().await.len(),
+            1,
+            "connection should still be parked in `inner` after the failed open_shell"
+        );
+
+        mgr.close(id).await.unwrap();
+        assert!(
+            mgr.list().await.is_empty(),
+            "close() must remove the connection left behind by the failed open_shell"
         );
     }
 }
