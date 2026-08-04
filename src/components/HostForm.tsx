@@ -91,6 +91,8 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     ? "Save"
     : (saveHost ? "Save & Connect" : "Connect");
 
+  const busyLabel = mode === "edit" ? "Saving…" : "Connecting…";
+
   return (
     <form onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()} style={{
       background: "var(--panel-2)", padding: 20, borderRadius: 8,
@@ -137,7 +139,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       {err && <div style={{ color: "var(--error)", fontSize: 11 }}>{err}</div>}
 
       <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-        <button type="button" onClick={onCancel} disabled={busy}
+        <button type="button" onClick={onCancel}
           style={{ flex: 1, padding: "6px 10px", borderRadius: 5, color: "var(--text-2)" }}>
           Cancel
         </button>
@@ -147,7 +149,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             background: "var(--accent)", color: "var(--text-on-accent)",
             fontWeight: 600,
           }}>
-          {busy ? "..." : primaryLabel}
+          {busy ? busyLabel : primaryLabel}
         </button>
       </div>
     </form>
