@@ -5,6 +5,7 @@ export interface SessionInfo {
   id: SessionId;
   label: string;
   kind: SessionKind;
+  host_id: string | null;
 }
 
 export interface OpenSshArgs {
@@ -13,4 +14,5 @@ export interface OpenSshArgs {
   username: string;
   password: string;
   label: string;
+  host_id?: string;
 }

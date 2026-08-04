@@ -53,6 +53,7 @@ impl SessionManager {
         port: u16,
         auth: AuthConfig,
         label: String,
+        host_id: Option<uuid::Uuid>,
     ) -> Result<SessionInfo> {
         let session = SshProtocol::connect(host, port, auth).await?;
         let id = uuid::Uuid::new_v4();
@@ -60,6 +61,7 @@ impl SessionManager {
             id,
             label,
             kind: SessionKind::Ssh,
+            host_id,
         };
         let (write_tx, write_rx) = mpsc::channel::<WriteCmd>(64);
         let subs = self.subs.clone();
@@ -197,7 +199,7 @@ mod tests {
             method: AuthMethod::Password("pw".into()),
         };
         let info = mgr
-            .open_ssh("127.0.0.1", port, auth, "test".into())
+            .open_ssh("127.0.0.1", port, auth, "test".into(), None)
             .await
             .unwrap();
         assert_eq!(mgr.list().await.len(), 1);
@@ -215,7 +217,7 @@ mod tests {
             method: AuthMethod::Password("pw".into()),
         };
         let info = mgr
-            .open_ssh("127.0.0.1", port, auth, "test".into())
+            .open_ssh("127.0.0.1", port, auth, "test".into(), None)
             .await
             .unwrap();
 
@@ -243,7 +245,7 @@ mod tests {
             method: AuthMethod::Password("pw".into()),
         };
         let info = mgr
-            .open_ssh("127.0.0.1", port, auth, "test".into())
+            .open_ssh("127.0.0.1", port, auth, "test".into(), None)
             .await
             .unwrap();
 
@@ -268,6 +270,44 @@ mod tests {
         assert!(
             mgr.list().await.is_empty(),
             "expected no live sessions after driver exit"
+        );
+    }
+
+    #[tokio::test]
+    async fn driver_loop_cleans_up_on_remote_eof() {
+        use crate::protocol::{AuthConfig, AuthMethod};
+        let (port, server_handle) = crate::protocol::ssh::testing::start_echo_ssh_server().await;
+        let mgr = SessionManager::new();
+        let auth = AuthConfig {
+            username: "chen".into(),
+            method: AuthMethod::Password("pw".into()),
+        };
+        let info = mgr
+            .open_ssh("127.0.0.1", port, auth, "eof-test".into(), None)
+            .await
+            .unwrap();
+        let mut rx = mgr.subscribe(info.id).await.unwrap();
+
+        // Force the server to drop the connection -- simulates remote EOF.
+        server_handle.abort();
+        let _ = server_handle.await;
+
+        // The driver_loop's read side should see EOF/error within a couple
+        // seconds and clean up subs + inner. Prove it by waiting for the
+        // subscription receiver to close (returns None) and by asserting
+        // list() is empty.
+        let recv_result = tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv()).await;
+        assert!(
+            recv_result.is_ok(),
+            "subscription receiver should close within 3s of remote EOF"
+        );
+        assert!(
+            recv_result.unwrap().is_none(),
+            "receiver should return None when driver_loop cleans up subs"
+        );
+        assert!(
+            mgr.list().await.is_empty(),
+            "list should be empty after driver_loop cleans up inner"
         );
     }
 }
