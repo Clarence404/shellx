@@ -20,13 +20,20 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::{oneshot, Mutex};
 use uuid::Uuid;
 
 pub mod task;
 
 pub type TransferId = Uuid;
+
+/// Emitted right before a transfer's byte-pumping task is spawned, carrying
+/// the full `TransferInfo` so the frontend can insert a `Queued`-state stub
+/// into `TransfersStore` for ids it has never seen before. Mirrors
+/// `task::EV_PROGRESS`/`task::EV_DONE`'s naming, colocated here since this is
+/// the only place it's emitted from.
+pub const EV_STARTED: &str = "transfer:started";
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -143,10 +150,11 @@ impl TransferManager {
         self.tasks.lock().await.insert(
             id,
             LiveTransfer {
-                info,
+                info: info.clone(),
                 cancel: Some(tx),
             },
         );
+        let _ = app.emit(EV_STARTED, &info);
         let tasks_clone = self.tasks.clone();
         tokio::spawn(task::run_upload(
             app,
@@ -187,10 +195,11 @@ impl TransferManager {
         self.tasks.lock().await.insert(
             id,
             LiveTransfer {
-                info,
+                info: info.clone(),
                 cancel: Some(tx),
             },
         );
+        let _ = app.emit(EV_STARTED, &info);
         let tasks_clone = self.tasks.clone();
         tokio::spawn(task::run_download(
             app,

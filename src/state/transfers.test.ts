@@ -32,6 +32,31 @@ describe("transfers store", () => {
     expect(useTransfersStore.getState().loading).toBe(false);
   });
 
+  it("applyStarted() inserts a new entry for an id not yet in the store", () => {
+    useTransfersStore.getState().applyStarted(baseTransfer);
+    expect(useTransfersStore.getState().list).toHaveLength(1);
+    expect(useTransfersStore.getState().list[0].id).toBe("t1");
+  });
+
+  it("applyStarted() does not duplicate an id that's already in the store", () => {
+    useTransfersStore.getState().applyStarted(baseTransfer);
+    useTransfersStore.getState().applyStarted(baseTransfer);
+    expect(useTransfersStore.getState().list).toHaveLength(1);
+  });
+
+  it("applyProgress() after applyStarted() correctly updates the entry", () => {
+    useTransfersStore.getState().applyStarted(baseTransfer);
+    useTransfersStore.getState().applyProgress({
+      transfer_id: "t1",
+      bytes_done: 100,
+      total_bytes: 1000,
+      rate_bps: 50,
+    });
+    const entry = useTransfersStore.getState().list[0];
+    expect(entry.bytes_done).toBe(100);
+    expect(entry.total_bytes).toBe(1000);
+  });
+
   it("applyProgress() merges bytes_done/total_bytes into the matching transfer", () => {
     useTransfersStore.setState({ list: [baseTransfer], loading: false });
     useTransfersStore.getState().applyProgress({
