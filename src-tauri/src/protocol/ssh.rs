@@ -4,6 +4,7 @@ use russh::client::{self, Handle};
 use russh::keys::PublicKey;
 use russh::{Channel, ChannelMsg};
 use std::sync::Arc;
+use std::time::Duration;
 
 pub struct SshProtocol;
 
@@ -12,13 +13,23 @@ pub struct SshSession {
     channel: Channel<client::Msg>,
 }
 
+/// Maximum time the initial SSH connect (TCP handshake + KEX) is allowed to take before
+/// giving up. Windows' OS-level TCP timeout is 21–30s on an unresponsive host; we bound
+/// it here so the user sees "Connecting failed" quickly on a typo'd address instead of
+/// staring at a spinner for half a minute.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+
 impl SshProtocol {
     pub async fn connect(host: &str, port: u16, auth: AuthConfig) -> Result<SshSession> {
         let config = Arc::new(client::Config::default());
         let handler = ClientHandler;
-        let mut handle = client::connect(config, (host, port), handler)
-            .await
-            .map_err(|e| Error::Protocol(format!("connect: {e}")))?;
+        let mut handle = tokio::time::timeout(
+            CONNECT_TIMEOUT,
+            client::connect(config, (host, port), handler),
+        )
+        .await
+        .map_err(|_| Error::Timeout)?
+        .map_err(|e| Error::Protocol(format!("connect: {e}")))?;
         let authed = match auth.method {
             AuthMethod::Password(pw) => handle
                 .authenticate_password(auth.username, pw)
