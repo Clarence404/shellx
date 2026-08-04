@@ -54,6 +54,7 @@ directories = "5"
 # cargo unions the features declared here with whichever target section
 # matches the build platform.
 keyring = "3"
+tauri-plugin-dialog = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
