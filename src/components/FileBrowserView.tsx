@@ -7,6 +7,7 @@ import { sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir } from "../ipc/sft
 import { sftpUpload, sftpDownload } from "../ipc/transfers";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow } from "./FileRow";
+import { TransferQueue } from "./TransferQueue";
 
 interface Props {
   connectionId: string;
@@ -200,6 +201,7 @@ export function FileBrowserView({ connectionId }: Props) {
           </div>
         )}
       </div>
+      <TransferQueue connectionId={connectionId} />
     </div>
   );
 }
