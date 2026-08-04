@@ -31,9 +31,16 @@ export function FileBrowserView({ connectionId }: Props) {
     if (!state) void loadDir(connectionId, ".");
   }, [connectionId, state, loadDir]);
 
-  // Native Tauri drag-drop listener (scoped to this component's lifetime)
+  // Native Tauri drag-drop listener (scoped to this component's lifetime).
+  // `cancelled` guards against the async registration race: onDragDropEvent
+  // resolves asynchronously, and this effect can be cleaned up (cwd change
+  // or unmount) before that promise settles. Without the flag, a listener
+  // that resolves after cleanup would wire itself up and never get
+  // unsubscribed (cleanup already ran `unlisten?.()` as a no-op) — same
+  // leak class as the v0.1 TerminalView fix.
   useEffect(() => {
     const win = getCurrentWebviewWindow();
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     win.onDragDropEvent((event) => {
       if (event.payload.type === "drop") {
@@ -43,8 +50,17 @@ export function FileBrowserView({ connectionId }: Props) {
           void sftpUpload(connectionId, localPath, remotePath);
         }
       }
-    }).then((u) => { unlisten = u; });
-    return () => unlisten?.();
+    }).then((u) => {
+      if (cancelled) {
+        u();
+        return;
+      }
+      unlisten = u;
+    });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionId, state?.cwd]);
 
