@@ -11,9 +11,11 @@ export function PathBreadcrumb({ path, onNavigate }: Props) {
     paths.push({ label: "/", target: "/" });
   } else {
     let acc = "";
-    for (const part of parts) {
-      acc += "/" + part;
-      paths.push({ label: part, target: acc });
+    for (let i = 0; i < parts.length; i++) {
+      acc += "/" + parts[i];
+      // First segment carries the leading "/" so users see "/etc" not "etc";
+      // subsequent segments render with an explicit "/" separator between them.
+      paths.push({ label: i === 0 ? "/" + parts[i] : parts[i], target: acc });
     }
   }
 

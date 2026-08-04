@@ -53,7 +53,9 @@ describe("FileBrowserView", () => {
 
   it("renders the breadcrumb path segments", () => {
     render(<FileBrowserView connectionId="c1" />);
-    expect(screen.getByText("home")).toBeInTheDocument();
+    // First segment carries the leading "/" so users see an absolute path;
+    // subsequent segments are bare labels.
+    expect(screen.getByText("/home")).toBeInTheDocument();
     expect(screen.getByText("chen")).toBeInTheDocument();
   });
 });
