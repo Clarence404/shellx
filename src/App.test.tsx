@@ -27,6 +27,30 @@ vi.mock("./ipc/hosts", () => ({
   getHostPassword: vi.fn().mockResolvedValue(null),
 }));
 
+const mockTransfersState = {
+  list: [] as Array<{ id: string; connection_id: string }>,
+  loading: false,
+  loadInitial: vi.fn(),
+  applyProgress: vi.fn(),
+  applyDone: vi.fn(),
+  cancel: vi.fn(),
+  remove: vi.fn(),
+};
+
+vi.mock("./state/transfers", () => ({
+  useTransfersStore: Object.assign(
+    (selector: any) => selector(mockTransfersState),
+    {
+      getState: () => mockTransfersState,
+      setState: vi.fn(),
+    },
+  ),
+}));
+vi.mock("./ipc/transfers", () => ({
+  onTransferProgress: vi.fn().mockResolvedValue(() => {}),
+  onTransferDone: vi.fn().mockResolvedValue(() => {}),
+}));
+
 describe("App shell", () => {
   afterEach(() => {
     mockHostsState.hosts = [];

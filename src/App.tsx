@@ -8,8 +8,10 @@ import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { useSessions } from "./state/sessions";
 import { useHostsStore } from "./state/hosts";
+import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
 import { getHostPassword } from "./ipc/hosts";
+import { onTransferProgress, onTransferDone } from "./ipc/transfers";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
 import type { HostInfo } from "./types/host";
 
@@ -34,6 +36,32 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => { void loadHosts(); }, [loadHosts]);
+
+  // Wire transfer progress/done events into the transfers store. Uses the
+  // `cancelled` flag guard (see FileBrowserView's drag-drop listener) since
+  // onTransferProgress/onTransferDone resolve asynchronously and this effect
+  // could unmount before the listener registration promise settles.
+  useEffect(() => {
+    const store = useTransfersStore.getState();
+    let cancelled = false;
+    const unlistens: Array<() => void> = [];
+
+    onTransferProgress((ev) => store.applyProgress(ev)).then((u) => {
+      if (cancelled) { u(); return; }
+      unlistens.push(u);
+    });
+    onTransferDone((ev) => store.applyDone(ev)).then((u) => {
+      if (cancelled) { u(); return; }
+      unlistens.push(u);
+    });
+
+    void store.loadInitial();
+
+    return () => {
+      cancelled = true;
+      unlistens.forEach((u) => u());
+    };
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
