@@ -1,5 +1,5 @@
 //! Tauri IPC surface: commands the frontend invokes plus the bridge that
-//! forwards each session's byte stream to the frontend as events.
+//! forwards each connection's byte stream to the frontend as events.
 
 pub mod events;
 pub mod hosts;
@@ -7,7 +7,7 @@ pub mod hosts;
 use crate::error::Result;
 use crate::protocol::{AuthConfig, AuthMethod};
 use crate::session::manager::SessionManager;
-use crate::session::{SessionId, SessionInfo};
+use crate::session::{ConnectionInfo, SessionId};
 use events::{ClosedEvent, DataEvent, EV_CLOSED, EV_DATA};
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter, State};
@@ -22,23 +22,26 @@ pub struct OpenSshArgs {
     pub host_id: Option<uuid::Uuid>,
 }
 
-/// Opens an SSH session, then spawns a background task that pumps bytes
-/// read from the session into `session:data` events until the driver loop
-/// exits, at which point a single `session:closed` event is emitted.
+/// Opens an SSH connection and eagerly opens its shell channel (matching
+/// v0.2's UX, where connecting always lands you in a terminal), then spawns
+/// a background task that pumps bytes read from the shell into
+/// `session:data` events until the driver loop exits, at which point a
+/// single `session:closed` event is emitted.
 #[tauri::command]
-pub async fn open_ssh_session(
+pub async fn open_connection(
     args: OpenSshArgs,
     app: AppHandle,
     mgr: State<'_, SessionManager>,
     host_store: State<'_, crate::store::HostStore>,
-) -> Result<SessionInfo> {
+) -> Result<ConnectionInfo> {
     let auth = AuthConfig {
         username: args.username,
         method: AuthMethod::Password(args.password),
     };
     let info = mgr
-        .open_ssh(&args.host, args.port, auth, args.label, args.host_id)
+        .open_connection(&args.host, args.port, auth, args.label, args.host_id)
         .await?;
+    mgr.open_shell(info.id).await?;
 
     // Best-effort: record that this saved host was just connected to.
     if let Some(hid) = args.host_id {
@@ -62,6 +65,20 @@ pub async fn open_ssh_session(
     });
 
     Ok(info)
+}
+
+#[derive(Deserialize)]
+pub struct OpenShellArgs {
+    pub id: SessionId,
+}
+
+/// Opens the shell channel on an already-established connection. Not used
+/// by the current UI (`open_connection` opens the shell eagerly) but
+/// available for future flows (e.g. Task 4's "go straight to Files")
+/// that establish a connection without immediately needing a terminal.
+#[tauri::command]
+pub async fn open_shell(args: OpenShellArgs, mgr: State<'_, SessionManager>) -> Result<()> {
+    mgr.open_shell(args.id).await
 }
 
 #[derive(Deserialize)]
@@ -93,11 +110,11 @@ pub struct CloseArgs {
 }
 
 #[tauri::command]
-pub async fn close_session(args: CloseArgs, mgr: State<'_, SessionManager>) -> Result<()> {
+pub async fn close_connection(args: CloseArgs, mgr: State<'_, SessionManager>) -> Result<()> {
     mgr.close(args.id).await
 }
 
 #[tauri::command]
-pub async fn list_sessions(mgr: State<'_, SessionManager>) -> Result<Vec<SessionInfo>> {
+pub async fn list_sessions(mgr: State<'_, SessionManager>) -> Result<Vec<ConnectionInfo>> {
     Ok(mgr.list().await)
 }

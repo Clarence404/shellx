@@ -28,10 +28,11 @@ fn main() {
         .manage(host_store)
         .manage(keychain)
         .invoke_handler(tauri::generate_handler![
-            ipc::open_ssh_session,
+            ipc::open_connection,
+            ipc::open_shell,
             ipc::write_session_input,
             ipc::resize_session,
-            ipc::close_session,
+            ipc::close_connection,
             ipc::list_sessions,
             ipc::hosts::list_hosts,
             ipc::hosts::save_host,

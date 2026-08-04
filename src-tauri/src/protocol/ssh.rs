@@ -1,5 +1,6 @@
 use crate::error::{Error, Result};
-use crate::protocol::{AuthConfig, AuthMethod};
+use crate::protocol::{AuthConfig, AuthMethod, Connection};
+use async_trait::async_trait;
 use russh::client::{self, Handle};
 use russh::keys::PublicKey;
 use russh::{Channel, ChannelMsg};
@@ -8,10 +9,27 @@ use std::time::Duration;
 
 pub struct SshProtocol;
 
-pub struct SshSession {
-    handle: Handle<ClientHandler>,
+/// One SSH connection to a host. Authentication happens during `connect`;
+/// no channel is opened yet — callers open a shell (and, from Task 2
+/// onward, an SFTP subsystem) explicitly via the `Connection` trait.
+///
+/// `russh::client::Handle` is not `Clone` (it owns an `UnboundedReceiver`
+/// and the driving task's `JoinHandle`), but every method we need from it
+/// after the initial authenticate step — `channel_open_session`,
+/// `disconnect` — takes `&self`. Wrapping it in an `Arc` lets both the
+/// `SshConnection` and every `ShellHandle` it opens share the same
+/// underlying handle without a `Mutex`.
+pub struct SshConnection {
+    handle: Arc<Handle<ClientHandler>>,
+}
+
+pub struct ShellHandle {
+    handle: Arc<Handle<ClientHandler>>,
     channel: Channel<client::Msg>,
 }
+
+/// Empty stub — Task 2 fills in the SFTP subsystem handle.
+pub struct SftpHandle;
 
 /// Maximum time the initial SSH connect (TCP handshake + KEX) is allowed to take before
 /// giving up. Windows' OS-level TCP timeout is 21–30s on an unresponsive host; we bound
@@ -20,7 +38,7 @@ pub struct SshSession {
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 impl SshProtocol {
-    pub async fn connect(host: &str, port: u16, auth: AuthConfig) -> Result<SshSession> {
+    pub async fn connect(host: &str, port: u16, auth: AuthConfig) -> Result<SshConnection> {
         let config = Arc::new(client::Config::default());
         let handler = ClientHandler;
         let mut handle = tokio::time::timeout(
@@ -39,7 +57,17 @@ impl SshProtocol {
         if !authed.success() {
             return Err(Error::Auth("rejected".into()));
         }
-        let channel = handle
+        Ok(SshConnection {
+            handle: Arc::new(handle),
+        })
+    }
+}
+
+#[async_trait]
+impl Connection for SshConnection {
+    async fn open_shell(&mut self) -> Result<ShellHandle> {
+        let channel = self
+            .handle
             .channel_open_session()
             .await
             .map_err(|e| Error::Protocol(format!("open session: {e}")))?;
@@ -51,11 +79,25 @@ impl SshProtocol {
             .request_shell(true)
             .await
             .map_err(|e| Error::Protocol(format!("shell: {e}")))?;
-        Ok(SshSession { handle, channel })
+        Ok(ShellHandle {
+            handle: self.handle.clone(),
+            channel,
+        })
+    }
+
+    async fn open_sftp(&mut self) -> Result<SftpHandle> {
+        Err(Error::Protocol("sftp not implemented — Task 2".into()))
+    }
+
+    async fn disconnect(&mut self) -> Result<()> {
+        self.handle
+            .disconnect(russh::Disconnect::ByApplication, "", "")
+            .await
+            .map_err(|e| Error::Protocol(format!("disconnect: {e}")))
     }
 }
 
-impl SshSession {
+impl ShellHandle {
     pub async fn write_input(&mut self, data: &[u8]) -> Result<()> {
         self.channel
             .data(data)
@@ -211,12 +253,13 @@ mod tests {
             username: "chen".into(),
             method: AuthMethod::Password("pw".into()),
         };
-        let mut sess = SshProtocol::connect("127.0.0.1", port, auth).await.unwrap();
-        sess.write_input(b"hello").await.unwrap();
+        let mut conn = SshProtocol::connect("127.0.0.1", port, auth).await.unwrap();
+        let mut shell = conn.open_shell().await.unwrap();
+        shell.write_input(b"hello").await.unwrap();
         let mut buf = Vec::new();
-        let n = sess.read_output(&mut buf).await.unwrap();
+        let n = shell.read_output(&mut buf).await.unwrap();
         assert!(n >= 5);
         assert!(buf.starts_with(b"hello"));
-        sess.close().await.unwrap();
+        shell.close().await.unwrap();
     }
 }

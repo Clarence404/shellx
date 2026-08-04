@@ -19,7 +19,7 @@ vi.mock("../state/hosts", () => ({
 }));
 
 vi.mock("../ipc/commands", () => ({
-  openSshSession: vi.fn().mockResolvedValue({
+  openConnection: vi.fn().mockResolvedValue({
     id: "sess-1", label: "l", kind: "ssh", host_id: null,
   }),
 }));

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useHostsStore } from "../state/hosts";
-import { openSshSession } from "../ipc/commands";
+import { openConnection } from "../ipc/commands";
 import type { HostInfo } from "../types/host";
 
 type Mode = "create" | "edit";
@@ -67,14 +67,14 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             return;
           }
           // Connect using the saved host
-          const info = await openSshSession({
+          const info = await openConnection({
             host, port: pn, username, password, label,
             host_id: inserted.id,
           });
           onDone("connected", { id: info.id, label: info.label, host_id: info.host_id });
         } else {
           // Quick connect — no DB entry
-          const info = await openSshSession({
+          const info = await openConnection({
             host, port: pn, username, password, label,
           });
           onDone("connected", { id: info.id, label: info.label, host_id: info.host_id });
