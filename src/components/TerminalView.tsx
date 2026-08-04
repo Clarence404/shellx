@@ -68,8 +68,12 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       void resizeSession(sessionId, cols, rows);
     });
 
-    // Handle container resize.
-    const ro = new ResizeObserver(() => fit.fit());
+    // Handle container resize. Guarded against 0-height: when the parent
+    // hides this view via `display: none` (activity tab switch), the host
+    // element's offsetHeight is 0 and fit() would otherwise divide-by-zero.
+    const ro = new ResizeObserver(() => {
+      if (hostRef.current && hostRef.current.offsetHeight > 0) fit.fit();
+    });
     ro.observe(hostRef.current);
 
     // Wire incoming data. `cancelled` prevents a listener that resolves after

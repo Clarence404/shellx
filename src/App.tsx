@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import { EmptyState } from "./components/EmptyState";
 import { TerminalView } from "./components/TerminalView";
+import { ActivityToolbar } from "./components/ActivityToolbar";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { useSessions } from "./state/sessions";
@@ -17,6 +18,10 @@ export function App() {
   const setActive = useSessions((s) => s.setActive);
   const addSession = useSessions((s) => s.addSession);
   const removeSession = useSessions((s) => s.removeSession);
+  const activeActivity = useSessions((s) =>
+    s.activeId ? (s.activeActivity[s.activeId] ?? "terminal") : "terminal"
+  );
+  const setActivity = useSessions((s) => s.setActivity);
 
   const loadHosts = useHostsStore((s) => s.load);
 
@@ -96,7 +101,22 @@ export function App() {
         onConnectHost={(host) => void handleConnectSavedHost(host)}
       >
         {activeId ? (
-          <TerminalView sessionId={activeId} />
+          <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+            <ActivityToolbar
+              activity={activeActivity}
+              onChange={(a) => setActivity(activeId, a)}
+            />
+            <div style={{ flex: 1, position: "relative" }}>
+              {/* Both mounted; only one visible — keeps xterm state alive across tab switches */}
+              <div style={{ display: activeActivity === "terminal" ? "block" : "none", height: "100%" }}>
+                <TerminalView sessionId={activeId} />
+              </div>
+              <div style={{ display: activeActivity === "files" ? "block" : "none", height: "100%" }}>
+                {/* FileBrowserView is added in Task 8 — for now a placeholder */}
+                <div style={{ padding: 20, color: "var(--text-3)" }}>Files view (Task 8 fills this in)</div>
+              </div>
+            </div>
+          </div>
         ) : (
           <EmptyState onNewConnection={() => setDialog({ mode: "create" })} />
         )}
