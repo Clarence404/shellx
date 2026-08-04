@@ -25,6 +25,9 @@ export interface TransferDoneEvent {
   state: TransferState;
 }
 
+export const onTransferStarted = (h: (info: TransferInfo) => void): Promise<UnlistenFn> =>
+  listen<TransferInfo>("transfer:started", (ev) => h(ev.payload));
+
 export const onTransferProgress = (h: (e: TransferProgressEvent) => void): Promise<UnlistenFn> =>
   listen<TransferProgressEvent>("transfer:progress", (ev) => h(ev.payload));
 

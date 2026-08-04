@@ -47,6 +47,7 @@ const mockTransfersState = {
   list: [] as Array<{ id: string; connection_id: string }>,
   loading: false,
   loadInitial: vi.fn(),
+  applyStarted: vi.fn(),
   applyProgress: vi.fn(),
   applyDone: vi.fn(),
   cancel: vi.fn(),
@@ -63,6 +64,7 @@ vi.mock("./state/transfers", () => ({
   ),
 }));
 vi.mock("./ipc/transfers", () => ({
+  onTransferStarted: vi.fn().mockResolvedValue(() => {}),
   onTransferProgress: vi.fn().mockResolvedValue(() => {}),
   onTransferDone: vi.fn().mockResolvedValue(() => {}),
 }));

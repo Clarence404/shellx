@@ -12,7 +12,7 @@ import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
 import { getHostPassword } from "./ipc/hosts";
 import { onConnectionClosed } from "./ipc/events";
-import { onTransferProgress, onTransferDone } from "./ipc/transfers";
+import { onTransferStarted, onTransferProgress, onTransferDone } from "./ipc/transfers";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
 import type { HostInfo } from "./types/host";
 
@@ -39,15 +39,20 @@ export function App() {
 
   useEffect(() => { void loadHosts(); }, [loadHosts]);
 
-  // Wire transfer progress/done events into the transfers store. Uses the
-  // `cancelled` flag guard (see FileBrowserView's drag-drop listener) since
-  // onTransferProgress/onTransferDone resolve asynchronously and this effect
-  // could unmount before the listener registration promise settles.
+  // Wire transfer started/progress/done events into the transfers store. Uses
+  // the `cancelled` flag guard (see FileBrowserView's drag-drop listener)
+  // since onTransferStarted/onTransferProgress/onTransferDone resolve
+  // asynchronously and this effect could unmount before the listener
+  // registration promise settles.
   useEffect(() => {
     const store = useTransfersStore.getState();
     let cancelled = false;
     const unlistens: Array<() => void> = [];
 
+    onTransferStarted((info) => store.applyStarted(info)).then((u) => {
+      if (cancelled) { u(); return; }
+      unlistens.push(u);
+    });
     onTransferProgress((ev) => store.applyProgress(ev)).then((u) => {
       if (cancelled) { u(); return; }
       unlistens.push(u);
