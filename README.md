@@ -2,14 +2,15 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.2
+## Status: v0.3
 
-v0.2 adds a persistent connection manager (SQLite hosts + OS keychain passwords), multi-tab
-SSH with Ctrl+T/W/Tab shortcuts, a minimal ⌘K palette to search saved hosts, and a first UI
-polish pass (Lucide icons, JetBrains Mono terminal with a Custom Warm ANSI palette, a real
-`>_` app icon). See [docs/superpowers/specs/2026-08-04-shellx-v0.2-design.md](docs/superpowers/specs/2026-08-04-shellx-v0.2-design.md) for the full design.
+v0.3 adds SFTP alongside SSH in the same tab (toggle between Terminal and Files activities),
+plus a proper Connection/ShellHandle/SftpHandle trait hierarchy. Drag files from OS Explorer
+to upload; right-click for Rename/Delete/New folder/Download to... Also: dead-tab fade,
+Ctrl+Shift+W/T hotkey remap (Ctrl+W/T let back to shell readline), Forget-password UI, and
+HostRow keyboard a11y. See [docs/superpowers/specs/2026-08-04-shellx-v0.3-design.md](docs/superpowers/specs/2026-08-04-shellx-v0.3-design.md).
 
-> **Security note (v0.2)**: shellx does not verify SSH host keys — every server is trusted on first connection. Do not use over untrusted networks yet. Host-key verification lands in v0.3.
+> **Security note (v0.3)**: shellx does not verify SSH host keys — every server is trusted on first connection. Do not use over untrusted networks yet. Host-key verification lands in v0.4.
 
 ---
 
@@ -116,14 +117,15 @@ Release builds enable LTO and take longer (5–15 min on Windows) than dev.
 # Rust unit tests
 cd src-tauri && cargo test --lib
 
-# Rust end-to-end integration test (opens an in-process SSH server fixture)
+# Rust end-to-end integration tests (open in-process SSH/SFTP server fixtures)
 cd src-tauri && cargo test --features test-fixtures --test ssh_integration
+cd src-tauri && cargo test --features test-fixtures --test sftp_integration
 
 # Frontend tests (Vitest + jsdom + Testing Library)
 pnpm test -- --run
 ```
 
-The Rust integration test does not need Docker or an external SSH server — it spins up an in-process russh echo server inside the test itself. See `src-tauri/src/protocol/ssh.rs::testing::start_echo_ssh_server` for the fixture.
+The Rust integration tests do not need Docker or an external SSH server — they spin up an in-process russh (and russh-sftp) server inside the test itself. See `src-tauri/src/protocol/ssh.rs::testing::start_echo_ssh_server` for the fixture.
 
 ### Trying it against a real server
 
@@ -178,23 +180,24 @@ shellx/
 The Rust side is split into three trait-bounded layers, each independently testable:
 
 - **Transport** (`transport::Transport` trait) — bytes only. Currently `TcpTransport`; future `SerialTransport` (RS-232 / RS-485), `UsbCdcTransport`, `WsTransport` slot in here without touching upper layers.
-- **Protocol** (currently `SshProtocol` concrete; `Protocol` trait deferred to v0.3 when SFTP/FTP force the abstraction) — turns bytes into semantic operations (auth, channels, PTY, resize).
+- **Protocol** (`protocol::Connection` trait, implemented by `SshConnection`; a connection opens `ShellHandle` and/or `SftpHandle` sub-channels) — turns bytes into semantic operations (auth, channels, PTY/resize, SFTP CRUD + transfers). The trait boundary keeps room for a future FTP/FTPS implementation (v0.5) without touching `SessionManager`.
 - **SessionManager** (`session::manager::SessionManager`) — owns live sessions keyed by UUID; runs a per-session tokio task that pumps writes / reads / subscription forwarding. Exposed to the frontend via Tauri IPC commands + events (`session:data`, `session:closed`).
 
 Adding a new physical channel (e.g. RS-485) means writing one `Transport` impl. Adding a new application protocol (e.g. Modbus, MQTT) means writing a session type that plugs into `SessionManager`. Adding a new UI view (e.g. a Modbus register table) means writing one React component and one command dispatch. See spec §5 for the planned extension timeline.
 
 ---
 
-## Sizes (v0.2)
+## Sizes (v0.3)
 
 Measured from a `pnpm tauri:build` release build on Windows 11 (MSVC toolchain):
 
-- Windows MSI: 6.1 MB (`shellx_0.2.0_x64_en-US.msi`, 6,352,896 bytes)
-- Windows NSIS setup: 3.8 MB (`shellx_0.2.0_x64-setup.exe`, 3,956,675 bytes)
+- Windows MSI: 6.7 MB (`shellx_0.3.0_x64_en-US.msi`, 7,028,736 bytes)
+- Windows NSIS setup: 4.1 MB (`shellx_0.3.0_x64-setup.exe`, 4,253,987 bytes)
 - macOS DMG: not yet measured (no macOS build machine in this pass)
 - Linux AppImage: not yet measured (no Linux build machine in this pass)
 
-Both Windows installers are well under the 15 MB target (spec §7).
+Both Windows installers are well under the 15 MB target (spec §7). The v0.2 → v0.3 growth
+(~0.7 MB MSI / ~0.3 MB NSIS) comes from russh-sftp and the dialog plugin's transitive deps.
 
 ---
 
@@ -215,7 +218,7 @@ If downloads fail with `os error 2` file rename mid-transfer, that's Defender ra
 
 **App compiles but panics at launch with `SetLoggerError`** — was fixed in `be85531`. If it recurs after adding a new logger init, remember `tauri_plugin_log` already owns the global logger slot; don't call `tracing_subscriber::init()` alongside it.
 
-**Frontend tests print jsdom canvas errors from xterm.js** — noise, not failures. `jsdom` doesn't implement `<canvas>` fully; xterm.js prints stack traces to stderr but the tests still pass (`4 passed`).
+**Frontend tests print jsdom canvas errors from xterm.js** — noise, not failures. `jsdom` doesn't implement `<canvas>` fully; xterm.js prints stack traces to stderr but the tests still pass (`52 passed`).
 
 **Windows Defender flags the built exe** — it's an unsigned binary. Code signing is a v1.0 concern; for now, right-click → Properties → **Unblock** if you want to distribute.
 
@@ -225,9 +228,9 @@ If downloads fail with `os error 2` file rename mid-transfer, that's Defender ra
 
 The next natural steps (roughly the order of the spec's milestone roadmap):
 
-- **v0.3** — SFTP (rides SSH channel), SSH key-based auth, host-key verification (known_hosts), `Protocol` trait extraction.
-- **v0.4** — traditional FTP / FTPS.
-- **v0.5+** — optional master-password double-track for credentials, signed installers, cross-platform CI, light theme.
+- **v0.4** — SSH key-based auth, host-key verification (known_hosts), full boxed `Protocol` trait impls, credentials double-track (password vs. key).
+- **v0.5** — traditional FTP / FTPS.
+- **v0.6+** — signed installers, cross-platform CI, light theme.
 - **Future** — RS-232 / RS-485 transport, Modbus RTU/TCP protocol, custom register-table views (spec §4 shows exactly which layer each addition touches).
 
 The design spec and implementation plan directories under `docs/superpowers/` are the source of truth for how each milestone is scoped; the SDD ledger under `.superpowers/sdd/` is the retrospective for how each was built.
