@@ -1,0 +1,98 @@
+name: release
+
+# Triggers:
+#   - push a tag matching v* (v0.3.1, v0.4.0-rc.1, etc.) → auto-build all platforms
+#     and attach installers to a draft release for that tag
+#   - manually via Actions → "Run workflow" (pick a tag that already exists)
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build a release for (e.g. v0.3.1)'
+        required: true
+        type: string
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS universal binary — one runner builds both arm64 and x86_64
+          - platform: macos-latest
+            args: '--target universal-apple-darwin'
+            rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+          # Ubuntu 22.04 — Tauri 2 needs webkit2gtk-4.1 (not -4.0 which is v1)
+          - platform: ubuntu-22.04
+            args: ''
+            rust-targets: ''
+          - platform: windows-latest
+            args: ''
+            rust-targets: ''
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          # push-tag runs on the tag ref; workflow_dispatch runs on the branch
+          # you triggered from — override with the tag input so the build is
+          # always taken from the tagged commit.
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Linux system deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build + upload to release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: 'shellx ${{ github.event.inputs.tag || github.ref_name }}'
+          releaseBody: |
+            Auto-built from the tagged commit.
+
+            Installers below are unsigned — Windows SmartScreen and macOS
+            Gatekeeper will warn on first launch. See the README for the
+            "Run anyway" steps until installer signing lands (v0.4 backlog).
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
