@@ -28,50 +28,72 @@ export function HostRow({ host, isConnected, onConnect, onEdit, onDuplicate, onD
     setMenu({ x: e.clientX, y: e.clientY });
   }
 
-  function handleMoreClick(e: React.MouseEvent) {
+  function handleMoreClick(e: React.MouseEvent | React.KeyboardEvent) {
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setMenu({ x: rect.right, y: rect.bottom + 4 });
   }
 
+  function handleMoreKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleMoreClick(e);
+    }
+  }
+
   return (
     <>
-      <button
-        aria-label={host.label}
-        aria-describedby={isConnected ? `conn-status-${host.id}` : undefined}
-        onClick={onConnect}
-        onContextMenu={handleContextMenu}
+      <div
+        role="group"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          width: "100%", padding: "6px 8px", borderRadius: 5,
-          fontSize: 12, color: "var(--text-1)",
-          display: "flex", alignItems: "center", gap: 8,
+          width: "100%", borderRadius: 5,
+          display: "flex", alignItems: "center", gap: 4,
           background: hovered ? "var(--border)" : "transparent",
-          textAlign: "left",
         }}>
-        <span
-          data-testid={`conn-status-${host.id}`}
-          data-connected={String(isConnected)}
+        <button
+          aria-label={host.label}
+          aria-describedby={isConnected ? `conn-status-${host.id}` : undefined}
+          onClick={onConnect}
+          onContextMenu={handleContextMenu}
           style={{
-            width: 6, height: 6, borderRadius: "50%",
-            background: "var(--accent)",
-            opacity: isConnected ? 1 : 0.3,
-          }} />
-        <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {host.label}
-        </span>
-        <span
+            flex: 1, minWidth: 0, padding: "6px 8px", borderRadius: 5,
+            fontSize: 12, color: "var(--text-1)",
+            display: "flex", alignItems: "center", gap: 8,
+            background: "transparent",
+            textAlign: "left",
+          }}>
+          <span
+            data-testid={`conn-status-${host.id}`}
+            data-connected={String(isConnected)}
+            style={{
+              width: 6, height: 6, borderRadius: "50%",
+              background: "var(--accent)",
+              opacity: isConnected ? 1 : 0.3,
+            }} />
+          <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {host.label}
+          </span>
+        </button>
+        <button
+          aria-label="host options"
+          tabIndex={0}
           onClick={handleMoreClick}
+          onKeyDown={handleMoreKeyDown}
           style={{
             color: "var(--text-3)",
             opacity: hovered ? 1 : 0,
             transition: "opacity 0.1s",
-            padding: "0 2px",
+            padding: "4px 6px",
+            marginRight: 4,
+            background: "transparent",
+            borderRadius: 4,
+            flexShrink: 0,
           }}>
           <MoreHorizontal size={12} strokeWidth={2} />
-        </span>
-      </button>
+        </button>
+      </div>
       {menu && (
         <HostContextMenu
           x={menu.x} y={menu.y} items={items}

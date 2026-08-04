@@ -56,4 +56,68 @@ describe("HostForm", () => {
     expect(screen.getByDisplayValue("prod-1")).toBeInTheDocument();
     expect(screen.getByDisplayValue("10.0.0.1")).toBeInTheDocument();
   });
+
+  it("edit mode: 'Forget stored password' checkbox sends password: null", async () => {
+    const user = userEvent.setup();
+    const updateHostById = vi.fn().mockResolvedValue({
+      id: "id-1", label: "prod-1", host: "10.0.0.1", port: 22, username: "chen",
+      notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
+      password_stored: true,
+    });
+    vi.resetModules();
+    vi.doMock("../state/hosts", () => ({
+      useHostsStore: Object.assign(
+        (selector: any) => selector({
+          keychainAvailable: true,
+          addHost: vi.fn(),
+          updateHostById,
+        }),
+        { getState: () => ({ keychainAvailable: true }) },
+      ),
+    }));
+    const { HostForm: HostFormReloaded } = await import("./HostForm");
+
+    const onDone = vi.fn();
+    render(<HostFormReloaded
+      mode="edit"
+      initial={{
+        id: "id-1", label: "prod-1", host: "10.0.0.1", port: 22,
+        username: "chen", notes: null,
+        created_at: 0, last_connected_at: null, sort_order: 0,
+      }}
+      onDone={onDone} onCancel={() => {}} />);
+
+    const checkbox = screen.getByRole("checkbox", { name: /forget stored password/i });
+    await user.click(checkbox);
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(updateHostById).toHaveBeenCalledWith(expect.objectContaining({
+      id: "id-1", password: null,
+    }));
+    expect(onDone).toHaveBeenCalledWith("saved");
+  });
+
+  it("edit mode: no 'Forget stored password' checkbox when keychain is unavailable", async () => {
+    vi.resetModules();
+    vi.doMock("../state/hosts", () => ({
+      useHostsStore: Object.assign(
+        (selector: any) => selector({
+          keychainAvailable: false,
+          addHost: vi.fn(),
+          updateHostById: vi.fn(),
+        }),
+        { getState: () => ({ keychainAvailable: false }) },
+      ),
+    }));
+    const { HostForm: HostFormReloaded } = await import("./HostForm");
+    render(<HostFormReloaded
+      mode="edit"
+      initial={{
+        id: "id-1", label: "prod-1", host: "10.0.0.1", port: 22,
+        username: "chen", notes: null,
+        created_at: 0, last_connected_at: null, sort_order: 0,
+      }}
+      onDone={() => {}} onCancel={() => {}} />);
+    expect(screen.queryByRole("checkbox", { name: /forget stored password/i })).not.toBeInTheDocument();
+  });
 });

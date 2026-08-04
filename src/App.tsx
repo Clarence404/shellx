@@ -11,6 +11,7 @@ import { useHostsStore } from "./state/hosts";
 import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
 import { getHostPassword } from "./ipc/hosts";
+import { onConnectionClosed } from "./ipc/events";
 import { onTransferProgress, onTransferDone } from "./ipc/transfers";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
 import type { HostInfo } from "./types/host";
@@ -21,6 +22,7 @@ export function App() {
   const setActive = useSessions((s) => s.setActive);
   const addSession = useSessions((s) => s.addSession);
   const removeSession = useSessions((s) => s.removeSession);
+  const markSessionClosed = useSessions((s) => s.markSessionClosed);
   const activeActivity = useSessions((s) =>
     s.activeId ? (s.activeActivity[s.activeId] ?? "terminal") : "terminal"
   );
@@ -62,6 +64,29 @@ export function App() {
       unlistens.forEach((u) => u());
     };
   }, []);
+
+  // Wire the backend's connection:closed event into the sessions store:
+  // fade the tab first (markSessionClosed), then drop it from the list once
+  // the fade transition (300ms, see TabBar) has had time to play out. Guarded
+  // with the same `cancelled` pattern as the transfer listeners above since
+  // onConnectionClosed resolves asynchronously.
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    onConnectionClosed(({ id }) => {
+      markSessionClosed(id);
+      setTimeout(() => removeSession(id), 300);
+    }).then((u) => {
+      if (cancelled) { u(); return; }
+      unlisten = u;
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [markSessionClosed, removeSession]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -116,7 +141,7 @@ export function App() {
     }
   }
 
-  const tabs = sessions.map((s) => ({ id: s.id, title: s.label }));
+  const tabs = sessions.map((s) => ({ id: s.id, title: s.label, state: s.state }));
 
   return (
     <>
