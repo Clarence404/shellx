@@ -7,6 +7,7 @@ import { FileBrowserView } from "./components/FileBrowserView";
 import { RailFilesView } from "./components/RailFilesView";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
+import { SettingsView } from "./components/settings/SettingsView";
 import { useSessions } from "./state/sessions";
 import { useHostsStore } from "./state/hosts";
 import { useSettingsStore } from "./state/settings";
@@ -218,12 +219,14 @@ export function App() {
       >
         {railView === "files" ? (
           <RailFilesView onConnectSavedHost={(host) => void handleConnectSavedHost(host)} />
-        ) : railView === "protocols" || railView === "settings" ? (
+        ) : railView === "settings" ? (
+          <SettingsView />
+        ) : railView === "protocols" ? (
           <div style={{
             height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
             color: "var(--text-3)", fontSize: 13, fontStyle: "italic",
           }}>
-            {railView === "protocols" ? "Protocols" : "Settings"} · coming soon
+            Protocols · coming soon
           </div>
         ) : activeId ? (
           <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
