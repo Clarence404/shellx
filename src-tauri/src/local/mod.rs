@@ -67,6 +67,16 @@ pub fn list_dir(path: &str) -> Result<Vec<LocalEntry>> {
     Ok(out)
 }
 
+/// Normalizes a path to forward-slash form on Windows so the frontend's
+/// path-split / `..`-rejoin / breadcrumb logic works consistently. Windows
+/// std::fs accepts both `\` and `/` transparently, so this loses nothing on
+/// the Rust side but avoids `C:\Users\chen`.split("/").join("/") producing
+/// `/C:/Users/chen` after `..` navigation. No-op on POSIX.
+#[cfg(windows)]
+fn to_forward(s: String) -> String { s.replace('\\', "/") }
+#[cfg(not(windows))]
+fn to_forward(s: String) -> String { s }
+
 pub fn realpath(path: &str) -> Result<String> {
     let expanded = expand(path)?;
     let canonical = expanded
@@ -80,12 +90,12 @@ pub fn realpath(path: &str) -> Result<String> {
     // See rust-lang/rust#42869.
     #[cfg(windows)]
     let s = s.strip_prefix(r"\\?\").map(String::from).unwrap_or(s);
-    Ok(s)
+    Ok(to_forward(s))
 }
 
 pub fn default_roots() -> DefaultRoots {
     fn s(p: Option<PathBuf>) -> String {
-        p.map(|p| p.to_string_lossy().into_owned()).unwrap_or_default()
+        p.map(|p| to_forward(p.to_string_lossy().into_owned())).unwrap_or_default()
     }
     DefaultRoots {
         home: s(dirs::home_dir()),
@@ -161,13 +171,17 @@ mod tests {
     fn realpath_expands_tilde() {
         let expanded = realpath("~").unwrap();
         let home = dirs::home_dir().unwrap();
-        // On Windows, realpath now strips the `\\?\` UNC prefix that std's
-        // canonicalize prepends; strip the same prefix from the RHS so both
-        // sides speak the same form. Non-Windows platforms are unaffected.
+        // On Windows, realpath strips the `\\?\` UNC prefix that std's
+        // canonicalize prepends AND normalizes `\` → `/`; do the same on
+        // the RHS so both sides speak the same form. Non-Windows platforms
+        // are unaffected.
         let canonical = home.canonicalize().unwrap();
         let canonical_str = canonical.to_string_lossy().into_owned();
         #[cfg(windows)]
-        let canonical_str = canonical_str.strip_prefix(r"\\?\").map(String::from).unwrap_or(canonical_str);
+        let canonical_str = {
+            let s = canonical_str.strip_prefix(r"\\?\").map(String::from).unwrap_or(canonical_str);
+            s.replace('\\', "/")
+        };
         assert_eq!(expanded, canonical_str);
     }
 
@@ -215,6 +229,17 @@ mod tests {
         let home_str = home.to_string_lossy().into_owned();
         let resolved = realpath(&home_str).unwrap();
         assert!(!resolved.starts_with(r"\\?\"), "expected non-UNC, got {resolved}");
-        assert!(resolved.contains(":\\") || resolved.contains(":/"), "expected drive letter");
+        assert!(resolved.contains(":/"), "expected forward-slash drive letter (C:/...), got {resolved}");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn realpath_normalizes_backslashes_to_forward_slashes_on_windows() {
+        // std::fs accepts both `\` and `/`; we normalize to `/` so the
+        // frontend can split-and-rejoin without producing invalid mixed
+        // forms like `/C:/Users` (see mod docstring for to_forward).
+        let home = dirs::home_dir().unwrap();
+        let resolved = realpath(&home.to_string_lossy()).unwrap();
+        assert!(!resolved.contains('\\'), "expected no backslashes, got {resolved}");
     }
 }

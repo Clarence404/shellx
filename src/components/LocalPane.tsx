@@ -10,6 +10,31 @@ function joinPath(cwd: string, name: string): string {
   return cwd === "/" ? `/${name}` : `${cwd}/${name}`;
 }
 
+/** True for Windows drive-letter roots: "C:", "D:", ... */
+function isDriveLetter(seg: string): boolean {
+  return /^[A-Za-z]:$/.test(seg);
+}
+
+/**
+ * `..` navigation. Rust normalizes paths to forward slashes on Windows
+ * (e.g. `C:/Users/chen`), so a naive split-and-rejoin with a leading "/"
+ * would produce `/C:/Users` — not a valid Windows path. Detect a
+ * drive-letter first segment and rejoin without the leading "/".
+ */
+function parentPath(cwd: string): string {
+  const parts = cwd.split("/").filter(Boolean);
+  if (parts.length === 0) return "/";
+  parts.pop();
+  if (parts.length === 0) {
+    // Was at first-segment root: "/etc" → "/"; "C:/Users" → "C:/" is invalid
+    // for read_dir but "C:" is — no further "up" on Windows from the drive.
+    // Return the untouched cwd so the click is a no-op instead of erroring.
+    return isDriveLetter(cwd.split("/").filter(Boolean)[0] ?? "") ? cwd : "/";
+  }
+  if (isDriveLetter(parts[0])) return parts.join("/");
+  return "/" + parts.join("/");
+}
+
 export function LocalPane() {
   const leftPath = useRailFiles((s) => s.leftPath);
   const entries = useRailFiles((s) => s.leftEntries);
@@ -82,11 +107,7 @@ export function LocalPane() {
         {leftPath !== "/" && (
           <FileRow
             name=".." kind="directory" size={0}
-            onOpen={() => {
-              const parts = leftPath.split(/[\\/]/).filter(Boolean);
-              parts.pop();
-              void setLeftPath(parts.length ? "/" + parts.join("/") : "/");
-            }}
+            onOpen={() => void setLeftPath(parentPath(leftPath))}
             onRename={() => {}} onDelete={() => {}} onDownload={() => {}}
             disabled
           />
