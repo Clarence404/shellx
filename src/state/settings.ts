@@ -7,6 +7,7 @@ interface State extends Settings {
   load(): Promise<void>;
   setTheme(id: Settings["themeId"]): void;
   setDensity(id: Settings["density"]): void;
+  setSystemFont(id: Settings["systemFont"]): void;
   setTerminalFontFamily(id: Settings["terminal"]["fontFamily"]): void;
   setTerminalFontSize(size: number): void;
   setTerminalCursorStyle(style: Settings["terminal"]["cursorStyle"]): void;
@@ -16,17 +17,21 @@ interface State extends Settings {
 const SAVE_DEBOUNCE_MS = 300;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
+function snapshotForSave(s: State): Settings {
+  return {
+    themeId: s.themeId,
+    density: s.density,
+    systemFont: s.systemFont,
+    terminal: s.terminal,
+    schemaVersion: s.schemaVersion,
+  };
+}
+
 function scheduleSave(getState: () => State) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    const s = getState();
-    void saveSettings({
-      themeId: s.themeId,
-      density: s.density,
-      terminal: s.terminal,
-      schemaVersion: s.schemaVersion,
-    });
+    void saveSettings(snapshotForSave(getState()));
   }, SAVE_DEBOUNCE_MS);
 }
 
@@ -35,13 +40,7 @@ function immediateSave(getState: () => State) {
     clearTimeout(saveTimer);
     saveTimer = null;
   }
-  const s = getState();
-  void saveSettings({
-    themeId: s.themeId,
-    density: s.density,
-    terminal: s.terminal,
-    schemaVersion: s.schemaVersion,
-  });
+  void saveSettings(snapshotForSave(getState()));
 }
 
 export const useSettingsStore = create<State>((set, get) => ({
@@ -59,6 +58,10 @@ export const useSettingsStore = create<State>((set, get) => ({
   },
   setDensity(id) {
     set({ density: id });
+    scheduleSave(get);
+  },
+  setSystemFont(id) {
+    set({ systemFont: id });
     scheduleSave(get);
   },
   setTerminalFontFamily(id) {

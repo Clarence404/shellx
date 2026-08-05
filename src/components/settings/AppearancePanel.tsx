@@ -1,15 +1,18 @@
 import type { ReactNode } from "react";
 import { useSettingsStore } from "../../state/settings";
-import { THEME_META, DENSITY_META, FONT_MAP } from "../../types/settings";
+import { THEME_META, DENSITY_META, FONT_MAP, SYSTEM_FONT_META } from "../../types/settings";
 import type { Settings } from "../../types/settings";
 
 export function AppearancePanel() {
   const themeId = useSettingsStore((s) => s.themeId);
   const density = useSettingsStore((s) => s.density);
+  const systemFont = useSettingsStore((s) => s.systemFont);
   const terminal = useSettingsStore((s) => s.terminal);
 
   const setTheme = (id: Settings["themeId"]) => useSettingsStore.getState().setTheme(id);
   const setDensity = (id: Settings["density"]) => useSettingsStore.getState().setDensity(id);
+  const setSystemFont = (id: Settings["systemFont"]) =>
+    useSettingsStore.getState().setSystemFont(id);
   const setFontFamily = (id: Settings["terminal"]["fontFamily"]) =>
     useSettingsStore.getState().setTerminalFontFamily(id);
   const setFontSize = (n: number) => useSettingsStore.getState().setTerminalFontSize(n);
@@ -24,7 +27,11 @@ export function AppearancePanel() {
       </div>
 
       <Field label="Theme">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 10, maxWidth: 460 }}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+          gap: 10, maxWidth: 620,
+        }}>
           {THEME_META.map((t) => (
             <div
               key={t.id}
@@ -57,6 +64,26 @@ export function AppearancePanel() {
           value={density}
           onChange={(id) => setDensity(id as Settings["density"])}
         />
+      </Field>
+
+      <Field label="System font">
+        <select
+          value={systemFont}
+          onChange={(e) => setSystemFont(e.target.value as Settings["systemFont"])}
+          aria-label="System font"
+          style={{
+            padding: "6px 10px", fontSize: 11, color: "var(--text-1)",
+            background: "var(--panel-1)", border: "1px solid var(--border)",
+            borderRadius: 5,
+          }}
+        >
+          {SYSTEM_FONT_META.map((f) => (
+            <option key={f.id} value={f.id}>{f.label}</option>
+          ))}
+        </select>
+        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>
+          Controls sans UI — tabs, buttons, section headers.
+        </div>
       </Field>
 
       <Field label="Terminal font">

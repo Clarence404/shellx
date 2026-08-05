@@ -32,4 +32,17 @@ describe("AppearancePanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Underline" }));
     expect(useSettingsStore.getState().terminal.cursorStyle).toBe("underline");
   });
+
+  it("System font dropdown mutates systemFont", () => {
+    render(<AppearancePanel />);
+    const sel = screen.getByLabelText("System font") as HTMLSelectElement;
+    fireEvent.change(sel, { target: { value: "microsoft-yahei" } });
+    expect(useSettingsStore.getState().systemFont).toBe("microsoft-yahei");
+  });
+
+  it("clicking the Warm Light theme card switches themeId", () => {
+    render(<AppearancePanel />);
+    fireEvent.click(screen.getByText("Warm Light"));
+    expect(useSettingsStore.getState().themeId).toBe("warm-light");
+  });
 });
