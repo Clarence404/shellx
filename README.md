@@ -245,7 +245,7 @@ If downloads fail with `os error 2` file rename mid-transfer, that's Defender ra
 The next natural steps (roughly the order of the spec's milestone roadmap):
 
 - **v0.4** ✓ — Rail Files (dual-pane local ↔ remote browser), auto-select new connections as remote host, 8 local IPC commands.
-- **v0.5** ✓ — Settings / Appearance panel (theme + density + terminal font/size/cursor, live-applied, SQLite-persisted), custom titlebar (v0.4.3).
+- **v0.5** ✓ — Settings / Appearance panel (theme + density + terminal font/size/cursor, live-applied, JSON-persisted), custom titlebar (v0.4.3).
 
 ### v0.6+ Backlog
 
