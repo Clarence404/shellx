@@ -2,17 +2,28 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.4
+## Status: v0.5
 
-v0.4 ships **Rail Files** — a WinSCP-style dual-pane local ↔ remote file browser (second icon on the activity rail).
-Drag-and-drop files between panes; double-click the splitter to reset it; collapse the drawer via header button, click-active-icon, or `Ctrl+Shift+B` / `Cmd+B`.
-New connections auto-select as the remote pane host. Backend adds 8 local-filesystem IPC commands and 6 new UI components (LocalPane, RemotePane, PaneSplitter, TransferArrow, etc.).
+v0.5 ships a **Settings / Appearance panel** — a third activity-rail icon opens a dedicated settings view
+(sidebar with Appearance + About sections). Pick from 3 themes (Warm Minimal, Ocean, Forest) and 3 density
+presets (Compact, Comfortable, Spacious), both applied live via `<html>` data-attributes + a CSS variable
+cascade — no reload needed. The Terminal section configures font family (JetBrains Mono, SF Mono, Fira Code,
+Cascadia Code, Consolas), font size (10–20px), and cursor style (block/underline/bar); xterm reconfigures
+itself live and re-fits cols/rows on any change, no tab remount required. Settings persist to a JSON file
+in the app config directory (debounced autosave on the Rust side) and are restored on next launch.
 
-Also includes all v0.3 features: SFTP alongside SSH in the same tab (toggle between Terminal and Files activities),
-Connection/ShellHandle/SftpHandle trait hierarchy, drag-drop upload, right-click CRUD, dead-tab fade,
-Ctrl+Shift+W/T hotkey remap (Ctrl+W/T remain shell/tmux bindings), Forget-password UI, and HostRow keyboard a11y.
+Also includes the **custom titlebar** (landed in v0.4.3): tabs integrated into the titlebar itself, app logo,
+and native-feeling window controls, replacing the OS-drawn title bar on all three platforms.
 
-> **Security note (v0.4)**: shellx does not verify SSH host keys — every server is trusted on first connection. Do not use over untrusted networks yet. Host-key verification lands in v0.5.
+Also includes all v0.4 features: Rail Files (WinSCP-style dual-pane local ↔ remote file browser), drag-and-drop
+transfers, splitter reset, drawer collapse (`Ctrl+Shift+B` / `Cmd+B`); and all v0.3 features: SFTP alongside SSH
+in the same tab, Connection/ShellHandle/SftpHandle trait hierarchy, drag-drop upload, right-click CRUD,
+dead-tab fade, Ctrl+Shift+W/T hotkey remap (Ctrl+W/T remain shell/tmux bindings), Forget-password UI, and
+HostRow keyboard a11y.
+
+> **Security note (v0.5)**: shellx still does not verify SSH host keys — every server is trusted on first
+> connection. Do not use over untrusted networks yet. Host-key TOFU + pubkey auth remain on the v0.6+ backlog
+> below.
 
 ---
 
@@ -190,17 +201,19 @@ Adding a new physical channel (e.g. RS-485) means writing one `Transport` impl. 
 
 ---
 
-## Sizes (v0.4)
+## Sizes (v0.5)
 
 Measured from a `pnpm tauri:build` release build on Windows 11 (MSVC toolchain):
 
-- Windows MSI: 6.8 MB (`shellx_0.4.0_x64_en-US.msi`)
-- Windows NSIS setup: 4.1 MB (`shellx_0.4.0_x64-setup.exe`)
+- Windows MSI: 7.2 MB (`shellx_0.5.0_x64_en-US.msi`)
+- Windows NSIS setup: 4.5 MB (`shellx_0.5.0_x64-setup.exe`)
 - macOS DMG: not yet measured (no macOS build machine in this pass)
 - Linux AppImage: not yet measured (no Linux build machine in this pass)
 
-Both Windows installers remain well under the 15 MB target (spec §7). The v0.3 → v0.4 growth
-is minimal (~0.1 MB MSI, flat NSIS) since Rail Files is mostly UI additions without new native dependencies.
+Both Windows installers remain well under the 15 MB target (spec §7). The v0.4 → v0.5 growth is
+~0.4 MB on both installers — larger than the two new `@fontsource` packages' CSS alone would
+suggest, since each package ships woff2 files for every Unicode subset of its 400-weight face,
+not just the single `400.css` entry point that's imported. Still comfortably within budget.
 
 ---
 
@@ -232,9 +245,11 @@ If downloads fail with `os error 2` file rename mid-transfer, that's Defender ra
 The next natural steps (roughly the order of the spec's milestone roadmap):
 
 - **v0.4** ✓ — Rail Files (dual-pane local ↔ remote browser), auto-select new connections as remote host, 8 local IPC commands.
+- **v0.5** ✓ — Settings / Appearance panel (theme + density + terminal font/size/cursor, live-applied, SQLite-persisted), custom titlebar (v0.4.3).
 
-### v0.4 Backlog & beyond
+### v0.6+ Backlog
 
+- **Settings: Advanced page** — keyboard-shortcut remapping, log level, telemetry toggle.
 - **Host-key TOFU + known_hosts persistence** — trust-on-first-use SSH host-key verification; save fingerprints to `~/.ssh/known_hosts`.
 - **Public-key authentication** — RSA / Ed25519 key pairs with passphrase in system keychain.
 - **Installer code signing** — Windows authenticode + macOS notarization.
@@ -242,7 +257,7 @@ The next natural steps (roughly the order of the spec's milestone roadmap):
 - **Cargo.toml authors field** — replace `authors = ["you"]` placeholder with actual maintainer names.
 - **Hidden-file filter** — toggle to show/hide dotfiles in local and remote panes.
 - **Upload conflict dialog** — prompt user when overwriting existing remote files.
-- **v0.5+** — traditional FTP / FTPS, signed cross-platform CI, light theme.
+- **v0.7+** — traditional FTP / FTPS, signed cross-platform CI, light theme.
 - **Future** — RS-232 / RS-485 transport, Modbus RTU/TCP protocol, custom register-table views (spec §4 shows exactly which layer each addition touches).
 
 The design spec and implementation plan directories under `docs/superpowers/` are the source of truth for how each milestone is scoped; the SDD ledger under `.superpowers/sdd/` is the retrospective for how each was built.

@@ -5,9 +5,14 @@ import "@xterm/xterm/css/xterm.css";
 import { onSessionData, onSessionClosed } from "../ipc/events";
 import { writeSessionInput, resizeSession } from "../ipc/commands";
 import type { SessionId } from "../types/session";
+import { useSettingsStore } from "../state/settings";
+import { FONT_MAP } from "../types/settings";
 
 export function TerminalView({ sessionId }: { sessionId: SessionId }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const fitRef = useRef<FitAddon | null>(null);
+  const terminal = useSettingsStore((s) => s.terminal);
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -19,12 +24,17 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     // Terminal and never getting unsubscribed.
     let cancelled = false;
 
+    // Read persisted settings directly (rather than the `terminal` closure
+    // value) so first paint matches whatever was saved, independent of
+    // when this effect re-runs relative to the settings store hydrating.
+    const initialTerminal = useSettingsStore.getState().terminal;
+
     const term = new Terminal({
-      fontFamily: '"JetBrains Mono", "SF Mono", Consolas, monospace',
-      fontSize: 13,
+      fontFamily: FONT_MAP[initialTerminal.fontFamily],
+      fontSize: initialTerminal.fontSize,
       lineHeight: 1.2,
       cursorBlink: true,
-      cursorStyle: "block",
+      cursorStyle: initialTerminal.cursorStyle,
       cursorInactiveStyle: "outline",
       convertEol: false,
       scrollback: 5000,
@@ -56,6 +66,8 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     term.loadAddon(fit);
     term.open(hostRef.current);
     fit.fit();
+    termRef.current = term;
+    fitRef.current = fit;
 
     // Send user input to backend as bytes.
     const dataDisp = term.onData((s) => {
@@ -109,9 +121,22 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       ro.disconnect();
       unlistenData?.();
       unlistenClosed?.();
+      termRef.current = null;
+      fitRef.current = null;
       term.dispose();
     };
   }, [sessionId]);
+
+  // Live-reconfigure xterm when appearance settings change (no remount).
+  // Font-family/size changes shift character metrics, so re-fit afterward
+  // to recompute cols/rows and keep the backend PTY size in sync.
+  useEffect(() => {
+    if (!termRef.current || !fitRef.current) return;
+    termRef.current.options.fontFamily = FONT_MAP[terminal.fontFamily];
+    termRef.current.options.fontSize = terminal.fontSize;
+    termRef.current.options.cursorStyle = terminal.cursorStyle;
+    fitRef.current.fit();
+  }, [terminal.fontFamily, terminal.fontSize, terminal.cursorStyle]);
 
   return (
     <div
