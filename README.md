@@ -4,11 +4,18 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.5.4
+## Status: v0.5.5
 
-v0.5.4 widens the activity rail (icon + label under each button) so the four
-view switchers stop being misclick-prone, and makes empty patches of the tab
-strip a window-drag surface. Everything below still applies (introduced in v0.5.3):
+v0.5.5 is a polish + robustness pass: a proper `DisconnectedPanel` when a
+Files-view session dies (with a one-click Reconnect using saved credentials),
+muted-sage terminal green so `ls`'s other-writable directory colouring is
+finally readable, host-delete cascades to its live tabs + panes, host drawer
+auto-hides when empty, `New SSH connection` field labels no longer wash out,
+and `PathBreadcrumb`'s `C:` chip actually navigates to the drive root.
+Everything below still applies:
+
+v0.5.4 widened the activity rail (icon + label under each button) and made
+empty patches of the tab strip a window-drag surface.
 
 The **Settings / Appearance** panel and titlebar in v0.5.3:
 

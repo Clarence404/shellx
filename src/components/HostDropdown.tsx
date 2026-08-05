@@ -9,6 +9,14 @@ import type { ConnectionInfo } from "../types/connection";
 interface Props {
   /** ConnectionId of the currently-picked remote host (may be null). */
   currentHost: string | null;
+  /**
+   * Label to fall back to when `currentHost` points to a session that's
+   * been removed (post-close cleanup after 300ms). Without it the button
+   * would silently revert to "Pick a host" mid-disconnect, hiding the
+   * host identity from the DisconnectedPanel. Ignored while the session
+   * is still in `sessions` (whether active or closed).
+   */
+  fallbackLabel?: string | null;
   /** Fires when the user picks an already-connected host. */
   onSelect: (id: string | null) => void;
   /**
@@ -60,7 +68,7 @@ function buildRows(hosts: HostInfo[], sessions: ConnectionInfo[]): Row[] {
   return rows;
 }
 
-export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewConnection }: Props) {
+export function HostDropdown({ currentHost, fallbackLabel, onSelect, onConnectSavedHost, onNewConnection }: Props) {
   const sessions = useSessions((s) => s.sessions);
   const connecting = useSessions((s) => s.connecting);
   const hosts = useHostsStore((s) => s.hosts);
@@ -82,8 +90,14 @@ export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewC
   }, [open]);
 
   const rows = buildRows(hosts, sessions);
-  const active = sessions.find((s) => s.id === currentHost);
-  const label = active?.label ?? "Pick a host";
+  const currentSession = sessions.find((s) => s.id === currentHost);
+  // Label precedence: live session → saved-host fallback (surviving the
+  // 300 ms fade-then-remove window) → generic placeholder.
+  const label = currentSession?.label ?? fallbackLabel ?? "Pick a host";
+  // "closed" badge shows whenever we have a currentHost but no active
+  // session — covers both the pre-remove "state==='closed'" window and
+  // the fully-purged case (currentSession undefined).
+  const isClosed = !!currentHost && currentSession?.state !== "active";
 
   function handleRowClick(row: Row) {
     if (row.session) {
@@ -113,6 +127,15 @@ export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewC
         }}>
         <Server size={iconSizes.md} color="var(--text-2)" />
         <span>{label}</span>
+        {isClosed && (
+          <span style={{
+            fontSize: 9, textTransform: "uppercase", letterSpacing: 0.6,
+            padding: "1px 6px", borderRadius: 999,
+            background: "rgba(242,200,162,0.15)",
+            color: "var(--warn)",
+            fontFamily: "-apple-system, sans-serif",
+          }}>closed</span>
+        )}
         <ChevronDown size={iconSizes.sm} color="var(--text-3)" />
       </button>
       {open && (

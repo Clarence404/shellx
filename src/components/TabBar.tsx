@@ -103,13 +103,16 @@ export function TabBar({
   return (
     <div style={{
       // Outer flex row — sits inside Titlebar's `flex: 1, minWidth: 0`
-      // wrapper. The strip flex-grows; the overflow-chrome cluster
-      // ({‹ › ≡}) sits at the RIGHT end of the strip, sharing one
-      // border-left divider so it reads as a single control group
+      // wrapper. `flex: 1, minWidth: 0` on THIS div matters too: without
+      // it the outer TabBar defaults to `flex: 0 1 auto` and only grows
+      // to fit its content, leaving a gap between the strip and the
+      // window controls that isn't inside any drag-region (v0.5.5 fix).
+      // The strip flex-grows within this row; the overflow-chrome
+      // cluster ({‹ › ≡}) sits at the RIGHT end of the strip, sharing
+      // one border-left divider so it reads as a single control group
       // rather than three loose buttons scattered across the titlebar.
-      // v0.5.3 positional fix: previous layout put ‹ on the left edge
-      // of the titlebar which crowded the app logo.
-      display: "flex", alignItems: "stretch", minWidth: 0, height: "100%",
+      flex: 1, minWidth: 0,
+      display: "flex", alignItems: "stretch", height: "100%",
       position: "relative",
     }}>
       <div

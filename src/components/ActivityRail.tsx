@@ -62,9 +62,12 @@ function RailButton({ item, active, onClick }: {
       }}>
       <Icon size={18} strokeWidth={1.8} />
       <span style={{
-        fontSize: 10, lineHeight: 1.1, letterSpacing: 0.2,
-        // Never wrap the label — long labels get an ellipsis instead of
-        // pushing the icon out of vertical centre.
+        // Follows the System font size slider — 2 px smaller than the
+        // main chrome so the rail can pack four labels in 64 px width.
+        // Long labels ("Protocols") get an ellipsis at high sizes rather
+        // than pushing the icon out of vertical centre.
+        fontSize: "calc(var(--font-ui-size) - 2px)",
+        lineHeight: 1.1, letterSpacing: 0.2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         maxWidth: "100%",
       }}>{label}</span>

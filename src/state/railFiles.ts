@@ -5,6 +5,7 @@ import type { ConnectionId } from "../types/connection";
 import { localListDir, localRealpath } from "../ipc/local";
 import { sftpListDir, sftpRealpath } from "../ipc/sftp";
 import { sftpUpload, sftpDownload } from "../ipc/transfers";
+import { useSessions } from "./sessions";
 
 interface State {
   leftPath: string;
@@ -14,6 +15,12 @@ interface State {
   leftSelected: string[];
 
   rightHost: ConnectionId | null;
+  /** Saved-host id captured at the moment `setRightHost` was called with
+   * a valid session. Survives session close/remove so RemotePane can
+   * still show the host label + offer Reconnect in the DisconnectedPanel
+   * even after the closed session is purged from `useSessions.sessions`.
+   * Null for quick-connect sessions (no matching saved host row). */
+  rightSavedHostId: string | null;
   rightPath: string;
   rightEntries: SftpEntry[];
   rightLoading: boolean;
@@ -49,6 +56,7 @@ function persist(st: State) {
   const pick = {
     leftPath: st.leftPath,
     rightHost: st.rightHost,
+    rightSavedHostId: st.rightSavedHostId,
     // per-host rightPath map: pull existing map from storage, patch our current host
     rightPaths: (() => {
       try {
@@ -70,6 +78,7 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
   leftEntries: [], leftLoading: false, leftError: null, leftSelected: [],
 
   rightHost: persisted.rightHost ?? null,
+  rightSavedHostId: persisted.rightSavedHostId ?? null,
   rightPath: persisted.rightHost ? (persisted.rightPaths?.[persisted.rightHost] ?? "") : "",
   rightEntries: [], rightLoading: false, rightError: null, rightSelected: [],
 
@@ -83,17 +92,42 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
   },
 
   async setRightHost(id) {
-    set({ rightHost: id, rightPath: "", rightEntries: [], rightSelected: [] });
+    // Capture the session's host_id right now so we can still identify
+    // the saved host for reconnect after the session is closed/removed.
+    // Quick-connect sessions (no saved-host link) resolve to null and
+    // therefore can't offer Reconnect — DisconnectedPanel falls back to
+    // "Pick different host" in that case.
+    const savedHostId = id
+      ? useSessions.getState().sessions.find((s) => s.id === id)?.host_id ?? null
+      : null;
+    // Full reset of error/loading too — v0.5.5 Reconnect flow bug:
+    // rightError = "closed" left over from the previous SFTP call
+    // survived across the new session id, so the freshly-reconnected
+    // pane rendered its content area with a stale "closed" banner and
+    // an empty list. Clearing both fields on every host switch prevents
+    // any leaked state from a prior host bleeding into the new view.
+    set({
+      rightHost: id, rightSavedHostId: savedHostId,
+      rightPath: "", rightEntries: [], rightSelected: [],
+      rightError: null, rightLoading: false,
+    });
     persist(get());
     if (id) {
+      // sftpRealpath is the "resolve $HOME" call. On a freshly reconnected
+      // session it can transiently error with "closed" (russh's SFTP
+      // subchannel handshake races the tauri IPC roundtrip). Rather than
+      // stamping that stale error onto the pane, fall back to "/" and let
+      // loadRight own the error-reporting contract. If that ALSO fails,
+      // loadRight sets rightError itself with a meaningful message.
+      let home = "/";
       try {
-        const home = await sftpRealpath(id, ".");
-        set({ rightPath: home });
-        persist(get());
-        await get().loadRight();
-      } catch (e: any) {
-        set({ rightError: String(e) });
+        home = await sftpRealpath(id, ".");
+      } catch {
+        // ignore — root fallback below
       }
+      set({ rightPath: home });
+      persist(get());
+      await get().loadRight();
     }
   },
 

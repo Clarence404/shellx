@@ -2,6 +2,8 @@ import { Plus, PanelLeftClose } from "lucide-react";
 import { HostRow } from "./HostRow";
 import { useHostsStore } from "../state/hosts";
 import { useSessions } from "../state/sessions";
+import { useRailFiles } from "../state/railFiles";
+import { closeSession } from "../ipc/commands";
 import type { HostInfo } from "../types/host";
 import type { RailView } from "./ActivityRail";
 
@@ -25,9 +27,34 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
   // rail+drawer replacement, SettingsView has SettingsSidebar) don't need the
   // outer Drawer. Protocols is a bare "coming soon" placeholder — also skip.
   if (view !== "hosts" || drawerCollapsed) return null;
+  // Fresh-install empty state: with no saved hosts, the drawer would only
+  // show a "HOSTS" caps label and the "+ New connection" button — the
+  // main-area EmptyState already offers that action prominently, so the
+  // empty drawer is just visual noise. Hide until the user saves their
+  // first host; the drawer then reappears automatically. Manual toggle
+  // via rail click still respected once hosts.length > 0.
+  if (hosts.length === 0) return null;
 
   async function handleDelete(host: HostInfo) {
     if (!confirm(`Delete "${host.label}"?`)) return;
+    // Cascade cleanup before removing the row: any tab whose session's
+    // host_id matches gets its backend closed + removed from the store,
+    // and if the RemotePane was pointing at one of those sessions, reset
+    // it to "Pick a host". Order matters — do this BEFORE deleteHostById
+    // so if any step throws, the saved-host row is still there and the
+    // user can retry rather than being left with a dangling tab and no
+    // way to re-associate it.
+    const linkedSessionIds = useSessions.getState().sessions
+      .filter((s) => s.host_id === host.id)
+      .map((s) => s.id);
+    for (const id of linkedSessionIds) {
+      try { await closeSession(id); } catch { /* backend may be gone; keep going */ }
+      useSessions.getState().removeSession(id);
+    }
+    const railFiles = useRailFiles.getState();
+    if (railFiles.rightHost && linkedSessionIds.includes(railFiles.rightHost)) {
+      railFiles.setRightHost(null);
+    }
     await deleteHostById(host.id);
   }
 

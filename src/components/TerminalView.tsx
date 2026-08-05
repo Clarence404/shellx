@@ -38,6 +38,16 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       cursorInactiveStyle: "outline",
       convertEol: false,
       scrollback: 5000,
+      // v0.5.5: greens shifted to a muted sage. The prior pastel green
+      // (#a6e3a1 / #b8ecb0) doubles as a background for `ls`'s "other-
+      // writable directory" case (ANSI 42), and its high saturation +
+      // luminance washed blue foreground text out to near-invisibility.
+      // Sage green de-saturates the hue so both dark text (tw case,
+      // very readable — ~7:1) and blue text (ow case, ~2.4:1 but no
+      // longer painful thanks to the muted bg) sit legibly on it.
+      // Also matches warm-minimal's overall subdued palette better
+      // than the previous vivid pastel. Other colours unchanged; they
+      // don't hit the same fg/bg combo.
       theme: {
         background: "#1e1c24",
         foreground: "#d4d0dc",
@@ -46,7 +56,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
         selectionBackground: "rgba(124,92,255,0.3)",
         black: "#2a2830",
         red: "#f28779",
-        green: "#a6e3a1",
+        green: "#7c9c80",
         yellow: "#f2c8a2",
         blue: "#58d3fc",
         magenta: "#7c5cff",
@@ -54,7 +64,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
         white: "#d4d0dc",
         brightBlack: "#8b869a",
         brightRed: "#ff9080",
-        brightGreen: "#b8ecb0",
+        brightGreen: "#95b298",
         brightYellow: "#f5d1af",
         brightBlue: "#68dcf9",
         brightMagenta: "#a08bff",

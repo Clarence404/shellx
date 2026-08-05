@@ -28,7 +28,14 @@ export function PathBreadcrumb({ path, onNavigate }: Props) {
       const label = i === 0
         ? (isWinDrive ? parts[i] : "/" + parts[i])
         : parts[i];
-      paths.push({ label, target: acc });
+      // Target special case: a bare "C:" is NOT the drive root on Windows —
+      // Rust's canonicalize resolves it to the process cwd (whatever
+      // shellx.exe was launched from), so clicking the drive-letter chip
+      // would silently jump to `src-tauri/` in dev. Append "/" so the
+      // click lands on the actual drive root. Mirrors parentPath's fix in
+      // LocalPane.tsx.
+      const target = (i === 0 && isWinDrive) ? acc + "/" : acc;
+      paths.push({ label, target });
     }
   }
 
