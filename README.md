@@ -264,6 +264,11 @@ The next natural steps (roughly the order of the spec's milestone roadmap):
 ### v0.6+ Backlog
 
 - **Settings: Advanced page** — keyboard-shortcut remapping, log level, telemetry toggle.
+- **Rethink the purple accent** — `#7c5cff` reads harsh in rail icons and selected states; explore a softer accent variant (still on-brand) or expose accent hue as a Setting.
+- **Files-pane content font size** — currently governed by density's `--font-body`; add an explicit Files font-size slider in Appearance → Files, parallel to Terminal font size, so remote/local browsing scales independently.
+- **PaneSplitter min-width guard** — the Files splitter can be dragged into unusable narrow panes; enforce a minimum (e.g. 200 px per side) with soft snap on release.
+- **Security posture roadmap** — beyond host-key TOFU + pubkey auth already listed: audit path-sanitisation on remote-supplied strings, review keychain fallback modes, and land a written threat-model document.
+- **Protocols page design** — currently a `coming soon` placeholder; before v0.7 scope what it actually is (list of registered transport / protocol implementations? per-protocol activation UI? live health of each session's protocol layer?).
 - **Host-key TOFU + known_hosts persistence** — trust-on-first-use SSH host-key verification; save fingerprints to `~/.ssh/known_hosts`.
 - **Public-key authentication** — RSA / Ed25519 key pairs with passphrase in system keychain.
 - **Installer code signing** — Windows authenticode + macOS notarization.
@@ -271,7 +276,7 @@ The next natural steps (roughly the order of the spec's milestone roadmap):
 - **Cargo.toml authors field** — replace `authors = ["you"]` placeholder with actual maintainer names.
 - **Hidden-file filter** — toggle to show/hide dotfiles in local and remote panes.
 - **Upload conflict dialog** — prompt user when overwriting existing remote files.
-- **v0.7+** — traditional FTP / FTPS, signed cross-platform CI, light theme.
+- **v0.7+** — traditional FTP / FTPS, signed cross-platform CI.
 - **Future** — RS-232 / RS-485 transport, Modbus RTU/TCP protocol, custom register-table views (spec §4 shows exactly which layer each addition touches).
 
 The design spec and implementation plan directories under `docs/superpowers/` are the source of truth for how each milestone is scoped; the SDD ledger under `.superpowers/sdd/` is the retrospective for how each was built.

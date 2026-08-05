@@ -258,6 +258,11 @@ cargo --version && rustc --version        # 都要能输出
 ### v0.6+ Backlog
 
 - **Settings：Advanced 页** ——快捷键映射、log 级别、遥测开关。
+- **重新审视紫色 accent** ——`#7c5cff` 用在 rail 图标和高亮态时略显刺眼；探索更柔和的 accent 变体（仍保持品牌调性），或把 accent 色相开放到 Settings 里给用户自选。
+- **Files 面板内容字号** ——目前由 density 的 `--font-body` 控制；在 Appearance → Files 里加一条独立的 Files 字号滑块（对标 Terminal font size），让远端/本地文件浏览的字号能独立调整。
+- **PaneSplitter 最小宽度保护** ——Files 视图的分栏可以拖到基本不可用的窄度；加最小宽度约束（比如每边 200 px），松手时软吸附回位。
+- **安全相关规划** ——除已列的 host-key TOFU + 公钥认证外：审计远端返回字符串（尤其路径）的输入清洗、复核 keychain fallback 模式、落一份成文的威胁模型文档。
+- **Protocols 页面设计** ——目前是 `coming soon` 占位；v0.7 之前定型（列已注册的传输/协议实现？每协议激活开关？各会话协议层的实时健康度？）。
 - **Host-key TOFU + known_hosts 持久化** ——SSH host key 首次信任；指纹落 `~/.ssh/known_hosts`。
 - **公钥认证** ——RSA / Ed25519 密钥对 + 系统 keychain 存 passphrase。
 - **安装包签名** ——Windows Authenticode + macOS 公证。
@@ -265,7 +270,7 @@ cargo --version && rustc --version        # 都要能输出
 - **Cargo.toml authors 字段** ——把 `authors = ["you"]` 占位符换成真实维护者。
 - **隐藏文件过滤** ——本地/远程双栏切换显示 dotfile。
 - **上传冲突对话框** ——覆盖远端已有文件时提示。
-- **v0.7+** ——传统 FTP / FTPS、跨平台签名 CI、亮色主题（已在 v0.5.3 完成）。
+- **v0.7+** ——传统 FTP / FTPS、跨平台签名 CI。
 - **未来** ——RS-232 / RS-485 传输、Modbus RTU/TCP 协议、寄存器表视图（spec §4 说明各层落点）。
 
 `docs/superpowers/` 下的设计规格和实现计划是各里程碑的 source of truth；`.superpowers/sdd/` 下的 SDD 台账是构建过程的复盘。
