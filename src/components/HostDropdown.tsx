@@ -88,11 +88,17 @@ export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewC
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
+      {/* Fixed padding, not var(--pad-row-y/x): this is toolbar chrome (parent
+          LocalPane/RemotePane rows are a fixed 32px tall), not a scrollable
+          list row — it must not grow with density. At spacious density,
+          iconSizes.md (17) + 2*--pad-row-y (9) + 2px border == 37px, which
+          overflows the 32px toolbar. Only the popover's <li> rows below are
+          density-scaled. */}
       <button ref={btnRef} onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox" aria-expanded={open}
         style={{
           display: "flex", alignItems: "center", gap: 6,
-          padding: "var(--pad-row-y) var(--pad-row-x)",
+          padding: "5px 10px",
           fontSize: "var(--font-small)", color: "var(--text-1)", background: "var(--panel-1)",
           border: "1px solid var(--border)", borderRadius: 5,
           fontFamily: "\"JetBrains Mono\", var(--font-mono)",
