@@ -27,13 +27,13 @@ export function ActivityRail() {
           aria-current={activeView === id ? "page" : undefined}
           onClick={() => (activeView === id ? toggleDrawer() : setView(id))}
           style={{
-            width: 24, height: 24, borderRadius: 5,
+            width: 28, height: 28, borderRadius: 6,
             background: activeView === id ? "var(--accent)" : "transparent",
             color: activeView === id ? "var(--text-on-accent)" : "var(--text-2)",
             display: "flex", alignItems: "center", justifyContent: "center",
             padding: 0,
           }}>
-          <Icon size={16} strokeWidth={1.8} />
+          <Icon size={18} strokeWidth={1.8} />
         </button>
       ))}
     </nav>

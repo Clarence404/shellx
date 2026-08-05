@@ -13,9 +13,13 @@ export function TabBar({
 }) {
   return (
     <div role="tablist" style={{
-      height: "var(--tab-h)", background: "var(--panel-1)",
-      borderBottom: "1px solid var(--border)",
-      display: "flex", alignItems: "flex-end",
+      // Height stretches to the parent Titlebar (32px); tabs align to
+      // fill the full height so their active-pill background reaches
+      // the Titlebar's bottom border, giving the "attached tab" look
+      // without a redundant borderBottom of our own (Titlebar already
+      // draws that line).
+      height: "100%", background: "transparent",
+      display: "flex", alignItems: "stretch",
       padding: "0 6px", gap: 2,
       overflowX: "auto",
     }}>
@@ -23,10 +27,10 @@ export function TabBar({
         <div key={t.id} role="tab" aria-selected={t.id === activeTabId}
           onClick={() => onSelect(t.id)}
           style={{
-            padding: "4px 10px", borderRadius: "5px 5px 0 0", fontSize: 11,
+            padding: "6px 12px", borderRadius: "5px 5px 0 0", fontSize: 13,
             background: t.id === activeTabId ? "var(--panel-2)" : "transparent",
             color: t.id === activeTabId ? "var(--text-1)" : "var(--text-3)",
-            display: "flex", alignItems: "center", gap: 6,
+            display: "flex", alignItems: "center", gap: 8,
             cursor: "pointer", flexShrink: 0,
             whiteSpace: "nowrap",
             opacity: t.state === "closed" ? 0.4 : 1,
@@ -38,7 +42,7 @@ export function TabBar({
           <span
             onClick={(e) => { e.stopPropagation(); onClose(t.id); }}
             aria-label={`close ${t.title}`}
-            style={{ opacity: 0.6, fontSize: 10 }}>×</span>
+            style={{ opacity: 0.6, fontSize: 12 }}>×</span>
         </div>
       ))}
       {onNewConnection && (
@@ -46,13 +50,13 @@ export function TabBar({
           onClick={onNewConnection}
           aria-label="new connection"
           style={{
-            padding: "4px 8px", marginLeft: 4,
+            padding: "6px 10px", marginLeft: 4,
             background: "transparent", color: "var(--text-3)",
             borderRadius: "5px 5px 0 0",
             display: "flex", alignItems: "center",
             cursor: "pointer", flexShrink: 0,
           }}>
-          <Plus size={12} strokeWidth={2} />
+          <Plus size={14} strokeWidth={2} />
         </button>
       )}
     </div>
