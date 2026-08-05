@@ -12,10 +12,14 @@ export function HostDropdown({ currentHost, onSelect, onNewConnection }: Props) 
   const sessions = useSessions((s) => s.sessions);
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!btnRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!btnRef.current?.contains(target) && !listRef.current?.contains(target)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -39,7 +43,7 @@ export function HostDropdown({ currentHost, onSelect, onNewConnection }: Props) 
         <ChevronDown size={11} color="var(--text-3)" />
       </button>
       {open && (
-        <ul role="listbox" style={{
+        <ul ref={listRef} role="listbox" style={{
           position: "absolute", top: "100%", left: 0, marginTop: 4,
           minWidth: 200, background: "var(--panel-2)",
           border: "0.5px solid var(--border)", borderRadius: 6,

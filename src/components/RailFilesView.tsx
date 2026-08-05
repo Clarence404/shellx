@@ -13,6 +13,7 @@ export function RailFilesView() {
   const sessionCount = useSessions((s) => s.sessions.length);
   const rightHost = useRailFiles((s) => s.rightHost);
   const splitterPercent = useRailFiles((s) => s.splitterPercent);
+  const setSplitterDraft = useRailFiles((s) => s.setSplitterDraft);
   const setSplitter = useRailFiles((s) => s.setSplitter);
 
   // Auto-select the newly-connected host as the remote pane's host whenever
@@ -52,7 +53,7 @@ export function RailFilesView() {
         <div style={{ flexBasis: `${splitterPercent}%`, minWidth: 0, borderRight: "0.5px solid var(--border)" }}>
           <LocalPane />
         </div>
-        <PaneSplitter percent={splitterPercent} onChange={setSplitter} />
+        <PaneSplitter percent={splitterPercent} onChange={setSplitterDraft} onCommit={setSplitter} />
         <div style={{ flexBasis: `${100 - splitterPercent}%`, minWidth: 0 }}>
           <RemotePane onNewConnection={() => setDialogOpen(true)} />
         </div>

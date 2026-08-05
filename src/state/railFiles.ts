@@ -34,6 +34,7 @@ interface Actions {
   clearSelectionLeft(): void;
   clearSelectionRight(): void;
   transfer(direction: "up" | "down"): void;
+  setSplitterDraft(pct: number): void;
   setSplitter(pct: number): void;
 }
 
@@ -164,6 +165,15 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
     }
   },
 
+  // In-memory only — called on every mousemove during a drag. Cheap: no
+  // localStorage read/write per event (was the Minor perf finding).
+  setSplitterDraft(pct) {
+    const clamped = Math.max(20, Math.min(80, pct));
+    set({ splitterPercent: clamped });
+  },
+
+  // Persists — called once on drag release (mouseup) or on discrete actions
+  // like the double-click reset.
   setSplitter(pct) {
     const clamped = Math.max(20, Math.min(80, pct));
     set({ splitterPercent: clamped });

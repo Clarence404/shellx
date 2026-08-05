@@ -2,12 +2,16 @@ import { useEffect, useRef, useCallback } from "react";
 
 interface Props {
   percent: number;
+  /** Fired on every mousemove during a drag — keep this in-memory only (no persistence). */
   onChange: (pct: number) => void;
+  /** Fired once when the drag ends (mouseup) or on the double-click reset — safe to persist here. */
+  onCommit: (pct: number) => void;
 }
 
-export function PaneSplitter({ onChange }: Props) {
+export function PaneSplitter({ onChange, onCommit }: Props) {
   const dragging = useRef(false);
   const containerFinder = useRef<HTMLDivElement | null>(null);
+  const lastPct = useRef<number | null>(null);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     dragging.current = true;
@@ -23,6 +27,7 @@ export function PaneSplitter({ onChange }: Props) {
       if (!parent) return;
       const rect = parent.getBoundingClientRect();
       const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      lastPct.current = pct;
       onChange(pct);
     }
     function up() {
@@ -30,6 +35,10 @@ export function PaneSplitter({ onChange }: Props) {
       dragging.current = false;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      if (lastPct.current != null) {
+        onCommit(lastPct.current);
+        lastPct.current = null;
+      }
     }
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
@@ -37,12 +46,12 @@ export function PaneSplitter({ onChange }: Props) {
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
     };
-  }, [onChange]);
+  }, [onChange, onCommit]);
 
   return (
     <div ref={containerFinder}
       onMouseDown={onMouseDown}
-      onDoubleClick={() => onChange(50)}
+      onDoubleClick={() => onCommit(50)}
       role="separator" aria-orientation="vertical"
       title="Drag to resize, double-click to reset"
       style={{

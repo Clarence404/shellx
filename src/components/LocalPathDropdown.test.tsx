@@ -22,4 +22,20 @@ describe("LocalPathDropdown", () => {
     fireEvent.click(await screen.findByText("Desktop"));
     expect(onSelect).toHaveBeenCalledWith("/home/chen/Desktop");
   });
+
+  it("survives a real mousedown-then-click on a list item (mousedown/click race)", async () => {
+    // Regression: the document-level mousedown listener used to close the
+    // popup because the <ul> is a sibling of the trigger button, not a
+    // descendant — so mousedown on an <li> closed the list before its click
+    // handler fired. fireEvent.click alone doesn't reproduce this; a real
+    // browser click fires mousedown then click on the same target.
+    const onSelect = vi.fn();
+    render(<LocalPathDropdown currentPath="/home/chen" onSelect={onSelect} />);
+    await screen.findByText("~ Home");
+    fireEvent.click(screen.getAllByText("~ Home")[0]); // open the dropdown
+    const desktopItem = await screen.findByText("Desktop");
+    fireEvent.mouseDown(desktopItem);
+    fireEvent.click(desktopItem);
+    expect(onSelect).toHaveBeenCalledWith("/home/chen/Desktop");
+  });
 });
