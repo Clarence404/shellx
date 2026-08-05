@@ -116,7 +116,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
         placeholder={mode === "edit" ? "leave blank to keep current" : ""} />
 
       {mode === "edit" && keychainAvailable && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-2)" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-1)" }}>
           <input type="checkbox" checked={forgetPassword}
             onChange={(e) => setForgetPassword(e.target.checked)} />
           Forget stored password
@@ -127,7 +127,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       )}
 
       {mode === "create" && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-2)" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-1)" }}>
           <input type="checkbox" checked={saveHost}
             onChange={(e) => setSaveHost(e.target.checked)} />
           Save this host
@@ -137,7 +137,9 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       {mode === "create" && saveHost && (
         <label style={{
           display: "flex", alignItems: "center", gap: 8, fontSize: 11,
-          color: canRememberPw ? "var(--text-2)" : "var(--text-3)",
+          // Bright --text-1 when active, dim to --text-3 only when the
+          // control is actually disabled (no keychain / empty password).
+          color: canRememberPw ? "var(--text-1)" : "var(--text-3)",
         }}>
           <input type="checkbox" checked={rememberPassword}
             disabled={!canRememberPw}
@@ -180,7 +182,11 @@ function Field({
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span style={{
-        fontSize: 10, color: "var(--text-3)",
+        // Field caption at --text-1 to match the "New SSH connection"
+        // heading rather than sitting a two-tier drop below it — the
+        // 10 → 11 px bump and 500 weight keep hierarchy against the
+        // input value (13 px regular) without needing colour contrast.
+        fontSize: 11, color: "var(--text-1)", fontWeight: 500,
         textTransform: "uppercase", letterSpacing: 0.8,
       }}>{label}</span>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)}

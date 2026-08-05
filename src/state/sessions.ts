@@ -54,6 +54,11 @@ export const useSessions = create<SessionsState>((set, get) => ({
         activeId: s.id,
         activeActivity: { ...st.activeActivity, [s.id]: "terminal" },
         connecting: restConnecting,
+        // Auto-collapse the HOSTS drawer once the session is live — the
+        // user just picked a host, so the list has served its purpose;
+        // give the terminal full width instead. They can reopen it any
+        // time via the rail Hosts icon click or Ctrl+Shift+B.
+        drawerCollapsed: true,
       };
     }),
   removeSession: (id) =>

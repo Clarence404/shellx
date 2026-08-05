@@ -25,6 +25,14 @@ vi.mock("./components/LocalPane", () => ({ LocalPane: () => null }));
 // tabs / drawer / main content.
 vi.mock("./components/Titlebar", () => ({ Titlebar: () => null }));
 
+// One-host fixture. Drawer.tsx hides the drawer entirely when
+// hosts.length === 0 (v0.5.5 empty-state polish), so any test asserting
+// on drawer visibility must seed at least one host before render.
+const DUMMY_HOST = {
+  id: "dummy", label: "dummy", host: "127.0.0.1", port: 22, username: "root",
+  notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
+};
+
 const mockHostsState = {
   hosts: [] as Array<{ id: string; label: string; host: string; port: number; username: string; notes: string | null; created_at: number; last_connected_at: number | null; sort_order: number }>,
   keychainAvailable: false,
@@ -100,10 +108,20 @@ describe("App shell", () => {
     delete document.documentElement.dataset.density;
   });
 
-  it("renders the activity rail, an empty drawer, and an empty state in the main area", () => {
+  it("renders the activity rail + drawer (with a host) + empty state in the main area", () => {
+    mockHostsState.hosts = [DUMMY_HOST];
     render(<App />);
     expect(screen.getByRole("navigation", { name: "activity rail" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
+    expect(screen.getByText(/a tiny, pretty terminal client/i)).toBeInTheDocument();
+  });
+
+  it("hides the drawer when there are no saved hosts (v0.5.5 empty-state polish)", () => {
+    // hosts starts empty via the mock's initial state — see mockHostsState.
+    render(<App />);
+    expect(screen.queryByRole("complementary", { name: "drawer" })).toBeNull();
+    // Main area still shows the primary CTA so the user can add a host
+    // without needing the drawer.
     expect(screen.getByText(/a tiny, pretty terminal client/i)).toBeInTheDocument();
   });
 
@@ -161,6 +179,7 @@ describe("App shell", () => {
   });
 
   it("renders RailFilesView (and hides the drawer) when rail view is 'files'", async () => {
+    mockHostsState.hosts = [DUMMY_HOST];
     render(<App />);
     // Sanity: drawer is present in default "hosts" view
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
@@ -176,6 +195,7 @@ describe("App shell", () => {
   });
 
   it("Ctrl+Shift+B toggles drawer collapse on non-Files views", async () => {
+    mockHostsState.hosts = [DUMMY_HOST];
     render(<App />);
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
 
@@ -191,6 +211,7 @@ describe("App shell", () => {
   });
 
   it("plain Ctrl+B does NOT toggle drawer (leaves it free for terminal readline)", async () => {
+    mockHostsState.hosts = [DUMMY_HOST];
     render(<App />);
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
     await act(async () => {
@@ -201,6 +222,7 @@ describe("App shell", () => {
   });
 
   it("clicking the currently-active rail icon toggles the drawer", async () => {
+    mockHostsState.hosts = [DUMMY_HOST];
     render(<App />);
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
     const hostsIcon = screen.getByRole("button", { name: "Hosts" });
@@ -211,6 +233,7 @@ describe("App shell", () => {
   });
 
   it("switching to a different rail icon force-opens the drawer (when the target view has one)", async () => {
+    mockHostsState.hosts = [DUMMY_HOST];
     render(<App />);
     // Start on a non-Hosts view (Files) with drawer collapsed. Files owns
     // its own internal drawer replacement, so the outer Drawer is hidden
