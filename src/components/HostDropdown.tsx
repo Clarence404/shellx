@@ -89,12 +89,12 @@ export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewC
       <button ref={btnRef} onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox" aria-expanded={open}
         style={{
-          display: "flex", alignItems: "center", gap: 6, padding: "4px 8px",
-          fontSize: 11, color: "var(--text-1)", background: "var(--panel-1)",
-          border: "0.5px solid var(--border)", borderRadius: 5,
+          display: "flex", alignItems: "center", gap: 6, padding: "5px 10px",
+          fontSize: 12, color: "var(--text-1)", background: "var(--panel-1)",
+          border: "1px solid var(--border)", borderRadius: 5,
           fontFamily: "\"JetBrains Mono\", var(--font-mono)",
         }}>
-        <Server size={12} color="var(--text-2)" />
+        <Server size={14} color="var(--text-2)" />
         <span>{label}</span>
         <ChevronDown size={11} color="var(--text-3)" />
       </button>
@@ -118,7 +118,7 @@ export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewC
                 aria-selected={row.session?.id === currentHost || undefined}
                 onClick={() => handleRowClick(row)}
                 style={{
-                  padding: "6px 10px", fontSize: 11, color: "var(--text-1)",
+                  padding: "7px 12px", fontSize: 12, color: "var(--text-1)",
                   cursor: "pointer", borderRadius: 4,
                   display: "flex", alignItems: "center", gap: 6,
                 }}
@@ -141,7 +141,7 @@ export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewC
           <li role="option"
             onClick={() => { onNewConnection(); setOpen(false); }}
             style={{
-              padding: "6px 10px", fontSize: 11, color: "var(--text-1)",
+              padding: "7px 12px", fontSize: 12, color: "var(--text-1)",
               cursor: "pointer", borderRadius: 4, borderTop: "0.5px solid var(--border)",
               marginTop: 4, display: "flex", alignItems: "center", gap: 6,
             }}

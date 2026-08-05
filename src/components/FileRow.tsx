@@ -150,15 +150,15 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "5px 10px", fontSize: 12,
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "7px 12px", fontSize: 13,
           fontFamily: '"JetBrains Mono", var(--font-mono)',
           color: disabled ? "var(--text-3)" : "var(--text-1)",
           background: selected ? "var(--accent-fade)" : hovered ? "var(--border)" : "transparent",
           cursor: "pointer",
         }}
       >
-        <Icon size={13} color={iconColor} />
+        <Icon size={15} color={iconColor} />
         {renaming ? (
           <input
             ref={inputRef}
