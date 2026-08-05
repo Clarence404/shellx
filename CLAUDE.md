@@ -2,6 +2,22 @@
 
 Standing rules for anyone (Claude, another agent, or a human) working on this repo. Read once at task start; skim on later turns.
 
+## Ship gate — user verification before every tag
+
+**Never version-bump, commit release notes, tag, or push a tag on your own.** After every substantive code change, hand the running app back to the user for visual verification and wait for their explicit approval before starting the release sequence.
+
+The flow is always:
+
+1. Make the code changes on `main` (or a feature branch, if the change is in flight).
+2. Confirm tests + tsc pass locally.
+3. Make sure the Tauri dev window is up so the change is live via HMR (restart it yourself if it exited — do not ask the user to). Point out what to look at in one or two sentences.
+4. **Stop and wait.** Do not proceed until the user gives explicit go-ahead (e.g. "打 tag", "发版", "OK", "看好了 → 发布"). Silence is not approval. A user message about a different topic is not approval.
+5. Only after explicit approval: bump the three version fields (see below), write both release-notes files (see below), commit, tag, push.
+
+**When in doubt about whether a change is release-worthy:** ask. Small polish edits during a longer conversation may be intended to stack up into one bigger release, not each become a tag. Never guess.
+
+**What the user sees between changes:** the running app via HMR (see `pnpm tauri:dev`). Do not stand up separate demos, screenshots, or throwaway builds unless asked. If the dev process exited, restart it; if it can't restart (port in use, corepack broken, etc.), diagnose and fix — do not skip verification because "the previous instance probably still shows it".
+
 ## Bilingual README
 
 Every user-facing documentation change MUST land in both language files, in the same commit:
