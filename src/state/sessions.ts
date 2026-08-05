@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { ActivityKind, ConnectionId, ConnectionInfo } from "../types/connection";
 
+export type RailView = "hosts" | "files" | "protocols" | "settings";
+
 interface SessionsState {
   sessions: ConnectionInfo[];
   activeId: ConnectionId | null;
@@ -9,6 +11,16 @@ interface SessionsState {
    * object-map rather than a Set so shallow-compare selectors work correctly.
    */
   connecting: Record<string, true>;
+
+  /** Which rail icon is active (Hosts / Files / Protocols / Settings). */
+  railView: RailView;
+  /** Switching to a DIFFERENT view force-opens the drawer; setting the same
+   * view is a no-op so it never fights the click-active-toggle path in
+   * ActivityRail. */
+  setRailView: (v: RailView) => void;
+  /** Whether the drawer is collapsed (hidden) for the current rail view. */
+  drawerCollapsed: boolean;
+  toggleDrawer: () => void;
 
   addSession: (s: ConnectionInfo) => void;
   removeSession: (id: ConnectionId) => void;
@@ -26,6 +38,13 @@ export const useSessions = create<SessionsState>((set, get) => ({
   activeId: null,
   activeActivity: {},
   connecting: {},
+
+  railView: "hosts",
+  setRailView: (v) => set((st) => (
+    st.railView === v ? {} : { railView: v, drawerCollapsed: false }
+  )),
+  drawerCollapsed: false,
+  toggleDrawer: () => set((st) => ({ drawerCollapsed: !st.drawerCollapsed })),
 
   addSession: (s) =>
     set((st) => {

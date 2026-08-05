@@ -1,7 +1,8 @@
-import { useState, type ReactNode } from "react";
-import { ActivityRail, type RailView } from "./ActivityRail";
+import type { ReactNode } from "react";
+import { ActivityRail } from "./ActivityRail";
 import { Drawer } from "./Drawer";
 import { TabBar, type Tab } from "./TabBar";
+import { useSessions } from "../state/sessions";
 import type { HostInfo } from "../types/host";
 
 interface Props {
@@ -24,10 +25,10 @@ export function AppShell({
   onConnectHost,
   children,
 }: Props) {
-  const [view, setView] = useState<RailView>("hosts");
+  const view = useSessions((s) => s.railView);
   return (
     <div style={{ height: "100vh", display: "flex" }}>
-      <ActivityRail activeView={view} onSelect={setView} />
+      <ActivityRail />
       <Drawer view={view}
         onNewConnection={onNewConnection}
         onEditHost={onEditHost}

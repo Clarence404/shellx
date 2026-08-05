@@ -4,6 +4,7 @@ import { EmptyState } from "./components/EmptyState";
 import { TerminalView } from "./components/TerminalView";
 import { ActivityToolbar } from "./components/ActivityToolbar";
 import { FileBrowserView } from "./components/FileBrowserView";
+import { RailFilesView } from "./components/RailFilesView";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { useSessions } from "./state/sessions";
@@ -27,6 +28,8 @@ export function App() {
     s.activeId ? (s.activeActivity[s.activeId] ?? "terminal") : "terminal"
   );
   const setActivity = useSessions((s) => s.setActivity);
+  const railView = useSessions((s) => s.railView);
+  const toggleDrawer = useSessions((s) => s.toggleDrawer);
 
   const loadHosts = useHostsStore((s) => s.load);
 
@@ -105,6 +108,18 @@ export function App() {
     return () => window.removeEventListener("keydown", handler, true);
   }, []);
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        toggleDrawer();
+      }
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [toggleDrawer]);
+
   useTabHotkeys({
     onNewTab: () => setDialog({ mode: "create" }),
     onCloseTab: () => {
@@ -167,7 +182,9 @@ export function App() {
         onEditHost={(host) => setDialog({ mode: "edit", initial: host })}
         onConnectHost={(host) => void handleConnectSavedHost(host)}
       >
-        {activeId ? (
+        {railView === "files" ? (
+          <RailFilesView />
+        ) : activeId ? (
           <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
             <ActivityToolbar
               activity={activeActivity}

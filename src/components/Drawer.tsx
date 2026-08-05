@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, PanelLeftClose } from "lucide-react";
 import { HostRow } from "./HostRow";
 import { useHostsStore } from "../state/hosts";
 import { useSessions } from "../state/sessions";
@@ -18,6 +18,10 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
   const addHost = useHostsStore((s) => s.addHost);
   const hostIsConnected = useSessions((s) => s.hostIsConnected);
   const connecting = useSessions((s) => s.connecting);
+  const drawerCollapsed = useSessions((s) => s.drawerCollapsed);
+  const toggleDrawer = useSessions((s) => s.toggleDrawer);
+
+  if (view === "files" || drawerCollapsed) return null;
 
   async function handleDelete(host: HostInfo) {
     if (!confirm(`Delete "${host.label}"?`)) return;
@@ -40,9 +44,27 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
       display: "flex", flexDirection: "column",
     }}>
       <div style={{
-        fontSize: 10, letterSpacing: 1, textTransform: "uppercase",
-        color: "var(--text-3)", marginBottom: 8,
-      }}>{view}</div>
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: 8,
+      }}>
+        <span style={{
+          fontSize: 10, letterSpacing: 1, textTransform: "uppercase",
+          color: "var(--text-3)",
+        }}>{view}</span>
+        <button
+          aria-label="Collapse drawer"
+          title="Collapse (Ctrl/⌘+B)"
+          onClick={toggleDrawer}
+          style={{
+            color: "var(--text-3)", padding: "2px 4px", borderRadius: 3,
+            display: "flex", alignItems: "center",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-1)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}
+        >
+          <PanelLeftClose size={12} strokeWidth={2} />
+        </button>
+      </div>
       <div style={{ flex: 1, overflow: "auto", marginBottom: 8 }}>
         {view === "hosts" && hosts.map((h) => (
           <HostRow
