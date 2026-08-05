@@ -53,7 +53,7 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
         }}>{view}</span>
         <button
           aria-label="Collapse drawer"
-          title="Collapse (Ctrl/⌘+B)"
+          title={navigator.userAgent.includes("Mac") ? "Collapse (⌘+B)" : "Collapse (Ctrl+Shift+B)"}
           onClick={toggleDrawer}
           style={{
             color: "var(--text-3)", padding: "2px 4px", borderRadius: 3,

@@ -158,18 +158,28 @@ describe("App shell", () => {
     expect(screen.getByTestId("rail-files-view")).toBeInTheDocument();
   });
 
-  it("Ctrl+B toggles drawer collapse on non-Files views", async () => {
+  it("Ctrl+Shift+B toggles drawer collapse on non-Files views", async () => {
     render(<App />);
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
 
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, shiftKey: true, bubbles: true }));
     });
     expect(screen.queryByRole("complementary", { name: "drawer" })).toBeNull();
 
     await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, shiftKey: true, bubbles: true }));
+    });
+    expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
+  });
+
+  it("plain Ctrl+B does NOT toggle drawer (leaves it free for terminal readline)", async () => {
+    render(<App />);
+    expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
+    await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true }));
     });
+    // Drawer should still be present — Ctrl+B alone did nothing
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
   });
 
