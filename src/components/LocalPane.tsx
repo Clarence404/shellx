@@ -15,6 +15,7 @@ export function LocalPane() {
   const entries = useRailFiles((s) => s.leftEntries);
   const loading = useRailFiles((s) => s.leftLoading);
   const error = useRailFiles((s) => s.leftError);
+  const selected = useRailFiles((s) => s.leftSelected);
 
   // Actions are dispatched via getState() at call time rather than a
   // hook-captured reference, so each invocation always reaches the store's
@@ -68,7 +69,14 @@ export function LocalPane() {
         background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)" }}>
         <PathBreadcrumb path={leftPath} onNavigate={setLeftPath} />
       </div>
-      <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+      <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const src = e.dataTransfer.getData("application/x-shellx-pane");
+          if (src === "right") transfer("down");
+        }}
+      >
         {error && <div style={{ padding: "8px 10px", color: "var(--error)", fontSize: 11 }}>{error}</div>}
         {loading && <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>Loading…</div>}
         {leftPath !== "/" && (
@@ -84,26 +92,31 @@ export function LocalPane() {
           />
         )}
         {entries.map((e) => (
-          <FileRow
-            key={e.name}
-            name={e.name} kind={e.kind} size={e.size}
-            onOpen={() => {
-              if (e.kind === "directory") void setLeftPath(joinPath(leftPath, e.name));
-              else void localOpenInOs(joinPath(leftPath, e.name));
-            }}
-            onRename={async (newName) => {
-              if (!newName || newName === e.name) return;
-              await localRename(joinPath(leftPath, e.name), joinPath(leftPath, newName));
-              await loadLeft();
-            }}
-            onDelete={async () => {
-              if (!confirm(`Delete "${e.name}"?`)) return;
-              if (e.kind === "directory") await localRemoveDir(joinPath(leftPath, e.name));
-              else await localRemoveFile(joinPath(leftPath, e.name));
-              await loadLeft();
-            }}
-            onDownload={() => transfer("up")}  // "Upload to remote" via context menu label; direction is inferred
-          />
+          <div key={e.name} draggable
+            onDragStart={(ev) => ev.dataTransfer.setData("application/x-shellx-pane", "left")}
+          >
+            <FileRow
+              name={e.name} kind={e.kind} size={e.size}
+              selected={selected.includes(e.name)}
+              onClick={(ev) => useRailFiles.getState().toggleSelectLeft(e.name, ev.ctrlKey || ev.metaKey || ev.shiftKey)}
+              onOpen={() => {
+                if (e.kind === "directory") void setLeftPath(joinPath(leftPath, e.name));
+                else void localOpenInOs(joinPath(leftPath, e.name));
+              }}
+              onRename={async (newName) => {
+                if (!newName || newName === e.name) return;
+                await localRename(joinPath(leftPath, e.name), joinPath(leftPath, newName));
+                await loadLeft();
+              }}
+              onDelete={async () => {
+                if (!confirm(`Delete "${e.name}"?`)) return;
+                if (e.kind === "directory") await localRemoveDir(joinPath(leftPath, e.name));
+                else await localRemoveFile(joinPath(leftPath, e.name));
+                await loadLeft();
+              }}
+              onDownload={() => transfer("up")}  // "Upload to remote" via context menu label; direction is inferred
+            />
+          </div>
         ))}
       </div>
     </div>
