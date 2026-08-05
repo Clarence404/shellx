@@ -27,7 +27,10 @@
      rows. File-list content stays on --font-body (density-controlled). */
   --font-ui-size: 13px;
 
-  --rail-w: 32px;
+  /* v0.5.4: widened from 32 → 64 so each rail button (icon + label stacked)
+     is a comfortable ~40 × 44 hit target. Icons alone at 32 were routinely
+     mis-clicked. */
+  --rail-w: 64px;
   --drawer-w: 220px;
   --tab-h: 30px;
   --titlebar-h: 28px;

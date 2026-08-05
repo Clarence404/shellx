@@ -115,6 +115,14 @@ export function TabBar({
       <div
         ref={stripRef}
         role="tablist"
+        // Empty strip area is a window drag surface — WebView2's default
+        // drag detection lets clicks pass through to interactive
+        // descendants (tabs are role="tab" with onClick, the + button is
+        // a real <button>), so tab interaction still works; only the
+        // gap-space between them and the empty strip when tabs=0 acts as
+        // drag. Onus of "don't start a drag on THIS element" is on any
+        // future child that needs a plain non-button click handler.
+        data-tauri-drag-region
         // Vertical mouse-wheel is translated to horizontal scroll — the
         // native scrollbar is hidden (see className below + reset.css) so
         // the wheel is the primary scroll input. deltaX is honoured too
