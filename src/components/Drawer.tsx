@@ -21,7 +21,10 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
   const drawerCollapsed = useSessions((s) => s.drawerCollapsed);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
 
-  if (view === "files" || drawerCollapsed) return null;
+  // Views that own their own internal chrome (RailFilesView has its own
+  // rail+drawer replacement, SettingsView has SettingsSidebar) don't need the
+  // outer Drawer. Protocols is a bare "coming soon" placeholder — also skip.
+  if (view !== "hosts" || drawerCollapsed) return null;
 
   async function handleDelete(host: HostInfo) {
     if (!confirm(`Delete "${host.label}"?`)) return;

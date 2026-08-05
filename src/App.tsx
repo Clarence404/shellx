@@ -217,25 +217,22 @@ export function App() {
         onEditHost={(host) => setDialog({ mode: "edit", initial: host })}
         onConnectHost={(host) => void handleConnectSavedHost(host)}
       >
-        {railView === "files" ? (
-          <RailFilesView onConnectSavedHost={(host) => void handleConnectSavedHost(host)} />
-        ) : railView === "settings" ? (
-          <SettingsView />
-        ) : railView === "protocols" ? (
+        {/* Tab body stays mounted whenever activeId exists — hide via
+            display:none when the user is on a rail-level view (Files /
+            Settings / Protocols) so xterm state (scrollback, buffer,
+            connection) survives round-trips, and live-reconfigure of
+            terminal settings takes effect on the mounted xterm even
+            while the Settings pane is being viewed. */}
+        {activeId && (
           <div style={{
-            height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--text-3)", fontSize: 13, fontStyle: "italic",
+            display: railView === "hosts" ? "flex" : "none",
+            flexDirection: "column", height: "100%", minHeight: 0,
           }}>
-            Protocols · coming soon
-          </div>
-        ) : activeId ? (
-          <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
             <ActivityToolbar
               activity={activeActivity}
               onChange={(a) => setActivity(activeId, a)}
             />
             <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-              {/* Both mounted; only one visible — keeps xterm state alive across tab switches */}
               <div style={{ display: activeActivity === "terminal" ? "block" : "none", height: "100%" }}>
                 <TerminalView sessionId={activeId} />
               </div>
@@ -244,8 +241,22 @@ export function App() {
               </div>
             </div>
           </div>
-        ) : (
+        )}
+
+        {railView === "hosts" && !activeId && (
           <EmptyState onNewConnection={() => setDialog({ mode: "create" })} />
+        )}
+        {railView === "files" && (
+          <RailFilesView onConnectSavedHost={(host) => void handleConnectSavedHost(host)} />
+        )}
+        {railView === "settings" && <SettingsView />}
+        {railView === "protocols" && (
+          <div style={{
+            height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+            color: "var(--text-3)", fontSize: 13, fontStyle: "italic",
+          }}>
+            Protocols · coming soon
+          </div>
         )}
       </AppShell>
       <ConnectDialog
