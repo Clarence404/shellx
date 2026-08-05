@@ -74,11 +74,12 @@ pub fn realpath(path: &str) -> Result<String> {
         .map_err(|e| Error::Protocol(format!("realpath {}: {e}", expanded.display())))?;
     let s = canonical.to_string_lossy().into_owned();
     // Strip Windows UNC prefix that std's canonicalize prepends. Rust std
-    // returns `\?\C:\...` from GetFinalPathNameByHandleW on Windows; that
-    // form breaks path.split("/") and label-equality comparisons in the UI.
+    // returns `\\?\C:\...` from GetFinalPathNameByHandleW on Windows (four
+    // chars: `\`, `\`, `?`, `\`); that form breaks path.split("/") and
+    // label-equality comparisons in the UI.
     // See rust-lang/rust#42869.
     #[cfg(windows)]
-    let s = s.strip_prefix(r"\?\").map(String::from).unwrap_or(s);
+    let s = s.strip_prefix(r"\\?\").map(String::from).unwrap_or(s);
     Ok(s)
 }
 
@@ -160,7 +161,14 @@ mod tests {
     fn realpath_expands_tilde() {
         let expanded = realpath("~").unwrap();
         let home = dirs::home_dir().unwrap();
-        assert_eq!(std::path::PathBuf::from(&expanded), home.canonicalize().unwrap());
+        // On Windows, realpath now strips the `\\?\` UNC prefix that std's
+        // canonicalize prepends; strip the same prefix from the RHS so both
+        // sides speak the same form. Non-Windows platforms are unaffected.
+        let canonical = home.canonicalize().unwrap();
+        let canonical_str = canonical.to_string_lossy().into_owned();
+        #[cfg(windows)]
+        let canonical_str = canonical_str.strip_prefix(r"\\?\").map(String::from).unwrap_or(canonical_str);
+        assert_eq!(expanded, canonical_str);
     }
 
     #[test]
@@ -206,7 +214,7 @@ mod tests {
         let home = dirs::home_dir().unwrap();
         let home_str = home.to_string_lossy().into_owned();
         let resolved = realpath(&home_str).unwrap();
-        assert!(!resolved.starts_with(r"\?\"), "expected non-UNC, got {resolved}");
+        assert!(!resolved.starts_with(r"\\?\"), "expected non-UNC, got {resolved}");
         assert!(resolved.contains(":\\") || resolved.contains(":/"), "expected drive letter");
     }
 }

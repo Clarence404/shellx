@@ -9,15 +9,18 @@ import { HostDropdown } from "./HostDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow } from "./FileRow";
 
+import type { HostInfo } from "../types/host";
+
 interface Props {
   onNewConnection: () => void;
+  onConnectSavedHost?: (host: HostInfo) => void;
 }
 
 function joinPath(cwd: string, name: string): string {
   return cwd === "/" ? `/${name}` : `${cwd}/${name}`;
 }
 
-export function RemotePane({ onNewConnection }: Props) {
+export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
   const rightHost = useRailFiles((s) => s.rightHost);
   const rightPath = useRailFiles((s) => s.rightPath);
   const entries = useRailFiles((s) => s.rightEntries);
@@ -58,7 +61,12 @@ export function RemotePane({ onNewConnection }: Props) {
           height: 32, padding: "0 10px", display: "flex", alignItems: "center",
           background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)",
         }}>
-          <HostDropdown currentHost={null} onSelect={setRightHost} onNewConnection={onNewConnection} />
+          <HostDropdown
+            currentHost={null}
+            onSelect={setRightHost}
+            onConnectSavedHost={onConnectSavedHost}
+            onNewConnection={onNewConnection}
+          />
         </div>
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
           flexDirection: "column", gap: 12, color: "var(--text-3)" }}>
@@ -83,7 +91,12 @@ export function RemotePane({ onNewConnection }: Props) {
         height: 32, padding: "0 10px", display: "flex", alignItems: "center", gap: 6,
         background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)",
       }}>
-        <HostDropdown currentHost={rightHost} onSelect={setRightHost} onNewConnection={onNewConnection} />
+        <HostDropdown
+          currentHost={rightHost}
+          onSelect={setRightHost}
+          onConnectSavedHost={onConnectSavedHost}
+          onNewConnection={onNewConnection}
+        />
         <div style={{ flex: 1 }} />
         <button title="New folder" onClick={async () => {
           const name = prompt("New folder name");
