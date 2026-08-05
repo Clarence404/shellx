@@ -54,6 +54,14 @@ fn main() {
             ipc::transfer::sftp_download,
             ipc::transfer::transfer_list,
             ipc::transfer::transfer_cancel,
+            ipc::local::local_list_dir,
+            ipc::local::local_realpath,
+            ipc::local::local_default_roots,
+            ipc::local::local_mkdir,
+            ipc::local::local_rename,
+            ipc::local::local_remove_file,
+            ipc::local::local_remove_dir,
+            ipc::local::local_open_in_os,
         ])
         .run(tauri::generate_context!())
         .expect("shellx failed to start");

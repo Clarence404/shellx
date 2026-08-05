@@ -55,6 +55,7 @@ directories = "5"
 # matches the build platform.
 keyring = "3"
 tauri-plugin-dialog = "2"
+dirs = "5"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

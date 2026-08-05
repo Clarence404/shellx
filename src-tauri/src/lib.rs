@@ -1,5 +1,6 @@
 pub mod error;
 pub mod ipc;
+pub mod local;
 pub mod protocol;
 pub mod session;
 pub mod store;
