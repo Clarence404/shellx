@@ -3,6 +3,8 @@ import { LocalPane } from "./LocalPane";
 import { RemotePane } from "./RemotePane";
 import { TransferQueue } from "./TransferQueue";
 import { ConnectDialog } from "./ConnectDialog";
+import { PaneSplitter } from "./PaneSplitter";
+import { TransferArrow } from "./TransferArrow";
 import { useSessions } from "../state/sessions";
 import { useRailFiles } from "../state/railFiles";
 
@@ -10,6 +12,8 @@ export function RailFilesView() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const sessionCount = useSessions((s) => s.sessions.length);
   const rightHost = useRailFiles((s) => s.rightHost);
+  const splitterPercent = useRailFiles((s) => s.splitterPercent);
+  const setSplitter = useRailFiles((s) => s.setSplitter);
 
   // Auto-select the newly-connected host as the remote pane's host whenever
   // the session list grows (e.g. after ConnectDialog resolves a connection).
@@ -44,13 +48,15 @@ export function RailFilesView() {
     <div data-testid="rail-files-view"
       style={{ height: "100%", minHeight: 0, display: "flex", flexDirection: "column",
         background: "var(--panel-2)" }}>
-      <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-        <div style={{ flexBasis: "50%", minWidth: 0, borderRight: "0.5px solid var(--border)" }}>
+      <div style={{ flex: 1, minHeight: 0, display: "flex", position: "relative" }}>
+        <div style={{ flexBasis: `${splitterPercent}%`, minWidth: 0, borderRight: "0.5px solid var(--border)" }}>
           <LocalPane />
         </div>
-        <div style={{ flexBasis: "50%", minWidth: 0 }}>
+        <PaneSplitter percent={splitterPercent} onChange={setSplitter} />
+        <div style={{ flexBasis: `${100 - splitterPercent}%`, minWidth: 0 }}>
           <RemotePane onNewConnection={() => setDialogOpen(true)} />
         </div>
+        <TransferArrow />
       </div>
       <TransferQueue showAll />
       <ConnectDialog open={dialogOpen} mode="create" onClose={() => setDialogOpen(false)} />

@@ -46,4 +46,14 @@ describe("TransferQueue", () => {
 
     expect(screen.getByText(/foo.txt/i)).toBeInTheDocument();
   });
+
+  it("with showAll=true, ignores connectionId and lists every transfer", () => {
+    const otherTransfer = {
+      ...activeTransfer, id: "t2", connection_id: "c2", remote_path: "/y/bar.txt",
+    };
+    useTransfersStore.setState({ list: [activeTransfer, otherTransfer] });
+    render(<TransferQueue showAll />);
+    expect(screen.getByText(/foo.txt/i)).toBeInTheDocument();
+    expect(screen.getByText(/bar.txt/i)).toBeInTheDocument();
+  });
 });

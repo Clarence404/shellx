@@ -83,6 +83,8 @@ interface Props {
   onDelete: () => void;
   onDownload: () => void;
   disabled?: boolean;
+  selected?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -97,7 +99,7 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(1)} ${units[i]}`;
 }
 
-export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownload, disabled }: Props) {
+export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownload, disabled, selected, onClick }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -141,6 +143,8 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
     <>
       <div
         role="listitem"
+        aria-selected={selected || undefined}
+        onClick={disabled ? undefined : onClick}
         onDoubleClick={onOpen}
         onContextMenu={handleContextMenu}
         onMouseEnter={() => setHovered(true)}
@@ -150,7 +154,7 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
           padding: "5px 10px", fontSize: 12,
           fontFamily: '"JetBrains Mono", var(--font-mono)',
           color: disabled ? "var(--text-3)" : "var(--text-1)",
-          background: hovered ? "var(--border)" : "transparent",
+          background: selected ? "var(--accent-fade)" : hovered ? "var(--border)" : "transparent",
           cursor: "pointer",
         }}
       >

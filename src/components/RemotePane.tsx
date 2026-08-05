@@ -24,6 +24,7 @@ export function RemotePane({ onNewConnection }: Props) {
   const loading = useRailFiles((s) => s.rightLoading);
   const error = useRailFiles((s) => s.rightError);
   const leftPath = useRailFiles((s) => s.leftPath);
+  const selected = useRailFiles((s) => s.rightSelected);
 
   // Actions are dispatched via getState() at call time rather than a
   // hook-captured reference, so each invocation always reaches the store's
@@ -32,6 +33,7 @@ export function RemotePane({ onNewConnection }: Props) {
   const setRightHost = (id: string | null) => useRailFiles.getState().setRightHost(id);
   const setRightPath = (p: string) => useRailFiles.getState().setRightPath(p);
   const loadRight = () => useRailFiles.getState().loadRight();
+  const transfer = (direction: "up" | "down") => useRailFiles.getState().transfer(direction);
 
   // Mount-only rehydration guard: useRailFiles's initial state restores
   // rightHost/rightPath directly from localStorage (bypassing setRightHost
@@ -100,7 +102,14 @@ export function RemotePane({ onNewConnection }: Props) {
         background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)" }}>
         <PathBreadcrumb path={rightPath} onNavigate={setRightPath} />
       </div>
-      <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+      <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const src = e.dataTransfer.getData("application/x-shellx-pane");
+          if (src === "left") transfer("up");
+        }}
+      >
         {error && <div style={{ padding: "8px 10px", color: "var(--error)", fontSize: 11 }}>{error}</div>}
         {loading && <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>Loading…</div>}
         {rightPath !== "/" && (
@@ -116,26 +125,31 @@ export function RemotePane({ onNewConnection }: Props) {
           />
         )}
         {entries.map((e) => (
-          <FileRow
-            key={e.name}
-            name={e.name} kind={e.kind} size={e.size}
-            onOpen={() => {
-              if (e.kind === "directory") void setRightPath(joinPath(rightPath, e.name));
-              else void sftpDownload(rightHost, joinPath(rightPath, e.name), joinPath(leftPath, e.name));
-            }}
-            onRename={async (newName) => {
-              if (!newName || newName === e.name) return;
-              await sftpRename(rightHost, joinPath(rightPath, e.name), joinPath(rightPath, newName));
-              await loadRight();
-            }}
-            onDelete={async () => {
-              if (!confirm(`Delete "${e.name}"?`)) return;
-              if (e.kind === "directory") await sftpRemoveDir(rightHost, joinPath(rightPath, e.name));
-              else await sftpRemoveFile(rightHost, joinPath(rightPath, e.name));
-              await loadRight();
-            }}
-            onDownload={() => void sftpDownload(rightHost, joinPath(rightPath, e.name), joinPath(leftPath, e.name))}
-          />
+          <div key={e.name} draggable
+            onDragStart={(ev) => ev.dataTransfer.setData("application/x-shellx-pane", "right")}
+          >
+            <FileRow
+              name={e.name} kind={e.kind} size={e.size}
+              selected={selected.includes(e.name)}
+              onClick={(ev) => useRailFiles.getState().toggleSelectRight(e.name, ev.ctrlKey || ev.metaKey || ev.shiftKey)}
+              onOpen={() => {
+                if (e.kind === "directory") void setRightPath(joinPath(rightPath, e.name));
+                else void sftpDownload(rightHost, joinPath(rightPath, e.name), joinPath(leftPath, e.name));
+              }}
+              onRename={async (newName) => {
+                if (!newName || newName === e.name) return;
+                await sftpRename(rightHost, joinPath(rightPath, e.name), joinPath(rightPath, newName));
+                await loadRight();
+              }}
+              onDelete={async () => {
+                if (!confirm(`Delete "${e.name}"?`)) return;
+                if (e.kind === "directory") await sftpRemoveDir(rightHost, joinPath(rightPath, e.name));
+                else await sftpRemoveFile(rightHost, joinPath(rightPath, e.name));
+                await loadRight();
+              }}
+              onDownload={() => void sftpDownload(rightHost, joinPath(rightPath, e.name), joinPath(leftPath, e.name))}
+            />
+          </div>
         ))}
       </div>
     </div>

@@ -4,17 +4,17 @@ import { transferCancel } from "../ipc/transfers";
 
 interface Props {
   connectionId?: string;
-  showAll?: boolean;  // Task 6 makes this actually skip the filter
+  showAll?: boolean;  // when true, skip the connectionId filter and list every transfer
 }
 
-export function TransferQueue({ connectionId }: Props) {
+export function TransferQueue({ connectionId, showAll }: Props) {
   // Select the raw list (stable reference unless the store changes) and
   // filter outside the selector — filtering inside the selector returns a
   // new array every render, which breaks useSyncExternalStore's snapshot
   // stability check against the real zustand store and causes an infinite
   // render loop (only masked in isolation by a mocked store).
   const allTransfers = useTransfersStore((s) => s.list);
-  const list = allTransfers.filter((t) => t.connection_id === connectionId);
+  const list = showAll ? allTransfers : allTransfers.filter((t) => t.connection_id === connectionId);
   if (list.length === 0) return null;
 
   return (
