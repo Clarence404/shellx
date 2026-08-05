@@ -3,7 +3,8 @@ import { useTransfersStore } from "../state/transfers";
 import { transferCancel } from "../ipc/transfers";
 
 interface Props {
-  connectionId: string;
+  connectionId?: string;
+  showAll?: boolean;  // Task 6 makes this actually skip the filter
 }
 
 export function TransferQueue({ connectionId }: Props) {

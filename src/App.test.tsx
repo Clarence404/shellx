@@ -76,7 +76,10 @@ describe("App shell", () => {
     // React state update outside of act().
     cleanup();
     mockHostsState.hosts = [];
-    useSessions.setState({ sessions: [], activeId: null, activeActivity: {} });
+    useSessions.setState({
+      sessions: [], activeId: null, activeActivity: {}, connecting: {},
+      railView: "hosts", drawerCollapsed: false,
+    });
     capturedClosedHandler = null;
   });
 
@@ -138,5 +141,58 @@ describe("App shell", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("renders RailFilesView (and hides the drawer) when rail view is 'files'", async () => {
+    render(<App />);
+    // Sanity: drawer is present in default "hosts" view
+    expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
+
+    // Switch rail view
+    await act(async () => {
+      useSessions.setState({ railView: "files" });
+    });
+
+    // Drawer gone, main content should announce itself
+    expect(screen.queryByRole("complementary", { name: "drawer" })).toBeNull();
+    expect(screen.getByTestId("rail-files-view")).toBeInTheDocument();
+  });
+
+  it("Ctrl+B toggles drawer collapse on non-Files views", async () => {
+    render(<App />);
+    expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true }));
+    });
+    expect(screen.queryByRole("complementary", { name: "drawer" })).toBeNull();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true }));
+    });
+    expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
+  });
+
+  it("clicking the currently-active rail icon toggles the drawer", async () => {
+    render(<App />);
+    expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
+    const hostsIcon = screen.getByRole("button", { name: "Hosts" });
+    await act(async () => { hostsIcon.click(); });
+    expect(screen.queryByRole("complementary", { name: "drawer" })).toBeNull();
+    await act(async () => { hostsIcon.click(); });
+    expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
+  });
+
+  it("switching to a different rail icon force-opens the drawer", async () => {
+    render(<App />);
+    // Collapse first
+    await act(async () => {
+      useSessions.setState({ drawerCollapsed: true });
+    });
+    expect(screen.queryByRole("complementary", { name: "drawer" })).toBeNull();
+    // Click a different icon (Settings) — drawer should open
+    const settings = screen.getByRole("button", { name: "Settings" });
+    await act(async () => { settings.click(); });
+    expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import { Monitor, Files, Cable, Settings, type LucideIcon } from "lucide-react";
+import { useSessions, type RailView } from "../state/sessions";
 
-export type RailView = "hosts" | "files" | "protocols" | "settings";
+export type { RailView };
 
 const ITEMS: { id: RailView; label: string; Icon: LucideIcon }[] = [
   { id: "hosts", label: "Hosts", Icon: Monitor },
@@ -9,9 +10,10 @@ const ITEMS: { id: RailView; label: string; Icon: LucideIcon }[] = [
   { id: "settings", label: "Settings", Icon: Settings },
 ];
 
-export function ActivityRail({
-  activeView, onSelect,
-}: { activeView: RailView; onSelect: (v: RailView) => void }) {
+export function ActivityRail() {
+  const activeView = useSessions((s) => s.railView);
+  const setView = useSessions((s) => s.setRailView);
+  const toggleDrawer = useSessions((s) => s.toggleDrawer);
   return (
     <nav aria-label="activity rail" style={{
       width: "var(--rail-w)", flexShrink: 0, background: "var(--panel-1)",
@@ -23,7 +25,7 @@ export function ActivityRail({
           key={id}
           aria-label={label}
           aria-current={activeView === id ? "page" : undefined}
-          onClick={() => onSelect(id)}
+          onClick={() => (activeView === id ? toggleDrawer() : setView(id))}
           style={{
             width: 24, height: 24, borderRadius: 5,
             background: activeView === id ? "var(--accent)" : "transparent",
