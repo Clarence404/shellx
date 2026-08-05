@@ -72,7 +72,14 @@ pub fn realpath(path: &str) -> Result<String> {
     let canonical = expanded
         .canonicalize()
         .map_err(|e| Error::Protocol(format!("realpath {}: {e}", expanded.display())))?;
-    Ok(canonical.to_string_lossy().into_owned())
+    let s = canonical.to_string_lossy().into_owned();
+    // Strip Windows UNC prefix that std's canonicalize prepends. Rust std
+    // returns `\?\C:\...` from GetFinalPathNameByHandleW on Windows; that
+    // form breaks path.split("/") and label-equality comparisons in the UI.
+    // See rust-lang/rust#42869.
+    #[cfg(windows)]
+    let s = s.strip_prefix(r"\?\").map(String::from).unwrap_or(s);
+    Ok(s)
 }
 
 pub fn default_roots() -> DefaultRoots {
@@ -190,5 +197,16 @@ mod tests {
         fs::write(&p, b"gone").unwrap();
         remove_file(p.to_str().unwrap()).unwrap();
         assert!(!p.exists());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn realpath_strips_unc_prefix_on_windows() {
+        // dirs::home_dir() returns non-UNC form on Windows; realpath should too
+        let home = dirs::home_dir().unwrap();
+        let home_str = home.to_string_lossy().into_owned();
+        let resolved = realpath(&home_str).unwrap();
+        assert!(!resolved.starts_with(r"\?\"), "expected non-UNC, got {resolved}");
+        assert!(resolved.contains(":\\") || resolved.contains(":/"), "expected drive letter");
     }
 }
