@@ -4,9 +4,13 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.5.3
+## Status: v0.5.4
 
-v0.5.3 refines the **Settings / Appearance** panel and the titlebar:
+v0.5.4 widens the activity rail (icon + label under each button) so the four
+view switchers stop being misclick-prone, and makes empty patches of the tab
+strip a window-drag surface. Everything below still applies (introduced in v0.5.3):
+
+The **Settings / Appearance** panel and titlebar in v0.5.3:
 
 - **System font size** slider (11–16 px) — scales every sans UI surface (tabs, sidebar rows, host list,
   right-click menus, buttons, Terminal | Files toggle). Terminal font stays on its own scale.
