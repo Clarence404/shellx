@@ -76,6 +76,11 @@ vi.mock("./ipc/transfers", () => ({
   onTransferDone: vi.fn().mockResolvedValue(() => {}),
 }));
 
+vi.mock("./ipc/settings", () => ({
+  loadSettings: vi.fn().mockResolvedValue(null),
+  saveSettings: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe("App shell", () => {
   afterEach(() => {
     // Unmount first — resetting the (real, shared) sessions store while a
@@ -88,6 +93,11 @@ describe("App shell", () => {
       railView: "hosts", drawerCollapsed: false,
     });
     capturedClosedHandler = null;
+    // Reset <html> data-* attributes so tests don't leak theme/density state
+    // applied by App's sync effect (see the settings.load() + data-attr
+    // effects added in Task 3).
+    delete document.documentElement.dataset.theme;
+    delete document.documentElement.dataset.density;
   });
 
   it("renders the activity rail, an empty drawer, and an empty state in the main area", () => {
@@ -211,5 +221,28 @@ describe("App shell", () => {
     const settings = screen.getByRole("button", { name: "Settings" });
     await act(async () => { settings.click(); });
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
+  });
+
+  it("applies themeId / density to <html data-*> attributes", async () => {
+    render(<App />);
+    // Default theme (warm-minimal) and density (comfortable) → attributes ABSENT
+    expect(document.documentElement.dataset.theme).toBeUndefined();
+    expect(document.documentElement.dataset.density).toBeUndefined();
+
+    // Switch to Ocean + Compact
+    await act(async () => {
+      const { useSettingsStore } = await import("./state/settings");
+      useSettingsStore.setState({ themeId: "ocean", density: "compact" } as any);
+    });
+    expect(document.documentElement.dataset.theme).toBe("ocean");
+    expect(document.documentElement.dataset.density).toBe("compact");
+
+    // Switch back to defaults — attributes should be removed again
+    await act(async () => {
+      const { useSettingsStore } = await import("./state/settings");
+      useSettingsStore.setState({ themeId: "warm-minimal", density: "comfortable" } as any);
+    });
+    expect(document.documentElement.dataset.theme).toBeUndefined();
+    expect(document.documentElement.dataset.density).toBeUndefined();
   });
 });

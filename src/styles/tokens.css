@@ -26,3 +26,42 @@
   --tab-h: 30px;
   --titlebar-h: 28px;
 }
+
+/* v0.5: density-sensitive tokens. Density is set on <html data-density="…">.
+   Default (no attribute) = comfortable. */
+:root {
+  --font-body: 13px;
+  --font-small: 12px;
+  --pad-row-y: 7px;
+  --pad-row-x: 12px;
+}
+:root[data-density="compact"] {
+  --font-body: 12px;
+  --font-small: 11px;
+  --pad-row-y: 5px;
+  --pad-row-x: 10px;
+}
+:root[data-density="spacious"] {
+  --font-body: 14px;
+  --font-small: 13px;
+  --pad-row-y: 9px;
+  --pad-row-x: 14px;
+}
+
+/* v0.5: theme overrides. Default (no attribute) = Warm Minimal. */
+:root[data-theme="ocean"] {
+  --bg: #141822;
+  --panel-1: #171d2b;
+  --panel-2: #1a2233;
+  --accent: #4ea3ff;
+  --accent-fade: rgba(78, 163, 255, 0.15);
+  --accent-shadow: rgba(78, 163, 255, 0.4);
+}
+:root[data-theme="forest"] {
+  --bg: #141a15;
+  --panel-1: #171f18;
+  --panel-2: #1a251c;
+  --accent: #6cc57f;
+  --accent-fade: rgba(108, 197, 127, 0.15);
+  --accent-shadow: rgba(108, 197, 127, 0.4);
+}

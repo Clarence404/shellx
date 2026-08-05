@@ -9,6 +9,7 @@ import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { useSessions } from "./state/sessions";
 import { useHostsStore } from "./state/hosts";
+import { useSettingsStore } from "./state/settings";
 import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
 import { getHostPassword } from "./ipc/hosts";
@@ -32,6 +33,8 @@ export function App() {
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
 
   const loadHosts = useHostsStore((s) => s.load);
+  const themeId = useSettingsStore((s) => s.themeId);
+  const density = useSettingsStore((s) => s.density);
 
   const [dialog, setDialog] = useState<
     | { mode: "create" }
@@ -41,6 +44,19 @@ export function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => { void loadHosts(); }, [loadHosts]);
+
+  // Load persisted settings once on mount. If none exist, the store's
+  // DEFAULT_SETTINGS remain in effect.
+  useEffect(() => { void useSettingsStore.getState().load(); }, []);
+
+  // Sync themeId / density to <html data-*> attributes so tokens.css can
+  // pick up the correct :root[data-…] variable block. Empty string on
+  // "warm-minimal" / "comfortable" means "no attribute" → default block.
+  useEffect(() => {
+    const el = document.documentElement;
+    if (themeId === "warm-minimal") delete el.dataset.theme; else el.dataset.theme = themeId;
+    if (density === "comfortable") delete el.dataset.density; else el.dataset.density = density;
+  }, [themeId, density]);
 
   // Wire transfer started/progress/done events into the transfers store. Uses
   // the `cancelled` flag guard (see FileBrowserView's drag-drop listener)

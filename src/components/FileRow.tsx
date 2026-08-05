@@ -6,6 +6,7 @@ import {
   Database, type LucideIcon,
 } from "lucide-react";
 import { HostContextMenu } from "./HostContextMenu";
+import { useIconSizes } from "../state/settings";
 import type { EntryKind } from "../types/sftp";
 
 const EXT_ICON: Record<string, [LucideIcon, string]> = {
@@ -100,6 +101,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownload, disabled, selected, onClick }: Props) {
+  const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -151,14 +153,14 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
         onMouseLeave={() => setHovered(false)}
         style={{
           display: "flex", alignItems: "center", gap: 10,
-          padding: "7px 12px", fontSize: 13,
+          padding: "var(--pad-row-y) var(--pad-row-x)", fontSize: "var(--font-body)",
           fontFamily: '"JetBrains Mono", var(--font-mono)',
           color: disabled ? "var(--text-3)" : "var(--text-1)",
           background: selected ? "var(--accent-fade)" : hovered ? "var(--border)" : "transparent",
           cursor: "pointer",
         }}
       >
-        <Icon size={15} color={iconColor} />
+        <Icon size={iconSizes.md} color={iconColor} />
         {renaming ? (
           <input
             ref={inputRef}

@@ -34,7 +34,7 @@ export function PathBreadcrumb({ path, onNavigate }: Props) {
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 4,
-      fontFamily: '"JetBrains Mono", var(--font-mono)', fontSize: 12 }}>
+      fontFamily: '"JetBrains Mono", var(--font-mono)', fontSize: "var(--font-small)" }}>
       {paths.map((p, i) => (
         <div key={p.target} style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {i > 0 && <span style={{ color: "var(--text-3)" }}>/</span>}
