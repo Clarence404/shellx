@@ -12,9 +12,10 @@ vi.mock("./ipc/events", () => ({
   }),
 }));
 
-// TerminalView/FileBrowserView are heavy (real xterm.js / real Tauri IPC calls
-// on mount) and irrelevant to the App-level wiring under test here — stub them
-// out, same spirit as FileBrowserView.test.tsx stubbing its own Tauri deps.
+// TerminalView/FileBrowserView/LocalPane are heavy (real xterm.js / real Tauri
+// IPC calls on mount) and irrelevant to the App-level wiring under test here —
+// stub them out, same spirit as FileBrowserView.test.tsx stubbing its own
+// Tauri deps.
 vi.mock("./components/TerminalView", () => ({ TerminalView: () => null }));
 vi.mock("./components/FileBrowserView", () => ({ FileBrowserView: () => null }));
 vi.mock("./components/LocalPane", () => ({ LocalPane: () => null }));

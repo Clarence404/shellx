@@ -24,15 +24,20 @@ export function LocalPane() {
   const transfer = (direction: "up" | "down") => useRailFiles.getState().transfer(direction);
 
   // Initial load: if no leftPath yet, default to home. If a path is already
-  // set (e.g. rehydrated from persisted state), leave existing entries alone —
-  // navigation via setLeftPath/loadLeft already keeps entries in sync.
+  // set (e.g. rehydrated from persisted localStorage — only leftPath is
+  // persisted, not leftEntries), refresh only when entries are actually
+  // empty, so a cold restart still populates the list but pre-seeded entries
+  // (e.g. in tests) aren't clobbered by a race against the mount effect.
   useEffect(() => {
-    if (leftPath) return;
+    if (leftPath) {
+      if (entries.length === 0) void loadLeft();
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         const roots = await localDefaultRoots();
-        if (!cancelled) await setLeftPath(roots.home);
+        if (!cancelled) await useRailFiles.getState().setLeftPath(roots.home);
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };

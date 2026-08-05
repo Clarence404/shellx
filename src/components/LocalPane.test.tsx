@@ -39,4 +39,17 @@ describe("LocalPane", () => {
     fireEvent.doubleClick(row);
     expect(setLeftPath).toHaveBeenCalledWith("/home/chen/docs");
   });
+
+  it("mounts with a persisted leftPath but empty entries → auto-loads", async () => {
+    const { localListDir } = await import("../ipc/local");
+    useRailFiles.setState({
+      leftPath: "/home/chen",
+      leftEntries: [],  // cold-restart state: path rehydrated, entries not
+      leftLoading: false, leftError: null, leftSelected: [],
+    });
+    render(<LocalPane />);
+    // Wait a tick for the effect to fire loadLeft → localListDir
+    await new Promise((r) => setTimeout(r, 0));
+    expect(localListDir).toHaveBeenCalledWith("/home/chen");
+  });
 });
