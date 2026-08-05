@@ -2,15 +2,17 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.3
+## Status: v0.4
 
-v0.3 adds SFTP alongside SSH in the same tab (toggle between Terminal and Files activities),
-plus a proper Connection/ShellHandle/SftpHandle trait hierarchy. Drag files from OS Explorer
-to upload; right-click for Rename/Delete/New folder/Download to... Also: dead-tab fade,
-Ctrl+Shift+W/T hotkey remap (Ctrl+W/T let back to shell readline), Forget-password UI, and
-HostRow keyboard a11y. See [docs/superpowers/specs/2026-08-04-shellx-v0.3-design.md](docs/superpowers/specs/2026-08-04-shellx-v0.3-design.md).
+v0.4 ships **Rail Files** — a WinSCP-style dual-pane local ↔ remote file browser (second icon on the activity rail).
+Drag-and-drop files between panes; double-click the splitter to reset it; collapse the drawer via header button, click-active-icon, or `Ctrl+Shift+B` / `Cmd+B`.
+New connections auto-select as the remote pane host. Backend adds 8 local-filesystem IPC commands and 6 new UI components (LocalPane, RemotePane, PaneSplitter, TransferArrow, etc.).
 
-> **Security note (v0.3)**: shellx does not verify SSH host keys — every server is trusted on first connection. Do not use over untrusted networks yet. Host-key verification lands in v0.4.
+Also includes all v0.3 features: SFTP alongside SSH in the same tab (toggle between Terminal and Files activities),
+Connection/ShellHandle/SftpHandle trait hierarchy, drag-drop upload, right-click CRUD, dead-tab fade,
+Ctrl+Shift+W/T hotkey remap (Ctrl+W/T remain shell/tmux bindings), Forget-password UI, and HostRow keyboard a11y.
+
+> **Security note (v0.4)**: shellx does not verify SSH host keys — every server is trusted on first connection. Do not use over untrusted networks yet. Host-key verification lands in v0.5.
 
 ---
 
@@ -187,17 +189,17 @@ Adding a new physical channel (e.g. RS-485) means writing one `Transport` impl. 
 
 ---
 
-## Sizes (v0.3)
+## Sizes (v0.4)
 
 Measured from a `pnpm tauri:build` release build on Windows 11 (MSVC toolchain):
 
-- Windows MSI: 6.7 MB (`shellx_0.3.0_x64_en-US.msi`, 7,028,736 bytes)
-- Windows NSIS setup: 4.1 MB (`shellx_0.3.0_x64-setup.exe`, 4,253,987 bytes)
+- Windows MSI: 6.8 MB (`shellx_0.4.0_x64_en-US.msi`)
+- Windows NSIS setup: 4.1 MB (`shellx_0.4.0_x64-setup.exe`)
 - macOS DMG: not yet measured (no macOS build machine in this pass)
 - Linux AppImage: not yet measured (no Linux build machine in this pass)
 
-Both Windows installers are well under the 15 MB target (spec §7). The v0.2 → v0.3 growth
-(~0.7 MB MSI / ~0.3 MB NSIS) comes from russh-sftp and the dialog plugin's transitive deps.
+Both Windows installers remain well under the 15 MB target (spec §7). The v0.3 → v0.4 growth
+is minimal (~0.1 MB MSI, flat NSIS) since Rail Files is mostly UI additions without new native dependencies.
 
 ---
 
@@ -228,9 +230,18 @@ If downloads fail with `os error 2` file rename mid-transfer, that's Defender ra
 
 The next natural steps (roughly the order of the spec's milestone roadmap):
 
-- **v0.4** — SSH key-based auth, host-key verification (known_hosts), full boxed `Protocol` trait impls, credentials double-track (password vs. key).
-- **v0.5** — traditional FTP / FTPS.
-- **v0.6+** — signed installers, cross-platform CI, light theme.
+- **v0.4** ✓ — Rail Files (dual-pane local ↔ remote browser), auto-select new connections as remote host, 8 local IPC commands.
+
+### v0.4 Backlog & beyond
+
+- **Host-key TOFU + known_hosts persistence** — trust-on-first-use SSH host-key verification; save fingerprints to `~/.ssh/known_hosts`.
+- **Public-key authentication** — RSA / Ed25519 key pairs with passphrase in system keychain.
+- **Installer code signing** — Windows authenticode + macOS notarization.
+- **Drag-drop row transfer** — dragging a specific file row should transfer only that row, not the entire current selection.
+- **Cargo.toml authors field** — replace `authors = ["you"]` placeholder with actual maintainer names.
+- **Hidden-file filter** — toggle to show/hide dotfiles in local and remote panes.
+- **Upload conflict dialog** — prompt user when overwriting existing remote files.
+- **v0.5+** — traditional FTP / FTPS, signed cross-platform CI, light theme.
 - **Future** — RS-232 / RS-485 transport, Modbus RTU/TCP protocol, custom register-table views (spec §4 shows exactly which layer each addition touches).
 
 The design spec and implementation plan directories under `docs/superpowers/` are the source of truth for how each milestone is scoped; the SDD ledger under `.superpowers/sdd/` is the retrospective for how each was built.
