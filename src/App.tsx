@@ -188,7 +188,7 @@ export function App() {
         onConnectHost={(host) => void handleConnectSavedHost(host)}
       >
         {railView === "files" ? (
-          <RailFilesView />
+          <RailFilesView onConnectSavedHost={(host) => void handleConnectSavedHost(host)} />
         ) : activeId ? (
           <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
             <ActivityToolbar

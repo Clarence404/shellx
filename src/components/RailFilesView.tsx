@@ -7,8 +7,13 @@ import { PaneSplitter } from "./PaneSplitter";
 import { TransferArrow } from "./TransferArrow";
 import { useSessions } from "../state/sessions";
 import { useRailFiles } from "../state/railFiles";
+import type { HostInfo } from "../types/host";
 
-export function RailFilesView() {
+interface Props {
+  onConnectSavedHost?: (host: HostInfo) => void;
+}
+
+export function RailFilesView({ onConnectSavedHost }: Props = {}) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const sessionCount = useSessions((s) => s.sessions.length);
   const rightHost = useRailFiles((s) => s.rightHost);
@@ -55,7 +60,10 @@ export function RailFilesView() {
         </div>
         <PaneSplitter percent={splitterPercent} onChange={setSplitterDraft} onCommit={setSplitter} />
         <div style={{ flexBasis: `${100 - splitterPercent}%`, minWidth: 0 }}>
-          <RemotePane onNewConnection={() => setDialogOpen(true)} />
+          <RemotePane
+            onNewConnection={() => setDialogOpen(true)}
+            onConnectSavedHost={onConnectSavedHost}
+          />
         </div>
         <TransferArrow />
       </div>
