@@ -43,12 +43,12 @@ export function LocalPathDropdown({ currentPath, onSelect }: Props) {
       <button ref={btnRef} onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox" aria-expanded={open}
         style={{
-          display: "flex", alignItems: "center", gap: 6, padding: "4px 8px",
-          fontSize: 11, color: "var(--text-1)", background: "var(--panel-1)",
-          border: "0.5px solid var(--border)", borderRadius: 5,
+          display: "flex", alignItems: "center", gap: 6, padding: "5px 10px",
+          fontSize: 12, color: "var(--text-1)", background: "var(--panel-1)",
+          border: "1px solid var(--border)", borderRadius: 5,
           fontFamily: "\"JetBrains Mono\", var(--font-mono)",
         }}>
-        <Folder size={12} color="var(--text-2)" />
+        <Folder size={14} color="var(--text-2)" />
         <span>{label}</span>
         <ChevronDown size={11} color="var(--text-3)" />
       </button>
@@ -64,7 +64,7 @@ export function LocalPathDropdown({ currentPath, onSelect }: Props) {
             <li key={it.path} role="option"
               onClick={() => { onSelect(it.path); setOpen(false); }}
               style={{
-                padding: "6px 10px", fontSize: 11, color: "var(--text-1)",
+                padding: "7px 12px", fontSize: 12, color: "var(--text-1)",
                 cursor: "pointer", borderRadius: 4,
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--border)"; }}
