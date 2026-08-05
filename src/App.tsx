@@ -108,6 +108,19 @@ export function App() {
     return () => window.removeEventListener("keydown", handler, true);
   }, []);
 
+  // Suppress the WebView's default right-click menu (Back / Refresh /
+  // Save as…) — this is a desktop app, that menu doesn't belong.
+  // Components with their own context menus (HostRow, FileRow) call
+  // preventDefault in their onContextMenu synthetic handlers, which run
+  // AFTER this native capture and open their custom popover via state;
+  // both paths coexist. Text inputs lose their native copy/paste menu
+  // as collateral — keyboard shortcuts still work.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener("contextmenu", handler);
+    return () => document.removeEventListener("contextmenu", handler);
+  }, []);
+
   useEffect(() => {
     // Ctrl+B collides with terminal readline's backward-char emacs binding,
     // so on Windows/Linux the drawer-toggle chord requires Shift too. macOS

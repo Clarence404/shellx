@@ -20,18 +20,25 @@ function isDriveLetter(seg: string): boolean {
  * (e.g. `C:/Users/chen`), so a naive split-and-rejoin with a leading "/"
  * would produce `/C:/Users` — not a valid Windows path. Detect a
  * drive-letter first segment and rejoin without the leading "/".
+ *
+ * A bare `C:` (no trailing slash) is NOT the drive root on Windows —
+ * `canonicalize("C:")` treats it as "current working directory on drive
+ * C" and jumps to whatever process cwd is (e.g. the Tauri dev's
+ * src-tauri/ dir). Always append `/` so we get the unambiguous root.
  */
 function parentPath(cwd: string): string {
   const parts = cwd.split("/").filter(Boolean);
   if (parts.length === 0) return "/";
+  const firstIsDrive = isDriveLetter(parts[0]);
+  // Already at the drive-letter root ("C:/", or bare "C:") → no-op.
+  if (firstIsDrive && parts.length === 1) return firstIsDrive ? parts[0] + "/" : cwd;
   parts.pop();
-  if (parts.length === 0) {
-    // Was at first-segment root: "/etc" → "/"; "C:/Users" → "C:/" is invalid
-    // for read_dir but "C:" is — no further "up" on Windows from the drive.
-    // Return the untouched cwd so the click is a no-op instead of erroring.
-    return isDriveLetter(cwd.split("/").filter(Boolean)[0] ?? "") ? cwd : "/";
+  if (parts.length === 0) return "/";
+  if (isDriveLetter(parts[0])) {
+    // One segment left AND it's a drive letter → drive root: append `/`
+    // to disambiguate from Windows' "cwd on drive X" legacy semantic.
+    return parts.length === 1 ? parts[0] + "/" : parts.join("/");
   }
-  if (isDriveLetter(parts[0])) return parts.join("/");
   return "/" + parts.join("/");
 }
 
