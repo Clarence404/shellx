@@ -1,0 +1,124 @@
+import { useEffect, useState } from "react";
+import { Minus, Square, X, Copy as Restore } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { TabBar, type Tab } from "./TabBar";
+
+interface Props {
+  tabs: Tab[];
+  activeTabId: string | null;
+  onTabSelect: (id: string) => void;
+  onTabClose: (id: string) => void;
+  onNewConnection?: () => void;
+}
+
+/**
+ * Custom titlebar. `tauri.conf.json` sets `decorations: false` +
+ * `titleBarStyle: "Overlay"` (macOS keeps its own red/yellow/green
+ * traffic lights on top of this bar; on Windows/Linux we own everything).
+ *
+ * Layout: [logo] [tabs] [flex-1 drag region] [min][max/restore][close].
+ * The empty middle carries `data-tauri-drag-region` so the user can drag
+ * the window by any non-interactive area; TabBar / logo / controls are
+ * interactive and NOT drag regions.
+ */
+export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onNewConnection }: Props) {
+  const [maximized, setMaximized] = useState(false);
+
+  useEffect(() => {
+    const win = getCurrentWindow();
+    let cancelled = false;
+    void win.isMaximized().then((m) => { if (!cancelled) setMaximized(m); });
+    // Listen for resize/maximize toggles so the icon updates.
+    const unlistenPromise = win.onResized(async () => {
+      const m = await win.isMaximized();
+      if (!cancelled) setMaximized(m);
+    });
+    return () => {
+      cancelled = true;
+      void unlistenPromise.then((u) => u());
+    };
+  }, []);
+
+  const win = () => getCurrentWindow();
+
+  return (
+    <div
+      style={{
+        height: 32, flexShrink: 0, background: "var(--panel-1)",
+        borderBottom: "1px solid var(--border)",
+        display: "flex", alignItems: "center",
+        // Reserve macOS traffic-light gutter — 68px is enough for the
+        // three buttons at standard spacing. On Windows/Linux there's
+        // nothing there and this padding just becomes visual breathing
+        // room, which is fine.
+        paddingLeft: 8,
+      }}>
+      {/* Logo — clicking it doesn't do anything yet; drag region so users
+          can grab here to drag the window. */}
+      <div
+        data-tauri-drag-region
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "0 8px", color: "var(--accent)",
+          fontFamily: '"JetBrains Mono", var(--font-mono)',
+          fontSize: 13, fontWeight: 600,
+          userSelect: "none",
+        }}>
+        <span data-tauri-drag-region>&gt;_</span>
+      </div>
+      <div style={{ flexShrink: 0 }}>
+        <TabBar
+          tabs={tabs} activeTabId={activeTabId}
+          onSelect={onTabSelect} onClose={onTabClose}
+          onNewConnection={onNewConnection}
+        />
+      </div>
+      {/* Draggable filler occupies the space between tabs and window
+          controls. Double-click toggles maximize (native window
+          behaviour that self-drawn titlebars must implement manually). */}
+      <div
+        data-tauri-drag-region
+        onDoubleClick={() => void win().toggleMaximize()}
+        style={{ flex: 1, minWidth: 24, height: "100%" }}
+      />
+      <div style={{ display: "flex", height: "100%" }}>
+        <TitleButton onClick={() => void win().minimize()} label="Minimize">
+          <Minus size={14} />
+        </TitleButton>
+        <TitleButton onClick={() => void win().toggleMaximize()} label={maximized ? "Restore" : "Maximize"}>
+          {maximized ? <Restore size={12} /> : <Square size={12} />}
+        </TitleButton>
+        <TitleButton onClick={() => void win().close()} label="Close" danger>
+          <X size={14} />
+        </TitleButton>
+      </div>
+    </div>
+  );
+}
+
+function TitleButton({
+  children, onClick, label, danger,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  label: string;
+  danger?: boolean;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: 44, height: "100%",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: hover ? (danger ? "var(--error)" : "var(--border-hi)") : "transparent",
+        color: hover && danger ? "var(--bg)" : "var(--text-2)",
+        border: "none", padding: 0, cursor: "pointer",
+      }}
+    >{children}</button>
+  );
+}
