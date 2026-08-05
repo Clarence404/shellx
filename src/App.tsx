@@ -109,8 +109,13 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    // Ctrl+B collides with terminal readline's backward-char emacs binding,
+    // so on Windows/Linux the drawer-toggle chord requires Shift too. macOS
+    // keeps plain Cmd+B since Cmd isn't a modifier readline binds to. Mirrors
+    // the same class of fix in useTabHotkeys.ts for Ctrl+T/W.
     const handler = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey;
+      const isMacOs = navigator.userAgent.includes("Mac");
+      const mod = isMacOs ? e.metaKey : (e.ctrlKey && e.shiftKey);
       if (mod && (e.key === "b" || e.key === "B")) {
         e.preventDefault();
         toggleDrawer();
