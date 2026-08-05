@@ -27,6 +27,11 @@ describe("useSettingsStore", () => {
     expect(useSettingsStore.getState().themeId).toBe("ocean");
   });
 
+  it("setSystemFont mutates systemFont", () => {
+    useSettingsStore.getState().setSystemFont("segoe-ui");
+    expect(useSettingsStore.getState().systemFont).toBe("segoe-ui");
+  });
+
   it("setTerminalFontSize clamps to [10, 20]", () => {
     useSettingsStore.getState().setTerminalFontSize(5);
     expect(useSettingsStore.getState().terminal.fontSize).toBe(10);

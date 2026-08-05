@@ -65,3 +65,22 @@
   --accent-fade: rgba(108, 197, 127, 0.15);
   --accent-shadow: rgba(108, 197, 127, 0.4);
 }
+
+/* v0.5.2: light theme. Inverts bg/panel/text so the app fits day-lit
+   workspaces. Accent stays purple (slightly darkened for contrast on
+   near-white backgrounds). Terminal palette (hardcoded in TerminalView)
+   remains dark for now — matches VS Code / iTerm conventions where a
+   light UI often frames a dark terminal. Revisit in v0.6 if requested. */
+:root[data-theme="warm-light"] {
+  --bg: #fafaf7;
+  --panel-1: #f4f2ec;
+  --panel-2: #ffffff;
+  --accent: #6e4dff;
+  --accent-fade: rgba(110, 77, 255, 0.15);
+  --accent-shadow: rgba(110, 77, 255, 0.4);
+  --text-1: #1e1c24;
+  --text-2: #5f5c68;
+  --text-3: #8b869a;
+  --border: #dcd8d0;
+  --border-hi: #cfcbc2;
+}

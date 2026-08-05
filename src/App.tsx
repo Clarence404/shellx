@@ -11,6 +11,7 @@ import { SettingsView } from "./components/settings/SettingsView";
 import { useSessions } from "./state/sessions";
 import { useHostsStore } from "./state/hosts";
 import { useSettingsStore } from "./state/settings";
+import { SYSTEM_FONT_MAP } from "./types/settings";
 import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
 import { getHostPassword } from "./ipc/hosts";
@@ -36,6 +37,7 @@ export function App() {
   const loadHosts = useHostsStore((s) => s.load);
   const themeId = useSettingsStore((s) => s.themeId);
   const density = useSettingsStore((s) => s.density);
+  const systemFont = useSettingsStore((s) => s.systemFont);
 
   const [dialog, setDialog] = useState<
     | { mode: "create" }
@@ -58,6 +60,19 @@ export function App() {
     if (themeId === "warm-minimal") delete el.dataset.theme; else el.dataset.theme = themeId;
     if (density === "comfortable") delete el.dataset.density; else el.dataset.density = density;
   }, [themeId, density]);
+
+  // Sync systemFont to the --font-ui CSS custom property. body inherits
+  // font-family from :root via reset.css, so every sans UI element picks
+  // this up. "system-default" clears the override so tokens.css's own
+  // default fallback chain applies.
+  useEffect(() => {
+    const el = document.documentElement;
+    if (systemFont === "system-default") {
+      el.style.removeProperty("--font-ui");
+    } else {
+      el.style.setProperty("--font-ui", SYSTEM_FONT_MAP[systemFont]);
+    }
+  }, [systemFont]);
 
   // Wire transfer started/progress/done events into the transfers store. Uses
   // the `cancelled` flag guard (see FileBrowserView's drag-drop listener)

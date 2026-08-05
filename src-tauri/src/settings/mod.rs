@@ -7,9 +7,15 @@ use std::path::{Path, PathBuf};
 pub struct Settings {
     pub theme_id: String,
     pub density: String,
+    /// Sans UI font family preset. Missing on old settings.json files
+    /// (pre-v0.5.2) — serde default resolves to `"system-default"`.
+    #[serde(default = "default_system_font")]
+    pub system_font: String,
     pub terminal: TerminalSettings,
     pub schema_version: u32,
 }
+
+fn default_system_font() -> String { "system-default".into() }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -71,6 +77,7 @@ mod tests {
         Settings {
             theme_id: "ocean".into(),
             density: "compact".into(),
+            system_font: "segoe-ui".into(),
             terminal: TerminalSettings {
                 font_family: "fira-code".into(),
                 font_size: 14,
@@ -78,6 +85,18 @@ mod tests {
             },
             schema_version: 1,
         }
+    }
+
+    #[test]
+    fn load_old_settings_json_without_system_font_uses_default() {
+        // Pre-v0.5.2 settings.json didn't have systemFont; serde default
+        // resolves to "system-default" and load succeeds.
+        let td = TempDir::new().unwrap();
+        let store = SettingsStore::open(td.path());
+        let legacy = r#"{"themeId":"ocean","density":"compact","terminal":{"fontFamily":"fira-code","fontSize":14,"cursorStyle":"underline"},"schemaVersion":1}"#;
+        std::fs::write(td.path().join("settings.json"), legacy).unwrap();
+        let got = store.load().unwrap().unwrap();
+        assert_eq!(got.system_font, "system-default");
     }
 
     #[test]
