@@ -26,6 +26,18 @@ describe("useRailFiles", () => {
     expect(useRailFiles.getState().splitterPercent).toBe(65);
   });
 
+  it("setSplitterDraft updates state but does not persist; setSplitter does", () => {
+    useRailFiles.getState().setSplitterDraft(65);
+    expect(useRailFiles.getState().splitterPercent).toBe(65);
+    expect(localStorage.getItem("railFiles")).toBeNull();
+
+    useRailFiles.getState().setSplitter(65);
+    expect(useRailFiles.getState().splitterPercent).toBe(65);
+    const raw = localStorage.getItem("railFiles");
+    expect(raw).not.toBeNull();
+    expect(JSON.parse(raw!).splitterPercent).toBe(65);
+  });
+
   it("toggleSelectLeft multi vs single adds and replaces", () => {
     useRailFiles.getState().toggleSelectLeft("a", false);
     expect(useRailFiles.getState().leftSelected).toEqual(["a"]);

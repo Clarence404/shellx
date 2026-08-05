@@ -31,4 +31,22 @@ describe("HostDropdown", () => {
     fireEvent.click(screen.getByText("New connection"));
     expect(onNew).toHaveBeenCalled();
   });
+
+  it("survives a real mousedown-then-click on a list item (mousedown/click race)", () => {
+    // Regression: the document-level mousedown listener used to close the
+    // popup because the <ul> is a sibling of the trigger button, not a
+    // descendant — so mousedown on an <li> closed the list before its click
+    // handler fired. A real browser click fires mousedown then click on the
+    // same target; fireEvent.click alone doesn't reproduce the race.
+    useSessions.setState({
+      sessions: [{ id: "s1", label: "vm-local", kind: "ssh", host_id: null, state: "active" }],
+    });
+    const onSelect = vi.fn();
+    render(<HostDropdown currentHost={null} onSelect={onSelect} onNewConnection={() => {}} />);
+    fireEvent.click(screen.getByText("Pick a host"));
+    const item = screen.getByText("vm-local");
+    fireEvent.mouseDown(item);
+    fireEvent.click(item);
+    expect(onSelect).toHaveBeenCalledWith("s1");
+  });
 });

@@ -12,12 +12,16 @@ export function LocalPathDropdown({ currentPath, onSelect }: Props) {
   const [open, setOpen] = useState(false);
   const [roots, setRoots] = useState<DefaultRoots | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
 
   useEffect(() => { void localDefaultRoots().then(setRoots); }, []);
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (!btnRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (!btnRef.current?.contains(target) && !listRef.current?.contains(target)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
@@ -51,7 +55,7 @@ export function LocalPathDropdown({ currentPath, onSelect }: Props) {
         <ChevronDown size={11} color="var(--text-3)" />
       </button>
       {open && (
-        <ul role="listbox"
+        <ul ref={listRef} role="listbox"
           style={{
             position: "absolute", top: "100%", left: 0, marginTop: 4,
             minWidth: 180, background: "var(--panel-2)",

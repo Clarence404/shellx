@@ -69,6 +69,7 @@ pnpm tauri:dev
 | Close tab            | `Ctrl+Shift+W`       | `Cmd+W`        |
 | Next / previous tab | `Ctrl+Tab` / `Ctrl+Shift+Tab` | `Ctrl+Tab` / `Ctrl+Shift+Tab` |
 | Command palette      | `Ctrl+K`             | `Cmd+K`        |
+| Toggle sidebar (drawer) | `Ctrl+Shift+B`    | `Cmd+B`        |
 
 Windows/Linux require Shift on New/Close tab (v0.3) so they don't collide with terminal-inside-terminal
 muscle memory (`Ctrl+T`/`Ctrl+W` are common shell/tmux bindings); tab switching is unaffected.
