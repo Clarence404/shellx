@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { RefreshCw, FolderPlus, Plus } from "lucide-react";
 import { useRailFiles } from "../state/railFiles";
 import {
@@ -32,12 +33,21 @@ export function RemotePane({ onNewConnection }: Props) {
   const setRightPath = (p: string) => useRailFiles.getState().setRightPath(p);
   const loadRight = () => useRailFiles.getState().loadRight();
 
-  // No mount/rightHost-change effect here: `setRightHost` in the store
-  // already resolves the realpath and calls loadRight() itself, so an
-  // additional effect on [rightHost] would just double-fetch on every host
-  // switch. Selecting a host always goes through setRightHost (either here
-  // via HostDropdown or in RailFilesView's auto-select), so the store's own
-  // load-on-select covers every real code path.
+  // Mount-only rehydration guard: useRailFiles's initial state restores
+  // rightHost/rightPath directly from localStorage (bypassing setRightHost
+  // entirely), while rightEntries is never persisted and starts empty. On a
+  // cold restart with a previously-selected host, that leaves the pane
+  // showing a host + path but a permanently empty file list. Fire once on
+  // mount to catch that case; the `entries.length === 0 && !loading` guard
+  // means it's a no-op whenever setRightHost already populated things (the
+  // normal host-switch path still relies solely on setRightHost's own
+  // load-on-select, so this does not double-fetch on switches).
+  useEffect(() => {
+    if (rightHost && entries.length === 0 && !loading) {
+      void useRailFiles.getState().loadRight();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!rightHost) {
     return (

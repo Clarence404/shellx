@@ -45,4 +45,21 @@ describe("RemotePane", () => {
     fireEvent.doubleClick(screen.getByText("ip.log"));
     expect(sftpDownload).toHaveBeenCalledWith("h1", "/root/ip.log", "/home/chen/ip.log");
   });
+
+  it("cold-mount rehydration: rightHost + empty rightEntries → auto-loads", async () => {
+    const { sftpListDir } = await import("../ipc/sftp");
+    useSessions.setState({
+      sessions: [{ id: "h1", label: "vm", kind: "ssh", host_id: null, state: "active" }],
+      activeId: null, activeActivity: {}, connecting: {}, railView: "files",
+    });
+    useRailFiles.setState({
+      leftPath: "/home/chen", leftEntries: [], leftLoading: false, leftError: null, leftSelected: [],
+      rightHost: "h1", rightPath: "/root",
+      rightEntries: [], rightLoading: false, rightError: null, rightSelected: [],
+      splitterPercent: 50,
+    });
+    render(<RemotePane onNewConnection={() => {}} />);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(sftpListDir).toHaveBeenCalledWith("h1", "/root");
+  });
 });

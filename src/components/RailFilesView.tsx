@@ -9,6 +9,7 @@ import { useRailFiles } from "../state/railFiles";
 export function RailFilesView() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const sessionCount = useSessions((s) => s.sessions.length);
+  const rightHost = useRailFiles((s) => s.rightHost);
 
   // Auto-select the newly-connected host as the remote pane's host whenever
   // the session list grows (e.g. after ConnectDialog resolves a connection).
@@ -23,6 +24,21 @@ export function RailFilesView() {
     }
     setPrevCount(sessionCount);
   }, [sessionCount, prevCount]);
+
+  // Fallback for the case the growth effect above can't observe: this view
+  // unmounts entirely when railView !== "files" (App.tsx renders it
+  // conditionally, not just hidden), so a host connected while the user was
+  // on the Hosts view (via its own ConnectDialog flow) never registers as
+  // sessionCount "growing" here — prevCount just reseeds fresh on remount.
+  // Guarding on `!rightHost && activeId` means this can only fire once, on
+  // the null -> non-null transition: as soon as setRightHost runs (from
+  // here, from the effect above, or from a manual pick), rightHost becomes
+  // non-null and the guard blocks any further re-firing, so it can't clobber
+  // a deliberate host switch made later (e.g. by clicking between tabs).
+  const activeId = useSessions((s) => s.activeId);
+  useEffect(() => {
+    if (!rightHost && activeId) void useRailFiles.getState().setRightHost(activeId);
+  }, [activeId, rightHost]);
 
   return (
     <div data-testid="rail-files-view"
