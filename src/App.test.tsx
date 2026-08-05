@@ -232,12 +232,12 @@ describe("App shell", () => {
     expect(document.documentElement.dataset.theme).toBeUndefined();
     expect(document.documentElement.dataset.density).toBeUndefined();
 
-    // Switch to Ocean + Compact
+    // Switch to Warm Light + Compact
     await act(async () => {
       const { useSettingsStore } = await import("./state/settings");
-      useSettingsStore.setState({ themeId: "ocean", density: "compact" } as any);
+      useSettingsStore.setState({ themeId: "warm-light", density: "compact" } as any);
     });
-    expect(document.documentElement.dataset.theme).toBe("ocean");
+    expect(document.documentElement.dataset.theme).toBe("warm-light");
     expect(document.documentElement.dataset.density).toBe("compact");
 
     // Switch back to defaults — attributes should be removed again

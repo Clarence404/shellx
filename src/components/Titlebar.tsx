@@ -8,6 +8,7 @@ interface Props {
   activeTabId: string | null;
   onTabSelect: (id: string) => void;
   onTabClose: (id: string) => void;
+  onTabsClose?: (ids: string[]) => void;
   onNewConnection?: () => void;
 }
 
@@ -21,7 +22,7 @@ interface Props {
  * the window by any non-interactive area; TabBar / logo / controls are
  * interactive and NOT drag regions.
  */
-export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onNewConnection }: Props) {
+export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection }: Props) {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -66,20 +67,29 @@ export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onNewConn
         }}>
         <span data-tauri-drag-region>&gt;_</span>
       </div>
-      <div style={{ flexShrink: 0 }}>
+      {/* TabBar consumes the remaining space between logo and window
+          controls. `flex: 1 + minWidth: 0` lets it shrink below its
+          content width; TabBar's own `overflow-x: auto` scrolls the
+          strip internally. Without minWidth: 0, flex-basis "auto" wins
+          and tabs push into the window-controls area, hiding
+          minimize/maximize/close (see v0.5.3 hotfix). */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
         <TabBar
           tabs={tabs} activeTabId={activeTabId}
           onSelect={onTabSelect} onClose={onTabClose}
+          onCloseTabs={onTabsClose}
           onNewConnection={onNewConnection}
         />
       </div>
-      {/* Draggable filler occupies the space between tabs and window
-          controls. Double-click toggles maximize (native window
-          behaviour that self-drawn titlebars must implement manually). */}
+      {/* Drag gutter before window controls — guarantees a drag /
+          dbl-click-maximize surface even when tabs fill the strip, and
+          gives visual breathing room between the tab-chrome cluster
+          (‹ › ≡) and the window buttons (min/max/close). v0.5.3 widened
+          from 12px to 24px after the two clusters touched. */}
       <div
         data-tauri-drag-region
         onDoubleClick={() => void win().toggleMaximize()}
-        style={{ flex: 1, minWidth: 24, height: "100%" }}
+        style={{ flexShrink: 0, width: 24, height: "100%" }}
       />
       <div style={{ display: "flex", height: "100%" }}>
         <TitleButton onClick={() => void win().minimize()} label="Minimize">

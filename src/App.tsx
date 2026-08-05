@@ -38,6 +38,7 @@ export function App() {
   const themeId = useSettingsStore((s) => s.themeId);
   const density = useSettingsStore((s) => s.density);
   const systemFont = useSettingsStore((s) => s.systemFont);
+  const systemFontSize = useSettingsStore((s) => s.systemFontSize);
 
   const [dialog, setDialog] = useState<
     | { mode: "create" }
@@ -73,6 +74,13 @@ export function App() {
       el.style.setProperty("--font-ui", SYSTEM_FONT_MAP[systemFont]);
     }
   }, [systemFont]);
+
+  // Sync systemFontSize to --font-ui-size. Elements that render sans
+  // chrome (tabs, settings sidebar rows, body-inherited text) pick this
+  // up. File-list content stays on --font-body (density-controlled).
+  useEffect(() => {
+    document.documentElement.style.setProperty("--font-ui-size", `${systemFontSize}px`);
+  }, [systemFontSize]);
 
   // Wire transfer started/progress/done events into the transfers store. Uses
   // the `cancelled` flag guard (see FileBrowserView's drag-drop listener)
@@ -228,6 +236,13 @@ export function App() {
         activeTabId={activeId}
         onTabSelect={setActive}
         onTabClose={(id) => { void closeSession(id); removeSession(id); }}
+        onTabsClose={(ids) => {
+          // Batch close: fire the backend close for each session, then
+          // remove them all from the frontend list. onConnectionClosed
+          // events may still land afterward but markSessionClosed is a
+          // no-op once removed, so no double-teardown.
+          ids.forEach((id) => { void closeSession(id); removeSession(id); });
+        }}
         onNewConnection={() => setDialog({ mode: "create" })}
         onEditHost={(host) => setDialog({ mode: "edit", initial: host })}
         onConnectHost={(host) => void handleConnectSavedHost(host)}

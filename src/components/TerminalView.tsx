@@ -148,7 +148,14 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
   return (
     <div
       ref={hostRef}
-      style={{ width: "100%", height: "100%", padding: 8, background: "var(--panel-2)" }}
+      // Background matches xterm's own theme.background (#1e1c24) rather
+      // than var(--panel-2). Under the light theme --panel-2 is #ffffff,
+      // which turns the 8px padding into a bright white gutter around
+      // the dark terminal — inconsistent with how the same padding
+      // reads as "extended dark bezel" in dark themes. Pinning it to
+      // the terminal palette's own background keeps the visual gap
+      // between drawer/toolbar and rendered text identical everywhere.
+      style={{ width: "100%", height: "100%", padding: 8, background: "#1e1c24" }}
     />
   );
 }

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Settings } from "../types/settings";
-import { DEFAULT_SETTINGS } from "../types/settings";
+import { DEFAULT_SETTINGS, SYSTEM_FONT_SIZE_MIN, SYSTEM_FONT_SIZE_MAX, VALID_THEMES } from "../types/settings";
 import { loadSettings, saveSettings } from "../ipc/settings";
 
 interface State extends Settings {
@@ -8,6 +8,7 @@ interface State extends Settings {
   setTheme(id: Settings["themeId"]): void;
   setDensity(id: Settings["density"]): void;
   setSystemFont(id: Settings["systemFont"]): void;
+  setSystemFontSize(size: number): void;
   setTerminalFontFamily(id: Settings["terminal"]["fontFamily"]): void;
   setTerminalFontSize(size: number): void;
   setTerminalCursorStyle(style: Settings["terminal"]["cursorStyle"]): void;
@@ -22,6 +23,7 @@ function snapshotForSave(s: State): Settings {
     themeId: s.themeId,
     density: s.density,
     systemFont: s.systemFont,
+    systemFontSize: s.systemFontSize,
     terminal: s.terminal,
     schemaVersion: s.schemaVersion,
   };
@@ -48,7 +50,17 @@ export const useSettingsStore = create<State>((set, get) => ({
 
   async load() {
     const loaded = await loadSettings().catch(() => null);
-    if (loaded) set({ ...loaded });
+    if (loaded) {
+      // Migrate removed theme ids (ocean/forest dropped in v0.5.4) back
+      // to the default. Rust stores theme_id as an open String, so a
+      // stale settings.json survives the deserialize but hits the UI
+      // as an unmatched value that would render no THEME_META card as
+      // selected and leave --font-ui pointing at a gone CSS block.
+      if (!(VALID_THEMES as ReadonlyArray<string>).includes(loaded.themeId)) {
+        loaded.themeId = DEFAULT_SETTINGS.themeId;
+      }
+      set({ ...loaded });
+    }
     // If null (missing / malformed), keep DEFAULT_SETTINGS as-is.
   },
 
@@ -62,6 +74,11 @@ export const useSettingsStore = create<State>((set, get) => ({
   },
   setSystemFont(id) {
     set({ systemFont: id });
+    scheduleSave(get);
+  },
+  setSystemFontSize(size) {
+    const clamped = Math.max(SYSTEM_FONT_SIZE_MIN, Math.min(SYSTEM_FONT_SIZE_MAX, Math.round(size)));
+    set({ systemFontSize: clamped });
     scheduleSave(get);
   },
   setTerminalFontFamily(id) {

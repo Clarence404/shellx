@@ -62,7 +62,7 @@ export function HostRow({ host, isConnected, isConnecting, onConnect, onEdit, on
           onContextMenu={handleContextMenu}
           style={{
             flex: 1, minWidth: 0, padding: "6px 8px", borderRadius: 5,
-            fontSize: "var(--font-small)", color: "var(--text-1)",
+            fontSize: "var(--font-ui-size)", color: "var(--text-1)",
             display: "flex", alignItems: "center", gap: 8,
             background: "transparent",
             textAlign: "left",

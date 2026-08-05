@@ -20,6 +20,12 @@
 
   --font-ui: -apple-system, "Segoe UI", "PingFang SC", sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  /* User-adjustable base size for sans chrome. App.tsx re-sets this at
+     runtime from useSettingsStore.systemFontSize; the value here is a
+     safety fallback if the effect hasn't run yet. Elements that follow
+     it: body (inherits everywhere), TabBar tab label, SettingsSidebar
+     rows. File-list content stays on --font-body (density-controlled). */
+  --font-ui-size: 13px;
 
   --rail-w: 32px;
   --drawer-w: 220px;
@@ -48,23 +54,10 @@
   --pad-row-x: 14px;
 }
 
-/* v0.5: theme overrides. Default (no attribute) = Warm Minimal. */
-:root[data-theme="ocean"] {
-  --bg: #141822;
-  --panel-1: #171d2b;
-  --panel-2: #1a2233;
-  --accent: #4ea3ff;
-  --accent-fade: rgba(78, 163, 255, 0.15);
-  --accent-shadow: rgba(78, 163, 255, 0.4);
-}
-:root[data-theme="forest"] {
-  --bg: #141a15;
-  --panel-1: #171f18;
-  --panel-2: #1a251c;
-  --accent: #6cc57f;
-  --accent-fade: rgba(108, 197, 127, 0.15);
-  --accent-shadow: rgba(108, 197, 127, 0.4);
-}
+/* v0.5: theme overrides. Default (no attribute) = Warm Minimal.
+   Ocean / Forest were removed in v0.5.3 — see useSettingsStore.load()
+   for the migration path that coerces stale settings.json values back
+   to warm-minimal. */
 
 /* v0.5.2: light theme. Inverts bg/panel/text so the app fits day-lit
    workspaces. Accent stays purple (slightly darkened for contrast on

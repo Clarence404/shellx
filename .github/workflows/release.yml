@@ -85,6 +85,37 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
+      # Load per-version release notes from docs/release-notes/<TAG>.md so
+      # each release page opens with the human-written changelog instead of
+      # a generic banner. If the file doesn't exist yet (forgotten commit,
+      # ad-hoc tag), fall back to a short note so the release still ships.
+      # Emitted via GH_OUTPUT multiline heredoc — the delimiter (EOF_NOTES)
+      # must not appear in the file body, which is why we use a distinctive
+      # marker rather than plain EOF.
+      - name: Load release notes
+        id: notes
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          NOTES_FILE="docs/release-notes/${TAG}.md"
+          {
+            echo "body<<EOF_NOTES"
+            if [ -f "$NOTES_FILE" ]; then
+              cat "$NOTES_FILE"
+              echo
+            else
+              echo "Auto-built from the tagged commit — release notes file"
+              echo "\`$NOTES_FILE\` was not present at build time."
+              echo
+            fi
+            echo "---"
+            echo
+            echo "Installers below are unsigned — Windows SmartScreen and macOS"
+            echo "Gatekeeper will warn on first launch. See the README for the"
+            echo "\"Run anyway\" steps until installer signing lands."
+            echo "EOF_NOTES"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build + upload to release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -92,12 +123,7 @@ jobs:
         with:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: 'shellx ${{ github.event.inputs.tag || github.ref_name }}'
-          releaseBody: |
-            Auto-built from the tagged commit.
-
-            Installers below are unsigned — Windows SmartScreen and macOS
-            Gatekeeper will warn on first launch. See the README for the
-            "Run anyway" steps until installer signing lands (v0.4 backlog).
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

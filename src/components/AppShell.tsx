@@ -11,6 +11,7 @@ interface Props {
   activeTabId?: string | null;
   onTabSelect?: (id: string) => void;
   onTabClose?: (id: string) => void;
+  onTabsClose?: (ids: string[]) => void;
   onNewConnection?: () => void;
   onEditHost?: (host: HostInfo) => void;
   onConnectHost?: (host: HostInfo) => void;
@@ -27,6 +28,7 @@ export function AppShell({
   tabs = [], activeTabId = null,
   onTabSelect = () => {},
   onTabClose = () => {},
+  onTabsClose,
   onNewConnection,
   onEditHost,
   onConnectHost,
@@ -38,6 +40,7 @@ export function AppShell({
       <Titlebar
         tabs={tabs} activeTabId={activeTabId}
         onTabSelect={onTabSelect} onTabClose={onTabClose}
+        onTabsClose={onTabsClose}
         onNewConnection={onNewConnection}
       />
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>

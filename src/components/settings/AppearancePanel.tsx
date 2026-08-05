@@ -1,18 +1,30 @@
 import type { ReactNode } from "react";
 import { useSettingsStore } from "../../state/settings";
-import { THEME_META, DENSITY_META, FONT_MAP, SYSTEM_FONT_META } from "../../types/settings";
+import {
+  THEME_META, DENSITY_META, FONT_MAP, SYSTEM_FONT_META,
+  SYSTEM_FONT_SIZE_MIN, SYSTEM_FONT_SIZE_MAX,
+} from "../../types/settings";
 import type { Settings } from "../../types/settings";
+
+// v0.5.4: every visible text size in this panel is derived from
+// var(--font-ui-size) so the System-font-size slider scales the whole
+// Appearance surface coherently. Three tiers relative to the base:
+const FS_HEADING = "calc(var(--font-ui-size) + 2px)";  // h3
+const FS_BODY    = "var(--font-ui-size)";              // labels, controls
+const FS_META    = "calc(var(--font-ui-size) - 2px)";  // hints, section markers, subtitle
 
 export function AppearancePanel() {
   const themeId = useSettingsStore((s) => s.themeId);
   const density = useSettingsStore((s) => s.density);
   const systemFont = useSettingsStore((s) => s.systemFont);
+  const systemFontSize = useSettingsStore((s) => s.systemFontSize);
   const terminal = useSettingsStore((s) => s.terminal);
 
   const setTheme = (id: Settings["themeId"]) => useSettingsStore.getState().setTheme(id);
   const setDensity = (id: Settings["density"]) => useSettingsStore.getState().setDensity(id);
   const setSystemFont = (id: Settings["systemFont"]) =>
     useSettingsStore.getState().setSystemFont(id);
+  const setSystemFontSize = (n: number) => useSettingsStore.getState().setSystemFontSize(n);
   const setFontFamily = (id: Settings["terminal"]["fontFamily"]) =>
     useSettingsStore.getState().setTerminalFontFamily(id);
   const setFontSize = (n: number) => useSettingsStore.getState().setTerminalFontSize(n);
@@ -21,10 +33,12 @@ export function AppearancePanel() {
 
   return (
     <div style={{ padding: "20px 24px", overflowY: "auto", color: "var(--text-1)", flex: 1 }}>
-      <h3 style={{ fontSize: 15, fontWeight: 500, margin: "0 0 6px" }}>Appearance</h3>
-      <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 20 }}>
+      <h3 style={{ fontSize: FS_HEADING, fontWeight: 500, margin: "0 0 6px" }}>Appearance</h3>
+      <div style={{ fontSize: FS_META, color: "var(--text-3)", marginBottom: 20 }}>
         Changes apply live · saved to settings.json in your config directory
       </div>
+
+      <SectionHeader>Interface</SectionHeader>
 
       <Field label="Theme">
         <div style={{
@@ -52,7 +66,7 @@ export function AppearancePanel() {
                   <span key={i} style={{ flex: 1, borderRadius: 2, background: c }} />
                 ))}
               </div>
-              <div style={{ fontSize: 11, color: "var(--text-1)" }}>{t.label}</div>
+              <div style={{ fontSize: FS_BODY, color: "var(--text-1)" }}>{t.label}</div>
             </div>
           ))}
         </div>
@@ -66,56 +80,60 @@ export function AppearancePanel() {
         />
       </Field>
 
-      <Field label="System font">
-        <select
-          value={systemFont}
-          onChange={(e) => setSystemFont(e.target.value as Settings["systemFont"])}
-          aria-label="System font"
-          style={{
-            padding: "6px 10px", fontSize: 11, color: "var(--text-1)",
-            background: "var(--panel-1)", border: "1px solid var(--border)",
-            borderRadius: 5,
-          }}
-        >
-          {SYSTEM_FONT_META.map((f) => (
-            <option key={f.id} value={f.id}>{f.label}</option>
-          ))}
-        </select>
-        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>
-          Controls sans UI — tabs, buttons, section headers.
+      <Field
+        label="System font"
+        hint="Controls sans UI — tabs, buttons, section headers."
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <select
+            value={systemFont}
+            onChange={(e) => setSystemFont(e.target.value as Settings["systemFont"])}
+            aria-label="System font"
+            style={{
+              padding: "6px 10px", fontSize: FS_BODY, color: "var(--text-1)",
+              background: "var(--panel-1)", border: "1px solid var(--border)",
+              borderRadius: 5, minWidth: 180,
+            }}
+          >
+            {SYSTEM_FONT_META.map((f) => (
+              <option key={f.id} value={f.id}>{f.label}</option>
+            ))}
+          </select>
+          <SizeSlider
+            aria-label="System font size"
+            min={SYSTEM_FONT_SIZE_MIN} max={SYSTEM_FONT_SIZE_MAX}
+            value={systemFontSize}
+            onChange={setSystemFontSize}
+          />
         </div>
       </Field>
+
+      <SectionHeader>Terminal</SectionHeader>
 
       <Field label="Terminal font">
-        <select
-          value={terminal.fontFamily}
-          onChange={(e) => setFontFamily(e.target.value as Settings["terminal"]["fontFamily"])}
-          style={{
-            padding: "6px 10px", fontSize: 11, color: "var(--text-1)",
-            background: "var(--panel-1)", border: "1px solid var(--border)",
-            borderRadius: 5, fontFamily: '"JetBrains Mono", var(--font-mono)',
-          }}
-        >
-          {(Object.keys(FONT_MAP) as Array<Settings["terminal"]["fontFamily"]>).map((k) => (
-            <option key={k} value={k}>{humanFont(k)}</option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Terminal font size">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <input
-            type="range" min={10} max={20} step={1}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <select
+            value={terminal.fontFamily}
+            onChange={(e) => setFontFamily(e.target.value as Settings["terminal"]["fontFamily"])}
+            aria-label="Terminal font"
+            style={{
+              padding: "6px 10px", fontSize: FS_BODY, color: "var(--text-1)",
+              background: "var(--panel-1)", border: "1px solid var(--border)",
+              borderRadius: 5, minWidth: 180,
+              fontFamily: '"JetBrains Mono", var(--font-mono)',
+            }}
+          >
+            {(Object.keys(FONT_MAP) as Array<Settings["terminal"]["fontFamily"]>).map((k) => (
+              <option key={k} value={k}>{humanFont(k)}</option>
+            ))}
+          </select>
+          <SizeSlider
+            aria-label="Terminal font size"
+            min={10} max={20}
             value={terminal.fontSize}
-            onChange={(e) => setFontSize(Number(e.target.value))}
-            style={{ flex: 1, maxWidth: 240, accentColor: "var(--accent)" }}
+            onChange={setFontSize}
           />
-          <span style={{
-            fontSize: 11, fontFamily: '"JetBrains Mono", var(--font-mono)',
-            color: "var(--text-1)", width: 24, textAlign: "right",
-          }}>{terminal.fontSize}</span>
         </div>
-        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 4 }}>10 – 20 px</div>
       </Field>
 
       <Field label="Cursor style">
@@ -133,11 +151,49 @@ export function AppearancePanel() {
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function SectionHeader({ children }: { children: ReactNode }) {
   return (
-    <div style={{ marginBottom: 22 }}>
-      <div style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 8 }}>{label}</div>
+    <div style={{
+      fontSize: FS_META, textTransform: "uppercase", letterSpacing: 1.2,
+      color: "var(--text-3)", fontWeight: 500,
+      marginTop: 4, marginBottom: 12, paddingBottom: 6,
+      borderBottom: "1px solid var(--border)",
+    }}>{children}</div>
+  );
+}
+
+function Field({ label, hint, children }: {
+  label: string; hint?: string; children: ReactNode;
+}) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: FS_BODY, color: "var(--text-2)", marginBottom: 8 }}>{label}</div>
       {children}
+      {hint && (
+        <div style={{ fontSize: FS_META, color: "var(--text-3)", marginTop: 6 }}>{hint}</div>
+      )}
+    </div>
+  );
+}
+
+function SizeSlider({ min, max, value, onChange, ...aria }: {
+  min: number; max: number; value: number;
+  onChange: (n: number) => void;
+  "aria-label": string;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, maxWidth: 260 }}>
+      <input
+        type="range" min={min} max={max} step={1}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        aria-label={aria["aria-label"]}
+        style={{ flex: 1, accentColor: "var(--accent)" }}
+      />
+      <span style={{
+        fontSize: FS_BODY, fontFamily: '"JetBrains Mono", var(--font-mono)',
+        color: "var(--text-1)", minWidth: 42, textAlign: "right",
+      }}>{value}px</span>
     </div>
   );
 }
@@ -158,7 +214,7 @@ function Segmented({ options, value, onChange }: {
           aria-pressed={value === o.id}
           onClick={() => onChange(o.id)}
           style={{
-            padding: "5px 12px", fontSize: 11, borderRadius: 3,
+            padding: "5px 12px", fontSize: FS_BODY, borderRadius: 3,
             background: value === o.id ? "var(--accent)" : "transparent",
             color: value === o.id ? "var(--text-on-accent)" : "var(--text-2)",
             cursor: "pointer", border: "none",

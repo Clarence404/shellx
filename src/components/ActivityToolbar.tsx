@@ -30,7 +30,7 @@ function SegButton({ icon, label, active, onClick }: {
 }) {
   return (
     <button onClick={onClick} aria-pressed={active} style={{
-      padding: "4px 10px", borderRadius: 4, fontSize: 10,
+      padding: "4px 10px", borderRadius: 4, fontSize: "var(--font-ui-size)",
       background: active ? "var(--accent)" : "transparent",
       color: active ? "var(--text-on-accent)" : "var(--text-2)",
       display: "flex", alignItems: "center", gap: 4,

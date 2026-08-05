@@ -87,7 +87,7 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
           style={{
             padding: "6px 8px", borderRadius: 5,
             background: "var(--accent-fade)", color: "var(--text-1)",
-            border: "1px solid var(--accent)", fontSize: 12,
+            border: "1px solid var(--accent)", fontSize: "var(--font-ui-size)",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
           }}>
           <Plus size={12} strokeWidth={2.5} />
