@@ -27,17 +27,15 @@ export function LocalPathDropdown({ currentPath, onSelect }: Props) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  const label = displayLabel(currentPath, roots) ?? (currentPath || "Local");
+  // Label is intentionally a role, not the current path — the breadcrumb
+  // below already shows where you are. This button says where you can go.
+  const label = displayLabel(currentPath, roots) ?? "Local";
 
   const items: { label: string; path: string }[] = [];
   if (roots) {
     items.push({ label: "~ Home", path: roots.home });
     if (roots.desktop) items.push({ label: "Desktop", path: roots.desktop });
     if (roots.downloads) items.push({ label: "Downloads", path: roots.downloads });
-  }
-  // If currentPath isn't one of the roots, show it as "Current" at bottom
-  if (currentPath && !items.some(it => it.path === currentPath)) {
-    items.push({ label: `Current · ${currentPath}`, path: currentPath });
   }
 
   return (
