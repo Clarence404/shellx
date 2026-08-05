@@ -4,8 +4,8 @@ import { useRailFiles } from "../state/railFiles";
 export function TransferArrow() {
   const leftSel = useRailFiles((s) => s.leftSelected);
   const rightSel = useRailFiles((s) => s.rightSelected);
-  const transfer = useRailFiles((s) => s.transfer);
   const rightHost = useRailFiles((s) => s.rightHost);
+  const percent = useRailFiles((s) => s.splitterPercent);
 
   const leftHas = leftSel.length > 0;
   const rightHas = rightSel.length > 0;
@@ -20,12 +20,12 @@ export function TransferArrow() {
 
   return (
     <button
-      onClick={() => { if (enabled && direction) transfer(direction); }}
+      onClick={() => { if (enabled && direction) useRailFiles.getState().transfer(direction); }}
       disabled={!enabled}
       title={tooltip}
       aria-label={tooltip}
       style={{
-        position: "absolute", top: "50%", left: "50%",
+        position: "absolute", top: "50%", left: `${percent}%`,
         transform: "translate(-50%, -50%)", zIndex: 5,
         width: 28, height: 28, borderRadius: "50%",
         background: enabled ? "var(--accent)" : "var(--border)",
