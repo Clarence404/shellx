@@ -17,6 +17,7 @@ vi.mock("./ipc/events", () => ({
 // out, same spirit as FileBrowserView.test.tsx stubbing its own Tauri deps.
 vi.mock("./components/TerminalView", () => ({ TerminalView: () => null }));
 vi.mock("./components/FileBrowserView", () => ({ FileBrowserView: () => null }));
+vi.mock("./components/LocalPane", () => ({ LocalPane: () => null }));
 
 const mockHostsState = {
   hosts: [] as Array<{ id: string; label: string; host: string; port: number; username: string; notes: string | null; created_at: number; last_connected_at: number | null; sort_order: number }>,
