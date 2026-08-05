@@ -24,7 +24,18 @@ Both files carry a language switcher on line 3:
 
 ## Release notes flow
 
-`.github/workflows/release.yml` auto-injects `docs/release-notes/<TAG>.md` into the GitHub Release body when a `v*` tag is pushed. For every release, the last commit before the tag must include a new file `docs/release-notes/vX.Y.Z.md` covering that version. CI falls back to a placeholder if the file is missing, but do not rely on that.
+`.github/workflows/release.yml` auto-injects release notes into the GitHub Release body when a `v*` tag is pushed. The workflow looks for two files per tag:
+
+- `docs/release-notes/vX.Y.Z.md` — English (canonical)
+- `docs/release-notes/vX.Y.Z.zh-CN.md` — 简体中文
+
+Behaviour:
+
+- **Both files present** → the Release body opens with an anchor switcher (`[English](#english) · [简体中文](#简体中文)`), then stacks English under `## English` and Chinese under `## 简体中文`. GitHub markdown auto-slugs those headings so the anchors resolve.
+- **Only one present** → that file is used verbatim (backward-compatible with English-only releases).
+- **Neither present** → a placeholder ships and the build still succeeds; do not rely on this path.
+
+**Rule for future releases:** ship both files together in the commit that precedes the tag. Content mirrors between the two (same sections, same order); code blocks / CLI / paths / package names / error strings are not translated. Same discipline as the bilingual READMEs above.
 
 ## Version fields
 
