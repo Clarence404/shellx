@@ -1,0 +1,119 @@
+use crate::error::{Error, Result};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Settings {
+    pub theme_id: String,
+    pub density: String,
+    pub terminal: TerminalSettings,
+    pub schema_version: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSettings {
+    pub font_family: String,
+    pub font_size: u32,
+    pub cursor_style: String,
+}
+
+pub struct SettingsStore {
+    path: PathBuf,
+}
+
+impl SettingsStore {
+    pub fn open(config_dir: &Path) -> Self {
+        std::fs::create_dir_all(config_dir).ok();
+        Self {
+            path: config_dir.join("settings.json"),
+        }
+    }
+
+    pub fn load(&self) -> Result<Option<Settings>> {
+        if !self.path.exists() {
+            return Ok(None);
+        }
+        match std::fs::read_to_string(&self.path) {
+            Ok(s) => match serde_json::from_str::<Settings>(&s) {
+                Ok(settings) => Ok(Some(settings)),
+                Err(e) => {
+                    eprintln!("shellx: settings.json unreadable, using defaults: {e}");
+                    Ok(None)
+                }
+            },
+            Err(e) => {
+                eprintln!("shellx: settings.json IO error, using defaults: {e}");
+                Ok(None)
+            }
+        }
+    }
+
+    pub fn save(&self, settings: &Settings) -> Result<()> {
+        let json = serde_json::to_string_pretty(settings)
+            .map_err(|e| Error::Protocol(format!("serialize settings: {e}")))?;
+        let tmp = self.path.with_extension("json.tmp");
+        std::fs::write(&tmp, &json)
+            .map_err(|e| Error::Protocol(format!("write settings.tmp: {e}")))?;
+        std::fs::rename(&tmp, &self.path)
+            .map_err(|e| Error::Protocol(format!("rename settings.tmp -> settings.json: {e}")))?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn make_settings() -> Settings {
+        Settings {
+            theme_id: "ocean".into(),
+            density: "compact".into(),
+            terminal: TerminalSettings {
+                font_family: "fira-code".into(),
+                font_size: 14,
+                cursor_style: "underline".into(),
+            },
+            schema_version: 1,
+        }
+    }
+
+    #[test]
+    fn load_returns_none_when_file_missing() {
+        let td = TempDir::new().unwrap();
+        let store = SettingsStore::open(td.path());
+        assert!(store.load().unwrap().is_none());
+    }
+
+    #[test]
+    fn save_then_load_roundtrips() {
+        let td = TempDir::new().unwrap();
+        let store = SettingsStore::open(td.path());
+        let want = make_settings();
+        store.save(&want).unwrap();
+        let got = store.load().unwrap().unwrap();
+        assert_eq!(want, got);
+    }
+
+    #[test]
+    fn save_twice_overwrites() {
+        let td = TempDir::new().unwrap();
+        let store = SettingsStore::open(td.path());
+        let mut s = make_settings();
+        store.save(&s).unwrap();
+        s.terminal.font_size = 18;
+        store.save(&s).unwrap();
+        let got = store.load().unwrap().unwrap();
+        assert_eq!(got.terminal.font_size, 18);
+    }
+
+    #[test]
+    fn load_returns_none_on_malformed_json() {
+        let td = TempDir::new().unwrap();
+        let store = SettingsStore::open(td.path());
+        std::fs::write(td.path().join("settings.json"), "{ not valid json").unwrap();
+        assert!(store.load().unwrap().is_none()); // graceful fallback, not an error
+    }
+}

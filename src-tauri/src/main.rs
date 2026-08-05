@@ -4,6 +4,7 @@
 use directories::ProjectDirs;
 use shellx::ipc;
 use shellx::session::manager::SessionManager;
+use shellx::settings::SettingsStore;
 use shellx::store::{HostStore, KeychainStore};
 use shellx::transfer::TransferManager;
 
@@ -13,6 +14,7 @@ fn main() {
 
     let host_store = HostStore::open(config_dir).expect("failed to open hosts.db");
     let keychain = KeychainStore::open();
+    let settings_store = SettingsStore::open(config_dir);
 
     tauri::Builder::default()
         .setup(|app| {
@@ -30,6 +32,7 @@ fn main() {
         .manage(TransferManager::new())
         .manage(host_store)
         .manage(keychain)
+        .manage(settings_store)
         .invoke_handler(tauri::generate_handler![
             ipc::open_connection,
             ipc::open_shell,
@@ -62,6 +65,8 @@ fn main() {
             ipc::local::local_remove_file,
             ipc::local::local_remove_dir,
             ipc::local::local_open_in_os,
+            ipc::settings::load_settings,
+            ipc::settings::save_settings,
         ])
         .run(tauri::generate_context!())
         .expect("shellx failed to start");
