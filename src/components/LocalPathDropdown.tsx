@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Folder, ChevronDown } from "lucide-react";
 import { localDefaultRoots } from "../ipc/local";
+import { useIconSizes } from "../state/settings";
 import type { DefaultRoots } from "../types/local";
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function LocalPathDropdown({ currentPath, onSelect }: Props) {
+  const iconSizes = useIconSizes();
   const [open, setOpen] = useState(false);
   const [roots, setRoots] = useState<DefaultRoots | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -43,14 +45,15 @@ export function LocalPathDropdown({ currentPath, onSelect }: Props) {
       <button ref={btnRef} onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox" aria-expanded={open}
         style={{
-          display: "flex", alignItems: "center", gap: 6, padding: "5px 10px",
-          fontSize: 12, color: "var(--text-1)", background: "var(--panel-1)",
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "var(--pad-row-y) var(--pad-row-x)",
+          fontSize: "var(--font-small)", color: "var(--text-1)", background: "var(--panel-1)",
           border: "1px solid var(--border)", borderRadius: 5,
           fontFamily: "\"JetBrains Mono\", var(--font-mono)",
         }}>
-        <Folder size={14} color="var(--text-2)" />
+        <Folder size={iconSizes.md} color="var(--text-2)" />
         <span>{label}</span>
-        <ChevronDown size={11} color="var(--text-3)" />
+        <ChevronDown size={iconSizes.sm} color="var(--text-3)" />
       </button>
       {open && (
         <ul ref={listRef} role="listbox"
@@ -64,7 +67,7 @@ export function LocalPathDropdown({ currentPath, onSelect }: Props) {
             <li key={it.path} role="option"
               onClick={() => { onSelect(it.path); setOpen(false); }}
               style={{
-                padding: "7px 12px", fontSize: 12, color: "var(--text-1)",
+                padding: "var(--pad-row-y) var(--pad-row-x)", fontSize: "var(--font-small)", color: "var(--text-1)",
                 cursor: "pointer", borderRadius: 4,
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--border)"; }}

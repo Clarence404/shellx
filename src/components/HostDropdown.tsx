@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Server, ChevronDown, Plus } from "lucide-react";
 import { useSessions } from "../state/sessions";
 import { useHostsStore } from "../state/hosts";
+import { useIconSizes } from "../state/settings";
 import type { HostInfo } from "../types/host";
 import type { ConnectionInfo } from "../types/connection";
 
@@ -55,6 +56,7 @@ export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewC
   const sessions = useSessions((s) => s.sessions);
   const connecting = useSessions((s) => s.connecting);
   const hosts = useHostsStore((s) => s.hosts);
+  const iconSizes = useIconSizes();
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
@@ -89,14 +91,15 @@ export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewC
       <button ref={btnRef} onClick={() => setOpen(o => !o)}
         aria-haspopup="listbox" aria-expanded={open}
         style={{
-          display: "flex", alignItems: "center", gap: 6, padding: "5px 10px",
-          fontSize: 12, color: "var(--text-1)", background: "var(--panel-1)",
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "var(--pad-row-y) var(--pad-row-x)",
+          fontSize: "var(--font-small)", color: "var(--text-1)", background: "var(--panel-1)",
           border: "1px solid var(--border)", borderRadius: 5,
           fontFamily: "\"JetBrains Mono\", var(--font-mono)",
         }}>
-        <Server size={14} color="var(--text-2)" />
+        <Server size={iconSizes.md} color="var(--text-2)" />
         <span>{label}</span>
-        <ChevronDown size={11} color="var(--text-3)" />
+        <ChevronDown size={iconSizes.sm} color="var(--text-3)" />
       </button>
       {open && (
         <ul ref={listRef} role="listbox" style={{
@@ -118,7 +121,7 @@ export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewC
                 aria-selected={row.session?.id === currentHost || undefined}
                 onClick={() => handleRowClick(row)}
                 style={{
-                  padding: "7px 12px", fontSize: 12, color: "var(--text-1)",
+                  padding: "var(--pad-row-y) var(--pad-row-x)", fontSize: "var(--font-small)", color: "var(--text-1)",
                   cursor: "pointer", borderRadius: 4,
                   display: "flex", alignItems: "center", gap: 6,
                 }}
@@ -141,14 +144,14 @@ export function HostDropdown({ currentHost, onSelect, onConnectSavedHost, onNewC
           <li role="option"
             onClick={() => { onNewConnection(); setOpen(false); }}
             style={{
-              padding: "7px 12px", fontSize: 12, color: "var(--text-1)",
+              padding: "var(--pad-row-y) var(--pad-row-x)", fontSize: "var(--font-small)", color: "var(--text-1)",
               cursor: "pointer", borderRadius: 4, borderTop: "0.5px solid var(--border)",
               marginTop: 4, display: "flex", alignItems: "center", gap: 6,
             }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--border)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
           >
-            <Plus size={11} /> New connection
+            <Plus size={iconSizes.sm} /> New connection
           </li>
         </ul>
       )}

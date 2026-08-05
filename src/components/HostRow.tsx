@@ -1,6 +1,7 @@
 import { MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { HostContextMenu } from "./HostContextMenu";
+import { useIconSizes } from "../state/settings";
 import type { HostInfo } from "../types/host";
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function HostRow({ host, isConnected, isConnecting, onConnect, onEdit, onDuplicate, onDelete }: Props) {
+  const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -60,7 +62,7 @@ export function HostRow({ host, isConnected, isConnecting, onConnect, onEdit, on
           onContextMenu={handleContextMenu}
           style={{
             flex: 1, minWidth: 0, padding: "6px 8px", borderRadius: 5,
-            fontSize: 12, color: "var(--text-1)",
+            fontSize: "var(--font-small)", color: "var(--text-1)",
             display: "flex", alignItems: "center", gap: 8,
             background: "transparent",
             textAlign: "left",
@@ -95,7 +97,7 @@ export function HostRow({ host, isConnected, isConnecting, onConnect, onEdit, on
             borderRadius: 4,
             flexShrink: 0,
           }}>
-          <MoreHorizontal size={12} strokeWidth={2} />
+          <MoreHorizontal size={iconSizes.sm} strokeWidth={2} />
         </button>
       </div>
       {menu && (
