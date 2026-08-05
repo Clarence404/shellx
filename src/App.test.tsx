@@ -210,16 +210,19 @@ describe("App shell", () => {
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
   });
 
-  it("switching to a different rail icon force-opens the drawer", async () => {
+  it("switching to a different rail icon force-opens the drawer (when the target view has one)", async () => {
     render(<App />);
-    // Collapse first
+    // Start on a non-Hosts view (Files) with drawer collapsed. Files owns
+    // its own internal drawer replacement, so the outer Drawer is hidden
+    // both by view!=='hosts' AND by drawerCollapsed=true.
     await act(async () => {
-      useSessions.setState({ drawerCollapsed: true });
+      useSessions.setState({ railView: "files", drawerCollapsed: true });
     });
     expect(screen.queryByRole("complementary", { name: "drawer" })).toBeNull();
-    // Click a different icon (Settings) — drawer should open
-    const settings = screen.getByRole("button", { name: "Settings" });
-    await act(async () => { settings.click(); });
+    // Click Hosts icon → setRailView("hosts") resets drawerCollapsed=false
+    // AND view=="hosts" so the outer Drawer becomes visible again.
+    const hosts = screen.getByRole("button", { name: "Hosts" });
+    await act(async () => { hosts.click(); });
     expect(screen.getByRole("complementary", { name: "drawer" })).toBeInTheDocument();
   });
 

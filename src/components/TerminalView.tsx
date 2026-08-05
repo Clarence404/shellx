@@ -129,13 +129,20 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
 
   // Live-reconfigure xterm when appearance settings change (no remount).
   // Font-family/size changes shift character metrics, so re-fit afterward
-  // to recompute cols/rows and keep the backend PTY size in sync.
+  // to recompute cols/rows and keep the backend PTY size in sync — but
+  // only if the host is actually visible. When the user is on Settings /
+  // Files / Protocols views, the tab body is display:none and the host's
+  // offsetHeight is 0; fit() there divides by zero. The options are still
+  // applied; the ResizeObserver-attached fit() re-runs when the container
+  // becomes visible again.
   useEffect(() => {
     if (!termRef.current || !fitRef.current) return;
     termRef.current.options.fontFamily = FONT_MAP[terminal.fontFamily];
     termRef.current.options.fontSize = terminal.fontSize;
     termRef.current.options.cursorStyle = terminal.cursorStyle;
-    fitRef.current.fit();
+    if (hostRef.current && hostRef.current.offsetHeight > 0) {
+      fitRef.current.fit();
+    }
   }, [terminal.fontFamily, terminal.fontSize, terminal.cursorStyle]);
 
   return (
