@@ -14,17 +14,24 @@ describe("AppearancePanel", () => {
     useSettingsStore.setState({ ...DEFAULT_SETTINGS } as any);
   });
 
-  it("clicking Ocean theme card calls setTheme('ocean')", () => {
+  it("clicking Warm Light theme card calls setTheme('warm-light')", () => {
     render(<AppearancePanel />);
-    fireEvent.click(screen.getByText("Ocean"));
-    expect(useSettingsStore.getState().themeId).toBe("ocean");
+    fireEvent.click(screen.getByText("Warm Light"));
+    expect(useSettingsStore.getState().themeId).toBe("warm-light");
   });
 
   it("sliding font-size input mutates terminal.fontSize", () => {
     render(<AppearancePanel />);
-    const slider = screen.getByRole("slider");
+    const slider = screen.getByLabelText("Terminal font size");
     fireEvent.change(slider, { target: { value: "16" } });
     expect(useSettingsStore.getState().terminal.fontSize).toBe(16);
+  });
+
+  it("sliding system font size input mutates systemFontSize", () => {
+    render(<AppearancePanel />);
+    const slider = screen.getByLabelText("System font size");
+    fireEvent.change(slider, { target: { value: "15" } });
+    expect(useSettingsStore.getState().systemFontSize).toBe(15);
   });
 
   it("cursor Underline segmented button switches cursorStyle", () => {
@@ -40,9 +47,9 @@ describe("AppearancePanel", () => {
     expect(useSettingsStore.getState().systemFont).toBe("microsoft-yahei");
   });
 
-  it("clicking the Warm Light theme card switches themeId", () => {
+  it("Forest/Ocean theme cards are no longer offered (dropped in v0.5.3)", () => {
     render(<AppearancePanel />);
-    fireEvent.click(screen.getByText("Warm Light"));
-    expect(useSettingsStore.getState().themeId).toBe("warm-light");
+    expect(screen.queryByText("Ocean")).toBeNull();
+    expect(screen.queryByText("Forest")).toBeNull();
   });
 });

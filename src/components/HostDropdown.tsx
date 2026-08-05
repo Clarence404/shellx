@@ -38,15 +38,23 @@ function buildRows(hosts: HostInfo[], sessions: ConnectionInfo[]): Row[] {
   const rows: Row[] = [];
   const claimedSessions = new Set<string>();
   for (const h of hosts) {
-    const session = sessions.find((s) => s.host_id === h.id) ?? null;
+    // Only count ACTIVE sessions as "backing" a saved host — a closed session
+    // still lingers in `sessions` for ~300ms while its tab fades out, and
+    // during that window we'd otherwise render the row as connected with no
+    // reconnect affordance. Filtering here treats closed sessions as if
+    // they've already been removed.
+    const session = sessions.find((s) => s.host_id === h.id && s.state === "active") ?? null;
     if (session) claimedSessions.add(session.id);
     rows.push({ hostId: h.id, label: h.label, session, savedHost: h });
   }
   // Quick-connect sessions (no host_id): show under their session label so
   // they don't disappear from the picker just because they weren't saved.
+  // Skip closed ones — an anonymous session that's already gone offers no
+  // useful action (there's no saved-host row to reconnect through).
   for (const s of sessions) {
     if (claimedSessions.has(s.id)) continue;
     if (s.host_id) continue;
+    if (s.state === "closed") continue;
     rows.push({ hostId: s.id, label: s.label, session: s, savedHost: null });
   }
   return rows;

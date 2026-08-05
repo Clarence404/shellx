@@ -11,11 +11,16 @@ pub struct Settings {
     /// (pre-v0.5.2) — serde default resolves to `"system-default"`.
     #[serde(default = "default_system_font")]
     pub system_font: String,
+    /// Sans UI font size in px, 11..=16. Missing on old settings.json
+    /// files (pre-v0.5.3) — serde default resolves to 13.
+    #[serde(default = "default_system_font_size")]
+    pub system_font_size: u32,
     pub terminal: TerminalSettings,
     pub schema_version: u32,
 }
 
 fn default_system_font() -> String { "system-default".into() }
+fn default_system_font_size() -> u32 { 13 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -75,9 +80,10 @@ mod tests {
 
     fn make_settings() -> Settings {
         Settings {
-            theme_id: "ocean".into(),
+            theme_id: "warm-light".into(),
             density: "compact".into(),
             system_font: "segoe-ui".into(),
+            system_font_size: 14,
             terminal: TerminalSettings {
                 font_family: "fira-code".into(),
                 font_size: 14,
@@ -89,14 +95,15 @@ mod tests {
 
     #[test]
     fn load_old_settings_json_without_system_font_uses_default() {
-        // Pre-v0.5.2 settings.json didn't have systemFont; serde default
-        // resolves to "system-default" and load succeeds.
+        // Pre-v0.5.2 settings.json didn't have systemFont / systemFontSize;
+        // serde defaults resolve to "system-default" / 13 and load succeeds.
         let td = TempDir::new().unwrap();
         let store = SettingsStore::open(td.path());
-        let legacy = r#"{"themeId":"ocean","density":"compact","terminal":{"fontFamily":"fira-code","fontSize":14,"cursorStyle":"underline"},"schemaVersion":1}"#;
+        let legacy = r#"{"themeId":"warm-minimal","density":"compact","terminal":{"fontFamily":"fira-code","fontSize":14,"cursorStyle":"underline"},"schemaVersion":1}"#;
         std::fs::write(td.path().join("settings.json"), legacy).unwrap();
         let got = store.load().unwrap().unwrap();
         assert_eq!(got.system_font, "system-default");
+        assert_eq!(got.system_font_size, 13);
     }
 
     #[test]

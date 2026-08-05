@@ -1,7 +1,8 @@
 export interface Settings {
-  themeId: "warm-minimal" | "ocean" | "forest" | "warm-light";
+  themeId: "warm-minimal" | "warm-light";
   density: "compact" | "comfortable" | "spacious";
   systemFont: "system-default" | "segoe-ui" | "pingfang-sc" | "microsoft-yahei";
+  systemFontSize: number;
   terminal: {
     fontFamily: "jetbrains-mono" | "sf-mono" | "fira-code" | "cascadia-code" | "consolas";
     fontSize: number;
@@ -14,6 +15,7 @@ export const DEFAULT_SETTINGS: Settings = {
   themeId: "warm-minimal",
   density: "comfortable",
   systemFont: "system-default",
+  systemFontSize: 13,
   terminal: {
     fontFamily: "jetbrains-mono",
     fontSize: 13,
@@ -21,6 +23,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   schemaVersion: 1,
 };
+
+export const SYSTEM_FONT_SIZE_MIN = 11;
+export const SYSTEM_FONT_SIZE_MAX = 16;
 
 export const FONT_MAP: Record<Settings["terminal"]["fontFamily"], string> = {
   "jetbrains-mono": '"JetBrains Mono", ui-monospace, monospace',
@@ -53,10 +58,10 @@ export const THEME_META: Array<{
   swatch: [string, string, string];
 }> = [
   { id: "warm-minimal", label: "Warm Minimal", swatch: ["#1e1c24", "#7c5cff", "#322f3a"] },
-  { id: "ocean",        label: "Ocean",        swatch: ["#1a2233", "#4ea3ff", "#2a2e3a"] },
-  { id: "forest",       label: "Forest",       swatch: ["#1a251c", "#6cc57f", "#2a3230"] },
   { id: "warm-light",   label: "Warm Light",   swatch: ["#ffffff", "#6e4dff", "#dcd8d0"] },
 ];
+
+export const VALID_THEMES: ReadonlyArray<Settings["themeId"]> = ["warm-minimal", "warm-light"];
 
 export const DENSITY_META: Array<{ id: Settings["density"]; label: string }> = [
   { id: "compact", label: "Compact" },

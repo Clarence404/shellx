@@ -1,64 +1,311 @@
-import { Plus } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, List } from "lucide-react";
+import { forwardRef, useEffect, useRef, useState } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { HostContextMenu } from "./HostContextMenu";
 
 export type Tab = { id: string; title: string; state?: "active" | "closed" };
 
-export function TabBar({
-  tabs, activeTabId, onSelect, onClose, onNewConnection,
-}: {
+interface Props {
   tabs: Tab[];
   activeTabId: string | null;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
+  onCloseTabs?: (ids: string[]) => void;
   onNewConnection?: () => void;
-}) {
+}
+
+export function TabBar({
+  tabs, activeTabId, onSelect, onClose, onCloseTabs, onNewConnection,
+}: Props) {
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const activeRef = useRef<HTMLDivElement | null>(null);
+  const listBtnRef = useRef<HTMLButtonElement | null>(null);
+  const listPopRef = useRef<HTMLDivElement | null>(null);
+
+  // Which end can still scroll. Both false → no overflow, hide all controls.
+  const [overflow, setOverflow] = useState({ left: false, right: false });
+  const [listOpen, setListOpen] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+
+  // Recompute overflow state on scroll, resize, or tabs change. Runs on
+  // ResizeObserver ticks so the Titlebar chrome adjusts as the window
+  // grows/shrinks without waiting for the next scroll event.
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const update = () => {
+      const left = el.scrollLeft > 1;
+      const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+      setOverflow({ left, right });
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro?.disconnect();
+    };
+  }, [tabs]);
+
+  // Keep the selected tab visible when the user cycles to a tab that
+  // scrolled off. inline: "nearest" avoids jumpy re-centring on every
+  // click; only tabs that are actually clipped get scrolled into view.
+  // JSDom lacks scrollIntoView, so guard with a runtime check.
+  useEffect(() => {
+    const el = activeRef.current;
+    if (el && typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }, [activeTabId]);
+
+  // Close the list dropdown on outside click / Escape.
+  useEffect(() => {
+    if (!listOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!listBtnRef.current?.contains(t) && !listPopRef.current?.contains(t)) {
+        setListOpen(false);
+      }
+    };
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && setListOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [listOpen]);
+
+  const hasOverflow = overflow.left || overflow.right;
+
+  function scrollByPx(delta: number) {
+    stripRef.current?.scrollBy({ left: delta, behavior: "smooth" });
+  }
+
+  function closeMany(ids: string[]) {
+    if (ids.length === 0) return;
+    if (onCloseTabs) onCloseTabs(ids);
+    else ids.forEach((id) => onClose(id));
+  }
+
+  function buildCtxItems(id: string) {
+    const idx = tabs.findIndex((t) => t.id === id);
+    const leftIds = idx > 0 ? tabs.slice(0, idx).map((t) => t.id) : [];
+    const rightIds = idx >= 0 ? tabs.slice(idx + 1).map((t) => t.id) : [];
+    const items: Array<{ label: string; onClick: () => void; variant?: "danger" }> = [];
+    if (leftIds.length > 0) items.push({ label: `Close ${leftIds.length} to the left`, onClick: () => closeMany(leftIds) });
+    if (rightIds.length > 0) items.push({ label: `Close ${rightIds.length} to the right`, onClick: () => closeMany(rightIds) });
+    items.push({ label: "Close all", onClick: () => closeMany(tabs.map((t) => t.id)), variant: "danger" });
+    return items;
+  }
+
   return (
-    <div role="tablist" style={{
-      // Height stretches to the parent Titlebar (32px); tabs align to
-      // fill the full height so their active-pill background reaches
-      // the Titlebar's bottom border, giving the "attached tab" look
-      // without a redundant borderBottom of our own (Titlebar already
-      // draws that line).
-      height: "100%", background: "transparent",
-      display: "flex", alignItems: "stretch",
-      padding: "0 6px", gap: 2,
-      overflowX: "auto",
+    <div style={{
+      // Outer flex row — sits inside Titlebar's `flex: 1, minWidth: 0`
+      // wrapper. The strip flex-grows; the overflow-chrome cluster
+      // ({‹ › ≡}) sits at the RIGHT end of the strip, sharing one
+      // border-left divider so it reads as a single control group
+      // rather than three loose buttons scattered across the titlebar.
+      // v0.5.3 positional fix: previous layout put ‹ on the left edge
+      // of the titlebar which crowded the app logo.
+      display: "flex", alignItems: "stretch", minWidth: 0, height: "100%",
+      position: "relative",
     }}>
-      {tabs.map((t) => (
-        <div key={t.id} role="tab" aria-selected={t.id === activeTabId}
-          onClick={() => onSelect(t.id)}
-          style={{
-            padding: "6px 12px", borderRadius: "5px 5px 0 0", fontSize: 13,
-            background: t.id === activeTabId ? "var(--panel-2)" : "transparent",
-            color: t.id === activeTabId ? "var(--text-1)" : "var(--text-3)",
-            display: "flex", alignItems: "center", gap: 8,
-            cursor: "pointer", flexShrink: 0,
-            whiteSpace: "nowrap",
-            opacity: t.state === "closed" ? 0.4 : 1,
-            filter: t.state === "closed" ? "grayscale(0.6)" : "none",
-            transition: "opacity 300ms, filter 300ms",
-            pointerEvents: t.state === "closed" ? "none" : "auto",
-          }}>
-          {t.title}
-          <span
-            onClick={(e) => { e.stopPropagation(); onClose(t.id); }}
-            aria-label={`close ${t.title}`}
-            style={{ opacity: 0.6, fontSize: 12 }}>×</span>
+      <div
+        ref={stripRef}
+        role="tablist"
+        // Vertical mouse-wheel is translated to horizontal scroll — the
+        // native scrollbar is hidden (see className below + reset.css) so
+        // the wheel is the primary scroll input. deltaX is honoured too
+        // for horizontal trackpad gestures.
+        onWheel={(e) => {
+          if (!stripRef.current) return;
+          const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+          if (delta === 0) return;
+          stripRef.current.scrollLeft += delta;
+        }}
+        className="shellx-tabstrip"
+        style={{
+          // Height stretches to the parent Titlebar (32px); tabs align to
+          // fill the full height so their active-pill background reaches
+          // the Titlebar's bottom border, giving the "attached tab" look
+          // without a redundant borderBottom of our own (Titlebar already
+          // draws that line).
+          flex: 1, minWidth: 0, height: "100%", background: "transparent",
+          display: "flex", alignItems: "stretch",
+          padding: "0 6px", gap: 2,
+          overflowX: "auto", overflowY: "hidden",
+          // Hide the native scrollbar so it doesn't consume vertical
+          // space inside the 32px titlebar (squished tab pills otherwise
+          // clipped upward — v0.5.3 hotfix). Wheel-scroll above replaces
+          // the scrollbar for input; layout stays clean.
+          scrollbarWidth: "none",
+        }}
+      >
+        {tabs.map((t) => (
+          <div key={t.id} role="tab" aria-selected={t.id === activeTabId}
+            ref={t.id === activeTabId ? activeRef : undefined}
+            onClick={() => onSelect(t.id)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setCtxMenu({ x: e.clientX, y: e.clientY, id: t.id });
+            }}
+            style={{
+              padding: "6px 12px", borderRadius: "5px 5px 0 0", fontSize: "var(--font-ui-size)",
+              background: t.id === activeTabId ? "var(--panel-2)" : "transparent",
+              color: t.id === activeTabId ? "var(--text-1)" : "var(--text-3)",
+              display: "flex", alignItems: "center", gap: 8,
+              cursor: "pointer", flexShrink: 0,
+              whiteSpace: "nowrap",
+              opacity: t.state === "closed" ? 0.4 : 1,
+              filter: t.state === "closed" ? "grayscale(0.6)" : "none",
+              transition: "opacity 300ms, filter 300ms",
+              pointerEvents: t.state === "closed" ? "none" : "auto",
+            }}>
+            {t.title}
+            <span
+              onClick={(e) => { e.stopPropagation(); onClose(t.id); }}
+              aria-label={`close ${t.title}`}
+              style={{ opacity: 0.6, fontSize: 12 }}>×</span>
+          </div>
+        ))}
+        {onNewConnection && (
+          <button
+            onClick={onNewConnection}
+            aria-label="new connection"
+            style={{
+              padding: "6px 10px", marginLeft: 4,
+              background: "transparent", color: "var(--text-3)",
+              borderRadius: "5px 5px 0 0",
+              display: "flex", alignItems: "center",
+              cursor: "pointer", flexShrink: 0,
+            }}>
+            <Plus size={14} strokeWidth={2} />
+          </button>
+        )}
+      </div>
+      {hasOverflow && (
+        <div style={{
+          display: "flex", alignItems: "stretch",
+          borderLeft: "0.5px solid var(--border)",
+          flexShrink: 0,
+        }}>
+          <ChromeButton
+            aria-label="scroll tabs left"
+            disabled={!overflow.left}
+            onClick={() => scrollByPx(-160)}
+          >
+            <ChevronLeft size={14} />
+          </ChromeButton>
+          <ChromeButton
+            aria-label="scroll tabs right"
+            disabled={!overflow.right}
+            onClick={() => scrollByPx(160)}
+          >
+            <ChevronRight size={14} />
+          </ChromeButton>
+          <ChromeButton
+            ref={listBtnRef}
+            aria-label="all tabs"
+            aria-haspopup="menu"
+            aria-expanded={listOpen}
+            onClick={() => setListOpen((o) => !o)}
+          >
+            <List size={14} />
+          </ChromeButton>
         </div>
-      ))}
-      {onNewConnection && (
-        <button
-          onClick={onNewConnection}
-          aria-label="new connection"
+      )}
+
+      {listOpen && (
+        <div
+          ref={listPopRef}
+          role="menu"
           style={{
-            padding: "6px 10px", marginLeft: 4,
-            background: "transparent", color: "var(--text-3)",
-            borderRadius: "5px 5px 0 0",
-            display: "flex", alignItems: "center",
-            cursor: "pointer", flexShrink: 0,
+            // Anchored to the outer TabBar wrapper (position: relative);
+            // sits just under the list button at the right end.
+            position: "absolute", top: "100%", right: 0, marginTop: 2,
+            minWidth: 220, maxWidth: 320, maxHeight: 360, overflow: "auto",
+            background: "var(--panel-2)", border: "0.5px solid var(--border)",
+            borderRadius: 5, padding: 4, zIndex: 300,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
           }}>
-          <Plus size={14} strokeWidth={2} />
-        </button>
+          {tabs.map((t) => (
+            <div
+              key={t.id}
+              role="menuitem"
+              onClick={() => { onSelect(t.id); setListOpen(false); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "5px 8px", borderRadius: 3,
+                fontSize: "var(--font-ui-size)",
+                color: t.id === activeTabId ? "var(--text-1)" : "var(--text-2)",
+                background: t.id === activeTabId ? "var(--border)" : "transparent",
+                cursor: "pointer",
+                opacity: t.state === "closed" ? 0.5 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (t.id !== activeTabId) (e.currentTarget as HTMLElement).style.background = "var(--border)";
+              }}
+              onMouseLeave={(e) => {
+                if (t.id !== activeTabId) (e.currentTarget as HTMLElement).style.background = "transparent";
+              }}
+            >
+              <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {t.title}
+              </span>
+              <button
+                aria-label={`close ${t.title}`}
+                onClick={(e) => { e.stopPropagation(); onClose(t.id); }}
+                style={{
+                  color: "var(--text-3)", padding: "0 4px",
+                  background: "transparent", fontSize: 12,
+                }}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {ctxMenu && (
+        <HostContextMenu
+          x={ctxMenu.x} y={ctxMenu.y}
+          items={buildCtxItems(ctxMenu.id)}
+          onClose={() => setCtxMenu(null)}
+        />
       )}
     </div>
   );
 }
+
+// Small titlebar-height chrome button used for the three tab-strip
+// controls (‹ › list). forwardRef so the parent can anchor the list
+// popover to the list button.
+type ChromeButtonProps = {
+  children: ReactNode;
+  disabled?: boolean;
+  borderLeft?: boolean;
+} & ButtonHTMLAttributes<HTMLButtonElement>;
+
+const ChromeButton = forwardRef<HTMLButtonElement, ChromeButtonProps>(
+  function ChromeButton({ children, disabled, borderLeft, ...rest }, ref) {
+    return (
+      <button
+        ref={ref}
+        disabled={disabled}
+        {...rest}
+        style={{
+          width: 28, height: "100%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "transparent",
+          color: disabled ? "var(--text-3)" : "var(--text-2)",
+          opacity: disabled ? 0.4 : 1,
+          border: "none",
+          borderLeft: borderLeft ? "0.5px solid var(--border)" : "none",
+          padding: 0, cursor: disabled ? "default" : "pointer",
+          flexShrink: 0,
+        }}
+      >{children}</button>
+    );
+  },
+);

@@ -23,13 +23,22 @@ describe("useSettingsStore", () => {
   });
 
   it("setTheme mutates themeId", () => {
-    useSettingsStore.getState().setTheme("ocean");
-    expect(useSettingsStore.getState().themeId).toBe("ocean");
+    useSettingsStore.getState().setTheme("warm-light");
+    expect(useSettingsStore.getState().themeId).toBe("warm-light");
   });
 
   it("setSystemFont mutates systemFont", () => {
     useSettingsStore.getState().setSystemFont("segoe-ui");
     expect(useSettingsStore.getState().systemFont).toBe("segoe-ui");
+  });
+
+  it("setSystemFontSize clamps to [11, 16]", () => {
+    useSettingsStore.getState().setSystemFontSize(5);
+    expect(useSettingsStore.getState().systemFontSize).toBe(11);
+    useSettingsStore.getState().setSystemFontSize(99);
+    expect(useSettingsStore.getState().systemFontSize).toBe(16);
+    useSettingsStore.getState().setSystemFontSize(14);
+    expect(useSettingsStore.getState().systemFontSize).toBe(14);
   });
 
   it("setTerminalFontSize clamps to [10, 20]", () => {
@@ -43,7 +52,7 @@ describe("useSettingsStore", () => {
 
   it("reset() restores DEFAULT_SETTINGS and immediately calls saveSettings", async () => {
     const { saveSettings } = await import("../ipc/settings");
-    useSettingsStore.setState({ themeId: "ocean" } as any);
+    useSettingsStore.setState({ themeId: "warm-light" } as any);
     useSettingsStore.getState().reset();
     expect(useSettingsStore.getState().themeId).toBe(DEFAULT_SETTINGS.themeId);
     expect(saveSettings).toHaveBeenCalledWith(

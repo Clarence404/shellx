@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { RefreshCw, FolderPlus, Plus } from "lucide-react";
 import { useRailFiles } from "../state/railFiles";
+import { useSessions } from "../state/sessions";
 import {
   sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir,
 } from "../ipc/sftp";
@@ -28,6 +29,19 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
   const error = useRailFiles((s) => s.rightError);
   const leftPath = useRailFiles((s) => s.leftPath);
   const selected = useRailFiles((s) => s.rightSelected);
+  const sessions = useSessions((s) => s.sessions);
+
+  // Reset rightHost when the underlying session is gone or closed. Otherwise
+  // rightHost persists through localStorage (see useRailFiles rehydration)
+  // and points at a stale id after the tab closed — RemotePane's non-empty
+  // branch would render but HostDropdown's label falls back to "Pick a host"
+  // because no active session matches, plus every listRight() call fails
+  // silently against a dead connection.
+  useEffect(() => {
+    if (!rightHost) return;
+    const active = sessions.find((s) => s.id === rightHost && s.state === "active");
+    if (!active) useRailFiles.getState().setRightHost(null);
+  }, [rightHost, sessions]);
 
   // Actions are dispatched via getState() at call time rather than a
   // hook-captured reference, so each invocation always reaches the store's

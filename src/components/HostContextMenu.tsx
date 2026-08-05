@@ -43,7 +43,7 @@ export function HostContextMenu({
           onClick={() => { item.onClick(); onClose(); }}
           style={{
             display: "block", width: "100%", padding: "5px 10px",
-            fontSize: 11, textAlign: "left",
+            fontSize: "var(--font-ui-size)", textAlign: "left",
             color: item.variant === "danger" ? "var(--error)" : "var(--text-1)",
             borderRadius: 3,
             background: "transparent",

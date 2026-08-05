@@ -24,7 +24,7 @@ export function SettingsSidebar({ active, onSelect }: Props) {
         style={{
           display: "flex", alignItems: "center", gap: 8,
           padding: "7px 10px", margin: "0 4px", borderRadius: 4,
-          fontSize: "var(--font-body)", color: dim ? "var(--text-3)" : "var(--text-1)",
+          fontSize: "var(--font-ui-size)", color: dim ? "var(--text-3)" : "var(--text-1)",
           background: active === id ? "var(--border)" : "transparent",
           cursor: dim ? "not-allowed" : "pointer",
           opacity: dim ? 0.4 : 1,
@@ -59,7 +59,7 @@ export function SettingsSidebar({ active, onSelect }: Props) {
           margin: 4, padding: "6px 8px",
           background: "transparent", color: "var(--text-2)",
           border: "1px solid var(--border-hi)", borderRadius: 5,
-          fontSize: 11, cursor: "pointer",
+          fontSize: "var(--font-ui-size)", cursor: "pointer",
         }}
       >Reset to defaults</button>
     </div>

@@ -4,7 +4,7 @@ body {
   font-family: var(--font-ui);
   background: var(--bg);
   color: var(--text-1);
-  font-size: 13px;
+  font-size: var(--font-ui-size, 13px);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
@@ -31,3 +31,9 @@ input { font: inherit; color: inherit; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-3); background-clip: content-box; border: 2px solid transparent; }
 ::-webkit-scrollbar-corner { background: transparent; }
 * { scrollbar-width: thin; scrollbar-color: var(--border-hi) transparent; }
+
+/* Hide the tab-strip's horizontal scrollbar — it would consume vertical
+   space inside the 32px titlebar and clip tab pills. Wheel-scroll in
+   TabBar.tsx replaces it as the input mechanism. Firefox uses inline
+   `scrollbar-width: none`; WebKit needs this rule to disappear cleanly. */
+.shellx-tabstrip::-webkit-scrollbar { display: none; height: 0; width: 0; }
