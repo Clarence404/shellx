@@ -4,6 +4,7 @@
 pub mod events;
 pub mod hosts;
 pub mod local;
+pub mod settings;
 pub mod sftp;
 pub mod transfer;
 
