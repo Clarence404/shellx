@@ -1,16 +1,26 @@
 # shellx
 
+**English** · [简体中文](./README.zh-CN.md)
+
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.5
+## Status: v0.5.3
 
-v0.5 ships a **Settings / Appearance panel** — a third activity-rail icon opens a dedicated settings view
-(sidebar with Appearance + About sections). Pick from 3 themes (Warm Minimal, Ocean, Forest) and 3 density
-presets (Compact, Comfortable, Spacious), both applied live via `<html>` data-attributes + a CSS variable
-cascade — no reload needed. The Terminal section configures font family (JetBrains Mono, SF Mono, Fira Code,
-Cascadia Code, Consolas), font size (10–20px), and cursor style (block/underline/bar); xterm reconfigures
-itself live and re-fits cols/rows on any change, no tab remount required. Settings persist to a JSON file
-in the app config directory (debounced autosave on the Rust side) and are restored on next launch.
+v0.5.3 refines the **Settings / Appearance** panel and the titlebar:
+
+- **System font size** slider (11–16 px) — scales every sans UI surface (tabs, sidebar rows, host list,
+  right-click menus, buttons, Terminal | Files toggle). Terminal font stays on its own scale.
+- **System font family** picker — System default, Segoe UI, PingFang SC, Microsoft YaHei.
+- **Themes**: **Warm Minimal** + **Warm Light** (dropped Ocean and Forest; stale `settings.json` values
+  auto-migrate).
+- **Density**: Compact / Comfortable / Spacious — controls list-row padding + monospace content size.
+- **Terminal**: font family (JetBrains Mono, SF Mono, Fira Code, Cascadia Code, Consolas), size (10–20 px),
+  cursor style (block / underline / bar). xterm reconfigures live and re-fits cols/rows without remount.
+- **Tab bar overflow chrome** — when tabs exceed the titlebar width, a compact cluster `‹ › ≡` appears at
+  the right end (chevrons scroll the strip; list icon opens a per-row-close dropdown). Wheel scroll on the
+  strip. Right-click any tab for `Close N to the left` / `Close N to the right` / `Close all`.
+
+Settings persist to a JSON file in the app config directory (debounced autosave on the Rust side) and are restored on next launch.
 
 Also includes the **custom titlebar** (landed in v0.4.3): tabs integrated into the titlebar itself, app logo,
 and native-feeling window controls, replacing the OS-drawn title bar on all three platforms.
