@@ -3,9 +3,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TransferArrow } from "./TransferArrow";
 import { useRailFiles } from "../state/railFiles";
 
-// vi.spyOn(useRailFiles.getState(), "transfer") calls through to the real
-// store action by default, which would otherwise reach the real sftpUpload
-// IPC call (and throw on the missing Tauri bridge in jsdom).
+// TransferArrow's click handler reads useRailFiles.getState().transfer at
+// call time (not a hook-captured reference), so vi.spyOn(getState(), ...)
+// below is observed correctly regardless of when it's set relative to
+// render. It still calls through to the real store action by default,
+// which would otherwise reach the real sftpUpload IPC call (and throw on
+// the missing Tauri bridge in jsdom) — hence this mock.
 vi.mock("../ipc/transfers", () => ({
   sftpUpload: vi.fn(),
   sftpDownload: vi.fn(),
@@ -38,5 +41,12 @@ describe("TransferArrow", () => {
     useRailFiles.setState({ leftSelected: ["a"], rightSelected: ["b"] });
     render(<TransferArrow />);
     expect(screen.getByRole("button")).toBeDisabled();
+  });
+
+  it("arrow position tracks splitterPercent", () => {
+    useRailFiles.setState({ splitterPercent: 30 });
+    render(<TransferArrow />);
+    const btn = screen.getByRole("button");
+    expect(btn.style.left).toBe("30%");
   });
 });
