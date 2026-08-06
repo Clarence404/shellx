@@ -4,13 +4,17 @@
 
 一个小巧、精致、可扩展的终端 + 文件传输客户端。跨平台（Windows / macOS / Linux），开源，基于 Tauri + Rust + React。
 
-## 版本状态：v0.5.5
+## 版本状态：v0.5.6
 
-v0.5.5 是一轮打磨 + 稳健性：Files 视图断线时给出正经的 `DisconnectedPanel`
-（含用 keychain 凭据一键 Reconnect）、终端配色改成鼠尾草绿让 `ls` 的
-other-writable 目录着色终于清晰可读、删除 host 会级联清理相关的 tab 和面板、
-Hosts 抽屉空态自动隐藏、`New SSH connection` 表单标签不再淡到看不清、
-面包屑 `C:` 芯片点击终于能落到盘根。下面这些仍然生效：
+v0.5.6 是一轮大幅度的打磨和集成。配置目录挪到 `~/.shellx/`（自动迁移），
+可用 `SHELLX_CONFIG_DIR` 自定义。OS 拖拽上传 —— 从 Explorer / Finder 拖文件
+到 RemotePane 直接 SFTP。Terminal 字体在 Appearance 里有实时预览。文件面板
+工具栏改成图标化，点击区跟随 System font size 滑块缩放，同时空白右键 + 文件
+行右键都有了完整菜单（行菜单分 `THIS FILE` / `THIS FOLDER` 两组）。面包屑
+长路径在自己那行横向滚动，不再把工具栏挤到窗外。应用 identifier + publisher
+改成 `io.github.clarence404.shellx` / `Clarence404`。
+
+下面这些仍然生效：
 
 v0.5.4 拓宽了左侧功能列（图标 + 文字上下排列），tab 条的空白区也变成了窗口拖拽面。
 

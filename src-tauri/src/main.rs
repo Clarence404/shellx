@@ -1,7 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use directories::ProjectDirs;
+use shellx::config_paths::resolve_config_dir;
 use shellx::ipc;
 use shellx::session::manager::SessionManager;
 use shellx::settings::SettingsStore;
@@ -9,12 +9,14 @@ use shellx::store::{HostStore, KeychainStore};
 use shellx::transfer::TransferManager;
 
 fn main() {
-    let dirs = ProjectDirs::from("", "", "shellx").expect("cannot resolve project directory");
-    let config_dir = dirs.config_dir();
+    // Resolve config dir with priority: $SHELLX_CONFIG_DIR → ~/.shellx/ →
+    // legacy ProjectDirs. Also migrates hosts.db / settings.json from the
+    // legacy `%APPDATA%\shellx\config\` on first run.
+    let config_dir = resolve_config_dir();
 
-    let host_store = HostStore::open(config_dir).expect("failed to open hosts.db");
+    let host_store = HostStore::open(&config_dir).expect("failed to open hosts.db");
     let keychain = KeychainStore::open();
-    let settings_store = SettingsStore::open(config_dir);
+    let settings_store = SettingsStore::open(&config_dir);
 
     tauri::Builder::default()
         .setup(|app| {
@@ -33,6 +35,7 @@ fn main() {
         .manage(host_store)
         .manage(keychain)
         .manage(settings_store)
+        .manage(shellx::ipc::config::ConfigDir(config_dir.clone()))
         .invoke_handler(tauri::generate_handler![
             ipc::open_connection,
             ipc::open_shell,
@@ -67,6 +70,7 @@ fn main() {
             ipc::local::local_open_in_os,
             ipc::settings::load_settings,
             ipc::settings::save_settings,
+            ipc::config::get_config_paths,
         ])
         .run(tauri::generate_context!())
         .expect("shellx failed to start");

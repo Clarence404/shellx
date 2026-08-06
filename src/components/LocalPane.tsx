@@ -1,10 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { RefreshCw, FolderPlus } from "lucide-react";
 import { useRailFiles } from "../state/railFiles";
 import { localOpenInOs, localMkdir, localRename, localRemoveFile, localRemoveDir, localDefaultRoots } from "../ipc/local";
 import { LocalPathDropdown } from "./LocalPathDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
-import { FileRow } from "./FileRow";
+import { FileRow, buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
+import { PaneToolbarButton } from "./PaneToolbarButton";
+import { HostContextMenu } from "./HostContextMenu";
 
 function joinPath(cwd: string, name: string): string {
   return cwd === "/" ? `/${name}` : `${cwd}/${name}`;
@@ -48,6 +50,7 @@ export function LocalPane() {
   const loading = useRailFiles((s) => s.leftLoading);
   const error = useRailFiles((s) => s.leftError);
   const selected = useRailFiles((s) => s.leftSelected);
+  const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Actions are dispatched via getState() at call time rather than a
   // hook-captured reference, so each invocation always reaches the store's
@@ -55,6 +58,22 @@ export function LocalPane() {
   const setLeftPath = (p: string) => useRailFiles.getState().setLeftPath(p);
   const loadLeft = () => useRailFiles.getState().loadLeft();
   const transfer = (direction: "up" | "down") => useRailFiles.getState().transfer(direction);
+
+  // Folder-scope actions shared between the toolbar buttons and the
+  // right-click menus (empty-area + per-row). "Upload here" for the
+  // Local side reuses transfer("down") — pull from remote pane's
+  // selection down into this local folder. If no remote pane is
+  // connected or nothing is selected there, transfer is a no-op.
+  const folderActions: FolderMenuHandlers = {
+    onNewFolder: async () => {
+      const name = prompt("New folder name");
+      if (!name) return;
+      await localMkdir(joinPath(leftPath, name));
+      await loadLeft();
+    },
+    onUpload: () => transfer("down"),
+    onRefresh: () => void loadLeft(),
+  };
 
   // Initial load: if no leftPath yet, default to home. If a path is already
   // set (e.g. rehydrated from persisted localStorage — only leftPath is
@@ -84,18 +103,17 @@ export function LocalPane() {
       }}>
         <LocalPathDropdown currentPath={leftPath} onSelect={setLeftPath} />
         <div style={{ flex: 1 }} />
-        <button title="New folder" onClick={async () => {
+        <PaneToolbarButton title="New folder" onClick={async () => {
           const name = prompt("New folder name");
           if (!name) return;
           await localMkdir(joinPath(leftPath, name));
           await loadLeft();
-        }} style={{ color: "var(--text-2)" }}>
-          <FolderPlus size={12} />
-        </button>
-        <button title="Refresh" onClick={() => void loadLeft()}
-          style={{ color: "var(--text-2)" }}>
-          <RefreshCw size={12} />
-        </button>
+        }}>
+          {(size) => <FolderPlus size={size} />}
+        </PaneToolbarButton>
+        <PaneToolbarButton title="Refresh" onClick={() => void loadLeft()}>
+          {(size) => <RefreshCw size={size} />}
+        </PaneToolbarButton>
       </div>
       <div style={{ height: 30, padding: "0 10px", display: "flex", alignItems: "center",
         background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)" }}>
@@ -107,6 +125,13 @@ export function LocalPane() {
           e.preventDefault();
           const src = e.dataTransfer.getData("application/x-shellx-pane");
           if (src === "right") transfer("down");
+        }}
+        onContextMenu={(e) => {
+          // Empty-area right-click. FileRow.handleContextMenu stops
+          // propagation, so this only fires on background between/below
+          // rows.
+          e.preventDefault();
+          setBlankMenu({ x: e.clientX, y: e.clientY });
         }}
       >
         {error && <div style={{ padding: "8px 10px", color: "var(--error)", fontSize: 11 }}>{error}</div>}
@@ -143,10 +168,18 @@ export function LocalPane() {
                 await loadLeft();
               }}
               onDownload={() => transfer("up")}  // "Upload to remote" via context menu label; direction is inferred
+              folderActions={folderActions}
             />
           </div>
         ))}
       </div>
+      {blankMenu && (
+        <HostContextMenu
+          x={blankMenu.x} y={blankMenu.y}
+          items={buildFolderMenuItems(folderActions)}
+          onClose={() => setBlankMenu(null)}
+        />
+      )}
     </div>
   );
 }

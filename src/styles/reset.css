@@ -37,3 +37,9 @@ input { font: inherit; color: inherit; }
    TabBar.tsx replaces it as the input mechanism. Firefox uses inline
    `scrollbar-width: none`; WebKit needs this rule to disappear cleanly. */
 .shellx-tabstrip::-webkit-scrollbar { display: none; height: 0; width: 0; }
+
+/* Generic scroll-container that hides its scrollbar visually while
+   remaining scrollable via wheel/keyboard. Used by PathBreadcrumb so
+   long paths scroll internally without a hairline scrollbar eating a
+   row of vertical space. */
+.shellx-hide-scrollbar::-webkit-scrollbar { display: none; height: 0; width: 0; }

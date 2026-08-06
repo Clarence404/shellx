@@ -10,9 +10,11 @@ The flow is always:
 
 1. Make the code changes on `main` (or a feature branch, if the change is in flight).
 2. Confirm tests + tsc pass locally.
-3. Make sure the Tauri dev window is up so the change is live via HMR (restart it yourself if it exited — do not ask the user to). Point out what to look at in one or two sentences.
-4. **Stop and wait.** Do not proceed until the user gives explicit go-ahead (e.g. "打 tag", "发版", "OK", "看好了 → 发布"). Silence is not approval. A user message about a different topic is not approval.
+3. **Auto-launch Tauri** — after every batch of substantive code changes finishes and passes tests, launch `pnpm tauri:dev` yourself if it's not already running (via `Start-Process cmd.exe /c "pnpm tauri:dev"` if `pnpm` is broken in bash — see the corepack workaround note further below). Do not ask the user to launch it. Do not wait for the user to say "启动" or "run it". If a previous instance is still running, HMR delivers pure frontend changes for free — but Rust changes need a rebuild, and Tauri handles that automatically once the process is up. Point out what to look at in one or two sentences after launching.
+4. **Stop and wait.** Do not proceed to tagging until the user gives explicit go-ahead (e.g. "打 tag", "发版", "OK", "看好了 → 发布"). Silence is not approval. A user message about a different topic is not approval.
 5. Only after explicit approval: bump the three version fields (see below), write both release-notes files (see below), commit, tag, push.
+
+**Corepack workaround (this environment specifically):** `pnpm` via bash sometimes hits `ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING` from corepack partway through a session. When that happens, launch pnpm from `cmd.exe` instead — `Start-Process -FilePath "cmd.exe" -ArgumentList "/c","pnpm tauri:dev > `"$env:TEMP\tauri-out.log`" 2>&1" -WorkingDirectory "<repo>" -WindowStyle Hidden` reliably works. Poll for `Get-Process shellx` to know when the window is up.
 
 **When in doubt about whether a change is release-worthy:** ask. Small polish edits during a longer conversation may be intended to stack up into one bigger release, not each become a tag. Never guess.
 

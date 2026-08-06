@@ -1,9 +1,12 @@
+import { useEffect, useRef } from "react";
+
 interface Props {
   path: string;
   onNavigate: (path: string) => void;
 }
 
 export function PathBreadcrumb({ path, onNavigate }: Props) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const parts = path.split("/").filter((p) => p.length > 0);
   const paths: { label: string; target: string }[] = [];
 
@@ -39,17 +42,50 @@ export function PathBreadcrumb({ path, onNavigate }: Props) {
     }
   }
 
+  // Auto-scroll to end whenever `path` changes so the deepest (current)
+  // segment is always visible; users can scroll left to see the parents.
+  // Matches how modern file managers handle long paths.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = el.scrollWidth;
+  }, [path]);
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4,
-      fontFamily: '"JetBrains Mono", var(--font-mono)', fontSize: "var(--font-small)" }}>
+    <div
+      ref={scrollRef}
+      className="shellx-hide-scrollbar"
+      onWheel={(e) => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+        if (delta === 0) return;
+        el.scrollLeft += delta;
+      }}
+      style={{
+        // Grow to fill remaining space in the parent flex row; the
+        // toolbar buttons that sit next to us are flexShrink: 0, so
+        // whatever's left goes here. minWidth: 0 is what actually lets
+        // us shrink below content width and trigger the horizontal scroll
+        // (default `min-width: auto` on flex children would keep growing).
+        flex: 1, minWidth: 0,
+        display: "flex", alignItems: "center", gap: 4,
+        fontFamily: '"JetBrains Mono", var(--font-mono)',
+        fontSize: "var(--font-small)",
+        overflowX: "auto", overflowY: "hidden",
+        scrollbarWidth: "none",
+      }}
+    >
       {paths.map((p, i) => (
-        <div key={p.target} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        <div key={p.target} style={{
+          display: "flex", alignItems: "center", gap: 4, flexShrink: 0,
+        }}>
           {i > 0 && <span style={{ color: "var(--text-3)" }}>/</span>}
           <button
             onClick={() => onNavigate(p.target)}
             style={{
               color: i === paths.length - 1 ? "var(--text-1)" : "var(--text-2)",
               padding: "2px 4px", borderRadius: 3, cursor: "pointer",
+              whiteSpace: "nowrap",
             }}
           >
             {p.label}

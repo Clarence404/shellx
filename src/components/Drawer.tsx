@@ -67,6 +67,24 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
     });
   }
 
+  // Close every live session tied to this saved host — keep the host row
+  // itself. Also reset RemotePane if it was pointing at one of the closed
+  // sessions, same guard as handleDelete uses (but without dropping the
+  // saved host).
+  async function handleDisconnect(host: HostInfo) {
+    const linkedSessionIds = useSessions.getState().sessions
+      .filter((s) => s.host_id === host.id)
+      .map((s) => s.id);
+    for (const id of linkedSessionIds) {
+      try { await closeSession(id); } catch { /* backend may be gone */ }
+      useSessions.getState().removeSession(id);
+    }
+    const railFiles = useRailFiles.getState();
+    if (railFiles.rightHost && linkedSessionIds.includes(railFiles.rightHost)) {
+      railFiles.setRightHost(null);
+    }
+  }
+
   return (
     <aside aria-label="drawer" style={{
       width: "var(--drawer-w)", flexShrink: 0, background: "var(--panel-1)",
@@ -96,18 +114,25 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
         </button>
       </div>
       <div style={{ flex: 1, overflow: "auto", marginBottom: 8 }}>
-        {view === "hosts" && hosts.map((h) => (
-          <HostRow
-            key={h.id}
-            host={h}
-            isConnected={hostIsConnected(h.id)}
-            isConnecting={!!connecting[h.id]}
-            onConnect={() => onConnectHost?.(h)}
-            onEdit={() => onEditHost?.(h)}
-            onDuplicate={() => handleDuplicate(h)}
-            onDelete={() => handleDelete(h)}
-          />
-        ))}
+        {view === "hosts" && hosts.map((h) => {
+          const connected = hostIsConnected(h.id);
+          return (
+            <HostRow
+              key={h.id}
+              host={h}
+              isConnected={connected}
+              isConnecting={!!connecting[h.id]}
+              onConnect={() => onConnectHost?.(h)}
+              // Disconnect only surfaces when at least one live session
+              // matches this host_id — otherwise there's nothing to close
+              // and the menu item would confuse.
+              onDisconnect={connected ? () => void handleDisconnect(h) : undefined}
+              onEdit={() => onEditHost?.(h)}
+              onDuplicate={() => handleDuplicate(h)}
+              onDelete={() => handleDelete(h)}
+            />
+          );
+        })}
       </div>
       {view === "hosts" && onNewConnection && (
         <button onClick={onNewConnection}

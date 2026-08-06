@@ -147,6 +147,80 @@ export function AppearancePanel() {
           onChange={(id) => setCursorStyle(id as Settings["terminal"]["cursorStyle"])}
         />
       </Field>
+
+      <Field label="Preview" hint="Live sample using the selected font, size, and cursor style.">
+        <TerminalPreview
+          fontFamily={terminal.fontFamily}
+          fontSize={terminal.fontSize}
+          cursorStyle={terminal.cursorStyle}
+        />
+      </Field>
+    </div>
+  );
+}
+
+// Mini terminal mock — kept intentionally static (no xterm, no PTY) so it
+// costs nothing to render and can't leak resources. Colours match the
+// TerminalView theme (`#1e1c24` bg / muted-sage green prompt / cyan path /
+// pastel text) so what you see here is what you get in the real tab.
+function TerminalPreview({
+  fontFamily, fontSize, cursorStyle,
+}: {
+  fontFamily: Settings["terminal"]["fontFamily"];
+  fontSize: number;
+  cursorStyle: Settings["terminal"]["cursorStyle"];
+}) {
+  const cursorStyleMap: Record<Settings["terminal"]["cursorStyle"], {
+    width: string; height: string; verticalAlign: string; borderBottom?: string;
+    background: string;
+  }> = {
+    block: {
+      width: "0.55em", height: "1em", verticalAlign: "text-bottom",
+      background: "#7c5cff",
+    },
+    underline: {
+      width: "0.55em", height: "0.12em", verticalAlign: "baseline",
+      background: "#7c5cff",
+    },
+    bar: {
+      width: "0.14em", height: "1em", verticalAlign: "text-bottom",
+      background: "#7c5cff",
+    },
+  };
+  return (
+    <div style={{
+      background: "#1e1c24", borderRadius: 4,
+      padding: "10px 12px",
+      fontFamily: FONT_MAP[fontFamily],
+      fontSize, lineHeight: 1.4,
+      color: "#d4d0dc",
+      maxWidth: 460,
+      border: "0.5px solid var(--border)",
+      overflow: "hidden",
+    }}>
+      <div>
+        <span style={{ color: "#7c9c80" }}>root@host</span>
+        <span style={{ color: "#8b869a" }}>:</span>
+        <span style={{ color: "#58d3fc" }}>~</span>
+        <span style={{ color: "#d4d0dc" }}>$ </span>
+        <span style={{ color: "#d4d0dc" }}>echo hi | grep hi</span>
+      </div>
+      <div>
+        <span style={{ color: "#d4d0dc" }}>hi</span>
+      </div>
+      <div>
+        <span style={{ color: "#7c9c80" }}>root@host</span>
+        <span style={{ color: "#8b869a" }}>:</span>
+        <span style={{ color: "#58d3fc" }}>~</span>
+        <span style={{ color: "#d4d0dc" }}>$ </span>
+        <span
+          aria-hidden="true"
+          style={{
+            display: "inline-block",
+            ...cursorStyleMap[cursorStyle],
+          }}
+        />
+      </div>
     </div>
   );
 }

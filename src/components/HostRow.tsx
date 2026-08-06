@@ -9,18 +9,27 @@ interface Props {
   isConnected: boolean;
   isConnecting?: boolean;
   onConnect: () => void;
+  /** Provided only when the host has at least one active session — hides
+   *  the Disconnect item otherwise, since there's nothing to close. */
+  onDisconnect?: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }
 
-export function HostRow({ host, isConnected, isConnecting, onConnect, onEdit, onDuplicate, onDelete }: Props) {
+export function HostRow({ host, isConnected, isConnecting, onConnect, onDisconnect, onEdit, onDuplicate, onDelete }: Props) {
   const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [hovered, setHovered] = useState(false);
 
+  // Disconnect appears right below Connect so the "session lifecycle"
+  // actions cluster, followed by a separator, then the saved-host
+  // actions (Edit / Duplicate / Delete). Delete stays danger-red at the
+  // bottom to keep destructive actions where the eye expects them.
   const items = [
     { label: "Connect", onClick: onConnect },
+    ...(onDisconnect ? [{ label: "Disconnect", onClick: onDisconnect }] : []),
+    { kind: "separator" as const },
     { label: "Edit", onClick: onEdit },
     { label: "Duplicate", onClick: onDuplicate },
     { label: "Delete", onClick: onDelete, variant: "danger" as const },

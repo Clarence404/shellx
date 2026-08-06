@@ -1,15 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCw, FolderPlus, Plus, PlugZap, Unplug } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useRailFiles } from "../state/railFiles";
 import { useSessions } from "../state/sessions";
 import { useHostsStore } from "../state/hosts";
 import {
   sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir,
 } from "../ipc/sftp";
-import { sftpDownload } from "../ipc/transfers";
+import { sftpUpload, sftpDownload } from "../ipc/transfers";
 import { HostDropdown } from "./HostDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
-import { FileRow } from "./FileRow";
+import { FileRow, buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
+import { PaneToolbarButton } from "./PaneToolbarButton";
+import { HostContextMenu } from "./HostContextMenu";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import type { HostInfo } from "../types/host";
 
@@ -33,6 +37,11 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
   const selected = useRailFiles((s) => s.rightSelected);
   const sessions = useSessions((s) => s.sessions);
   const savedHosts = useHostsStore((s) => s.hosts);
+  // Ref to the pane's outer div so we can hit-test the drag-drop event's
+  // physical-pixel position against the pane's CSS-pixel bounding rect.
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const [osDragOver, setOsDragOver] = useState(false);
+  const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Actions are dispatched via getState() at call time rather than a
   // hook-captured reference, so each invocation always reaches the store's
@@ -76,6 +85,52 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // v0.5.6: OS drag-drop upload. Files dragged from Explorer / Finder
+  // into the pane trigger sftpUpload against the current rightPath. We
+  // listen to Tauri's native onDragDropEvent (the browser-level `drop`
+  // handler doesn't get OS paths for security reasons) and hit-test the
+  // physical-pixel position against the pane's client rect converted to
+  // physical pixels. dpr scaling happens on `event.position.x/y` since
+  // Tauri reports in physical pixels and getBoundingClientRect returns
+  // CSS pixels.
+  useEffect(() => {
+    if (!rightHost || isDisconnected) return;
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    const win = getCurrentWindow();
+
+    win.onDragDropEvent((event) => {
+      const el = paneRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const inside = (px: number, py: number) => {
+        const x = px / dpr;
+        const y = py / dpr;
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      };
+      const p = event.payload;
+      if (p.type === "over") {
+        setOsDragOver(inside(p.position.x, p.position.y));
+      } else if (p.type === "leave") {
+        setOsDragOver(false);
+      } else if (p.type === "drop") {
+        setOsDragOver(false);
+        if (!inside(p.position.x, p.position.y)) return;
+        for (const localPath of p.paths) {
+          const filename = localPath.split(/[\\/]/).pop() || "unknown";
+          const remotePath = joinPath(rightPath, filename);
+          void sftpUpload(rightHost, localPath, remotePath);
+        }
+      }
+    }).then((u) => {
+      if (cancelled) { u(); return; }
+      unlisten = u;
+    });
+
+    return () => { cancelled = true; unlisten?.(); };
+  }, [rightHost, rightPath, isDisconnected]);
+
   function handleReconnect() {
     if (savedHostForReconnect && onConnectSavedHost) {
       // Kick off the connect flow — RailFilesView's sessionCount-growth
@@ -85,6 +140,31 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
       onConnectSavedHost(savedHostForReconnect);
     }
   }
+
+  // Folder-scope actions shared between the toolbar, the empty-area
+  // right-click, and each file-row's "This folder" sub-menu. Uploads use
+  // the Tauri file-picker dialog rather than the LocalPane selection
+  // path (the standalone RemotePane view — dual-pane RailFiles has its
+  // own local pane for pane-to-pane transfers).
+  const folderActions: FolderMenuHandlers = rightHost && !isDisconnected ? {
+    onNewFolder: async () => {
+      const name = prompt("New folder name");
+      if (!name) return;
+      await sftpMkdir(rightHost, joinPath(rightPath, name));
+      await loadRight();
+    },
+    onUpload: async () => {
+      const picked = await openDialog({ multiple: true, directory: false });
+      if (!picked) return;
+      const paths = Array.isArray(picked) ? picked : [picked];
+      for (const p of paths) {
+        const filename = p.split(/[\\/]/).pop() || "unknown";
+        const remotePath = joinPath(rightPath, filename);
+        void sftpUpload(rightHost, p, remotePath);
+      }
+    },
+    onRefresh: () => void loadRight(),
+  } : {};
 
   if (!rightHost) {
     return (
@@ -118,7 +198,17 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div
+      ref={paneRef}
+      style={{
+        display: "flex", flexDirection: "column", height: "100%", minHeight: 0,
+        // Highlight border while dragging OS files over the pane, so the
+        // user knows the drop will land on THIS host at THIS path.
+        outline: osDragOver ? "2px dashed var(--accent)" : "none",
+        outlineOffset: -2,
+        transition: "outline-color 120ms ease",
+      }}
+    >
       <div style={{
         height: 32, padding: "0 10px", display: "flex", alignItems: "center", gap: 6,
         background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)",
@@ -131,23 +221,21 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
           onNewConnection={onNewConnection}
         />
         <div style={{ flex: 1 }} />
-        <button title="New folder"
+        <PaneToolbarButton title="New folder"
           disabled={isDisconnected}
           onClick={async () => {
             const name = prompt("New folder name");
             if (!name) return;
             await sftpMkdir(rightHost, joinPath(rightPath, name));
             await loadRight();
-          }}
-          style={{ color: "var(--text-2)", opacity: isDisconnected ? 0.35 : 1 }}>
-          <FolderPlus size={12} />
-        </button>
-        <button title="Refresh"
+          }}>
+          {(size) => <FolderPlus size={size} />}
+        </PaneToolbarButton>
+        <PaneToolbarButton title="Refresh"
           disabled={isDisconnected}
-          onClick={() => void loadRight()}
-          style={{ color: "var(--text-2)", opacity: isDisconnected ? 0.35 : 1 }}>
-          <RefreshCw size={12} />
-        </button>
+          onClick={() => void loadRight()}>
+          {(size) => <RefreshCw size={size} />}
+        </PaneToolbarButton>
       </div>
 
       {isDisconnected ? (
@@ -169,6 +257,10 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
               e.preventDefault();
               const src = e.dataTransfer.getData("application/x-shellx-pane");
               if (src === "left") transfer("up");
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setBlankMenu({ x: e.clientX, y: e.clientY });
             }}
           >
             {error && <div style={{ padding: "8px 10px", color: "var(--error)", fontSize: 11 }}>{error}</div>}
@@ -213,11 +305,19 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                     await loadRight();
                   }}
                   onDownload={() => void sftpDownload(rightHost, joinPath(rightPath, e.name), joinPath(leftPath, e.name))}
+                  folderActions={folderActions}
                 />
               </div>
             ))}
           </div>
         </>
+      )}
+      {blankMenu && (
+        <HostContextMenu
+          x={blankMenu.x} y={blankMenu.y}
+          items={buildFolderMenuItems(folderActions)}
+          onClose={() => setBlankMenu(null)}
+        />
       )}
     </div>
   );
