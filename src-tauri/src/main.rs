@@ -68,6 +68,7 @@ fn main() {
             ipc::local::local_remove_file,
             ipc::local::local_remove_dir,
             ipc::local::local_open_in_os,
+            ipc::local::local_copy_into,
             ipc::settings::load_settings,
             ipc::settings::save_settings,
             ipc::config::get_config_paths,

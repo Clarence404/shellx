@@ -75,23 +75,34 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(hostRef.current);
-    // Two-phase fit: React can commit the DOM before the browser has
-    // finalised layout, so hostRef.current.offsetWidth/Height in the
-    // same tick as `term.open()` is occasionally a transient small
-    // value (~10 cols). That would let the shell's first prompt bytes
-    // arrive and get written at the wrong width, producing a stale
-    // truncated line at the top of the terminal (e.g. "root@ubunt")
-    // once ResizeObserver catches up and widens the grid. Running fit
-    // once now for a first-cut, then again on the next animation frame
-    // (after layout has committed) gives the initial write the correct
-    // cols/rows on nearly every mount. ResizeObserver still handles
-    // subsequent size changes.
-    fit.fit();
-    requestAnimationFrame(() => {
-      if (hostRef.current && hostRef.current.offsetHeight > 0) fit.fit();
-    });
     termRef.current = term;
     fitRef.current = fit;
+
+    // v0.5.7 stale-prompt fix: DON'T fit or write incoming bytes yet
+    // if the container has 0-size (typical case: a session was just
+    // created while the user is on Files/Settings view — App.tsx keeps
+    // the tab body mounted but display:none, so hostRef.current has
+    // width/height 0). Fitting at 0-size gives xterm ~10 cols; the
+    // shell's welcome prompt gets written wrapped ("root@ubunt") and
+    // never rewraps once the container becomes visible. Instead:
+    // - Buffer session:data chunks until we've done at least one fit
+    //   with valid dimensions.
+    // - The ResizeObserver below fires the fit + flushes the buffer
+    //   the moment the container gets non-zero size (e.g. when the
+    //   user switches to the Hosts view).
+    let firstFitDone = false;
+    const pendingBytes: Uint8Array[] = [];
+    const tryInitialFit = () => {
+      if (firstFitDone) return;
+      if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
+      fit.fit();
+      firstFitDone = true;
+      for (const chunk of pendingBytes) term.write(chunk);
+      pendingBytes.length = 0;
+    };
+    // Attempt an immediate fit — covers the normal case where the tab
+    // body is visible on mount (user connects from the Hosts view).
+    tryInitialFit();
 
     // Send user input to backend as bytes.
     const dataDisp = term.onData((s) => {
@@ -107,8 +118,13 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     // Handle container resize. Guarded against 0-height: when the parent
     // hides this view via `display: none` (activity tab switch), the host
     // element's offsetHeight is 0 and fit() would otherwise divide-by-zero.
+    // Also drives the first-good-fit + buffer-flush machinery: the first
+    // time the observer fires with a real size, tryInitialFit() runs the
+    // fit AND drains pendingBytes.
     const ro = new ResizeObserver(() => {
-      if (hostRef.current && hostRef.current.offsetHeight > 0) fit.fit();
+      if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
+      if (!firstFitDone) tryInitialFit();
+      else fit.fit();
     });
     ro.observe(hostRef.current);
 
@@ -119,7 +135,12 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     let unlistenClosed: (() => void) | undefined;
     onSessionData(({ id, data }) => {
       if (id !== sessionId) return;
-      term.write(new Uint8Array(data));
+      const chunk = new Uint8Array(data);
+      // If we haven't sized the terminal yet, park bytes until the
+      // container has a real width. tryInitialFit() flushes them once
+      // the ResizeObserver fires with non-zero dimensions.
+      if (!firstFitDone) pendingBytes.push(chunk);
+      else term.write(chunk);
     }).then((u) => {
       if (cancelled) {
         u();

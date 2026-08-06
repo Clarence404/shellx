@@ -17,6 +17,16 @@ pub struct LocalRenameArgs {
     pub to: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalCopyIntoArgs {
+    /// Absolute source path (file or directory).
+    pub src: String,
+    /// Absolute path to the directory that will receive `src` as a
+    /// child. The source's basename is preserved inside `dst_dir`.
+    pub dst_dir: String,
+}
+
 #[tauri::command]
 pub async fn local_list_dir(args: LocalPathArgs) -> Result<Vec<LocalEntry>> {
     local::list_dir(&args.path)
@@ -55,4 +65,9 @@ pub async fn local_remove_dir(args: LocalPathArgs) -> Result<()> {
 #[tauri::command]
 pub async fn local_open_in_os(args: LocalPathArgs) -> Result<()> {
     local::open_in_os(&args.path)
+}
+
+#[tauri::command]
+pub async fn local_copy_into(args: LocalCopyIntoArgs) -> Result<()> {
+    local::copy_into(&args.src, &args.dst_dir)
 }

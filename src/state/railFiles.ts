@@ -28,6 +28,25 @@ interface State {
   rightSelected: string[];
 
   splitterPercent: number;
+
+  /** v0.5.7: transient state describing the file currently being
+   *  drag-dropped between panes. Set on mousedown-then-move-past-
+   *  threshold in each FileRow's wrapper, cleared on mouseup. Includes
+   *  the current cursor position so RailFilesView can render a
+   *  floating drag-ghost that follows the pointer, and `hoverTarget`
+   *  (the pane the cursor is currently over — null when over neither)
+   *  so the destination pane can highlight itself while the source
+   *  pane doesn't. Mouse-based drag replaced HTML5 drag entirely
+   *  because WebView2 + Tauri's `dragDropEnabled: true` suppresses
+   *  internal HTML5 drop events unreliably; pointer events are
+   *  Chromium primitives that Tauri can't intercept. */
+  currentDrag: {
+    pane: "left" | "right";
+    name: string;
+    x: number;
+    y: number;
+    hoverTarget: "left" | "right" | null;
+  } | null;
 }
 
 interface Actions {
@@ -38,6 +57,7 @@ interface Actions {
   loadRight(): Promise<void>;
   toggleSelectLeft(name: string, multi: boolean): void;
   toggleSelectRight(name: string, multi: boolean): void;
+  setCurrentDrag(d: State["currentDrag"]): void;
   clearSelectionLeft(): void;
   clearSelectionRight(): void;
   transfer(direction: "up" | "down"): void;
@@ -83,6 +103,7 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
   rightEntries: [], rightLoading: false, rightError: null, rightSelected: [],
 
   splitterPercent: typeof persisted.splitterPercent === "number" ? persisted.splitterPercent : 50,
+  currentDrag: null,
 
   async setLeftPath(p) {
     const resolved = await localRealpath(p).catch(() => p);
@@ -179,6 +200,8 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
   },
   clearSelectionLeft() { set({ leftSelected: [] }); },
   clearSelectionRight() { set({ rightSelected: [] }); },
+
+  setCurrentDrag(d) { set({ currentDrag: d }); },
 
   transfer(direction) {
     const { leftPath, rightPath, rightHost, leftSelected, rightSelected } = get();

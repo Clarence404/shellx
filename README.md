@@ -4,19 +4,18 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.5.6
+## Status: v0.5.7
 
-v0.5.6 is a big polish + integration pass. Config directory moved to
-`~/.shellx/` (auto-migrated) and configurable via `SHELLX_CONFIG_DIR`.
-OS drag-drop upload — drop files from Explorer / Finder onto RemotePane
-and they SFTP-upload. Terminal font gets a live preview in Appearance.
-File panes get an icon-only toolbar with hitboxes tied to the System
-font-size slider, plus right-click menus in both the empty area and on
-file rows (rows get a `THIS FILE` / `THIS FOLDER` split). Long paths in
-the breadcrumb now scroll internally instead of pushing toolbar buttons
-off screen. App identifier + publisher rebranded to
-`io.github.clarence404.shellx` / `Clarence404`.
-
+v0.5.7 makes pane-to-pane drag actually work — the previous HTML5-drag
+attempt was unreliable inside WebView2 + Tauri's `dragDropEnabled: true`,
+so the whole mechanism was rewritten as pointer-event tracking + a
+floating drag ghost + target-pane highlight. The middle ⇄ button is
+gone. LocalPane now accepts OS drops (Explorer / Finder → new
+`local_copy_into` IPC). File rows gain a `Send to remote →` context
+menu entry. New folder replaces the browser-native `prompt()` with an
+inline input row. Same-host duplicate-tab prevention, Terminal
+stale-row fix (`root@ubunt` no longer haunts you), reconnect-then-Files
+"closed" retry, and TransferQueue only-when-active complete the set.
 Everything below still applies:
 
 v0.5.4 widened the activity rail (icon + label under each button) and made
@@ -276,7 +275,8 @@ The next natural steps (roughly the order of the spec's milestone roadmap):
 ### v0.6+ Backlog
 
 - **Settings: Advanced page** — keyboard-shortcut remapping, log level, telemetry toggle.
-- **Drag-drop with the OS** — dragging a Files row out of shellx should trigger a download to Windows Explorer / macOS Finder; dragging a file from the OS into a shellx pane should upload. Currently only pane-to-pane drag works (see `application/x-shellx-pane` data-transfer key). Needs Tauri's file-drop event on the receive side and a virtual-file drag-source on the send side.
+- **Directory drag between panes** — the mouse-based pane-to-pane drag currently only transfers regular files. `sftpUpload`/`sftpDownload` are single-file only, so dragging a folder is a no-op. Recursive directory transfer (both directions) needs a new Rust IPC that walks the tree; UI-side the FileRow wrapper's onMouseDown should also skip the drag when `kind === "directory"` OR the new recursive backend must be wired up.
+- **Context menu clipping near pane edges** — when a file row near the bottom of the pane is right-clicked, `HostContextMenu` renders below the cursor with fixed `top: y` and gets clipped by the pane's outer scroll boundary. Should measure the menu's height on mount and flip upward when the click's y + menuHeight overflows the viewport (or the pane's clip rect). Mirror horizontally for near-right-edge clicks.
 - **Terminal font live preview in Appearance** — when adjusting Terminal font family / size / cursor, render a small sample area (`root@host:~$ echo hi | grep hi` etc.) inside the settings panel so the user can compare presets without switching tabs.
 - **Pane toolbar click targets** — the `New folder` / `Refresh` / `Upload` icon buttons in LocalPane / RemotePane use 12 px icons with tight padding and mis-fire often. Bump to a 14 – 16 px icon + wider padding, and tie the icon size to a `--font-ui-size` derived scale so they grow with the System font-size slider (matches the rest of the sans chrome).
 - **Rethink the purple accent** — `#7c5cff` reads harsh in rail icons and selected states; explore a softer accent variant (still on-brand) or expose accent hue as a Setting.

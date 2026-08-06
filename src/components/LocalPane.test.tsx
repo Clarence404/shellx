@@ -10,6 +10,20 @@ vi.mock("../ipc/local", () => ({
   localRemoveFile: vi.fn(), localRemoveDir: vi.fn(),
   localRealpath: vi.fn(async (p: string) => p),
   localListDir: vi.fn(async () => []),
+  localCopyInto: vi.fn().mockResolvedValue(undefined),
+}));
+
+// v0.5.7 added an OS drag-drop listener via getCurrentWindow(). Same
+// mock RemotePane uses — jsdom has no `window.__TAURI_INTERNALS__`.
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    onDragDropEvent: () => Promise.resolve(() => {}),
+  }),
+}));
+
+vi.mock("../ipc/transfers", () => ({
+  sftpUpload: vi.fn(),
+  sftpDownload: vi.fn(),
 }));
 
 describe("LocalPane", () => {

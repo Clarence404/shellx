@@ -23,9 +23,9 @@ describe("TransferArrow", () => {
     });
   });
 
-  it("disabled when both sides empty", () => {
+  it("hides entirely when both sides empty (v0.5.7: no idle button)", () => {
     render(<TransferArrow />);
-    expect(screen.getByRole("button")).toBeDisabled();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
   it("enabled when only left has selection; click fires transfer('up')", () => {
@@ -37,14 +37,16 @@ describe("TransferArrow", () => {
     expect(transferSpy).toHaveBeenCalledWith("up");
   });
 
-  it("disabled when both sides have selection", () => {
+  it("hides entirely when both sides have selection (ambiguous direction)", () => {
     useRailFiles.setState({ leftSelected: ["a"], rightSelected: ["b"] });
     render(<TransferArrow />);
-    expect(screen.getByRole("button")).toBeDisabled();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 
-  it("arrow position tracks splitterPercent", () => {
-    useRailFiles.setState({ splitterPercent: 30 });
+  it("arrow position tracks splitterPercent when visible", () => {
+    // Needs a valid selection so the button actually renders under the
+    // new visibility rule.
+    useRailFiles.setState({ splitterPercent: 30, leftSelected: ["a"] });
     render(<TransferArrow />);
     const btn = screen.getByRole("button");
     expect(btn.style.left).toBe("30%");

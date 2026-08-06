@@ -14,7 +14,13 @@ export function TransferQueue({ connectionId, showAll }: Props) {
   // stability check against the real zustand store and causes an infinite
   // render loop (only masked in isolation by a mocked store).
   const allTransfers = useTransfersStore((s) => s.list);
-  const list = showAll ? allTransfers : allTransfers.filter((t) => t.connection_id === connectionId);
+  // v0.5.7: show only in-progress transfers (queued or active). Done /
+  // failed / cancelled entries stay in the store as history but don't
+  // sit at the bottom of the pane taking up space — the panel
+  // disappears the moment nothing is transferring. Previously a single
+  // "io: Failure" line would linger indefinitely.
+  const scoped = showAll ? allTransfers : allTransfers.filter((t) => t.connection_id === connectionId);
+  const list = scoped.filter((t) => t.state.kind === "queued" || t.state.kind === "active");
   if (list.length === 0) return null;
 
   return (
