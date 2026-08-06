@@ -43,3 +43,16 @@ input { font: inherit; color: inherit; }
    long paths scroll internally without a hairline scrollbar eating a
    row of vertical space. */
 .shellx-hide-scrollbar::-webkit-scrollbar { display: none; height: 0; width: 0; }
+
+/* Narrower scrollbar for the bottom transfer strip — the default
+   10 px reserved gutter clashed with the strip's tight 4 px
+   horizontal padding, and the thumb visually competed with the
+   right-edge status text ("0/17 files"). 6 px thumb blends in. */
+.shellx-transfer-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.shellx-transfer-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-hi);
+  border-radius: 3px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+}
+.shellx-transfer-scroll::-webkit-scrollbar-thumb:hover { background: var(--text-3); background-clip: content-box; }

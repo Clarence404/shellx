@@ -29,6 +29,15 @@ export const transferList = () => invoke<TransferInfo[]>("transfer_list");
 export const transferCancel = (transfer_id: string) =>
   invoke<void>("transfer_cancel", { args: { transfer_id } });
 
+/** Cancels every child of a directory transfer AND flags the group so
+ *  `sftp_upload_dir` / `sftp_download_dir`'s enumeration loop stops
+ *  spawning further children mid-walk. Replaces the previous
+ *  N-per-child JS loop, which couldn't stop children the Rust side
+ *  hadn't spawned yet — a 2500-file directory kept adding queued
+ *  entries after the click. */
+export const transferCancelGroup = (group_id: string) =>
+  invoke<void>("transfer_cancel_group", { args: { group_id } });
+
 export const transferPause = (transfer_id: string) =>
   invoke<void>("transfer_pause", { args: { transfer_id } });
 

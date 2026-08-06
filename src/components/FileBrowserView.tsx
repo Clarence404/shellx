@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Upload, FolderPlus } from "lucide-react";
 import { PaneToolbarButton } from "./PaneToolbarButton";
 import { HostContextMenu } from "./HostContextMenu";
@@ -11,6 +11,7 @@ import { sftpUpload, sftpDownload, sftpDownloadDir } from "../ipc/transfers";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow } from "./FileRow";
 import { TransferQueue } from "./TransferQueue";
+import { TransferStripSection } from "./TransferStripSection";
 
 interface Props {
   connectionId: string;
@@ -30,6 +31,13 @@ export function FileBrowserView({ connectionId }: Props) {
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [mkdirName, setMkdirName] = useState("");
   const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null);
+  // Drop-target highlight — mirrors LocalPane / RemotePane. `paneRef`
+  // gives us the CSS-px bounding rect so we can hit-test Tauri's
+  // physical-px drag position against this view (not the whole
+  // window) and turn the outline on only while the OS cursor is
+  // actually over the browser area.
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const [osDragOver, setOsDragOver] = useState(false);
 
   // v0.5.6: Same three folder-scope actions the toolbar exposes, packaged
   // for the file-row + empty-area context menus. Definition kept near the
@@ -70,9 +78,24 @@ export function FileBrowserView({ connectionId }: Props) {
     let cancelled = false;
     let unlisten: (() => void) | undefined;
     win.onDragDropEvent((event) => {
-      if (event.payload.type === "drop") {
+      const el = paneRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const inside = (px: number, py: number) => {
+        const x = px / dpr, y = py / dpr;
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      };
+      const p = event.payload;
+      if (p.type === "over") {
+        setOsDragOver(inside(p.position.x, p.position.y));
+      } else if (p.type === "leave") {
+        setOsDragOver(false);
+      } else if (p.type === "drop") {
+        setOsDragOver(false);
+        if (!inside(p.position.x, p.position.y)) return;
         const cwd = state?.cwd ?? ".";
-        for (const localPath of event.payload.paths) {
+        for (const localPath of p.paths) {
           const remotePath = joinPath(cwd, basename(localPath));
           void sftpUpload(connectionId, localPath, remotePath);
         }
@@ -155,7 +178,18 @@ export function FileBrowserView({ connectionId }: Props) {
   }
 
   return (
-    <div style={{ height: "100%", minHeight: 0, display: "flex", flexDirection: "column" }}>
+    <div
+      ref={paneRef}
+      style={{
+        height: "100%", minHeight: 0, display: "flex", flexDirection: "column",
+        // Purple dashed outline while a file is dragged in from
+        // Explorer / Finder — matches the LocalPane / RemotePane
+        // affordance so the drop target is obvious.
+        outline: osDragOver ? "2px dashed var(--accent)" : "none",
+        outlineOffset: -2,
+        transition: "outline-color 120ms ease",
+      }}
+    >
       <div style={{
         height: 32, padding: "0 10px", background: "var(--panel-1)",
         borderBottom: "1px solid var(--border)",
@@ -241,7 +275,11 @@ export function FileBrowserView({ connectionId }: Props) {
           </div>
         )}
       </div>
-      <TransferQueue connectionId={connectionId} />
+      {/* Shared strip section — same drag handle + auto-compact vs
+          user-height behavior as RailFilesView. State lives in
+          `useRailFiles` so a height dragged in one view carries
+          over to the other. */}
+      <TransferStripSection connectionId={connectionId} />
       {blankMenu && (
         <HostContextMenu
           x={blankMenu.x} y={blankMenu.y}

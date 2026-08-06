@@ -28,6 +28,16 @@ interface State {
   rightSelected: string[];
 
   splitterPercent: number;
+  /** Bottom transfer strip's height in pixels — the value used
+   *  whenever ANY group is expanded. Collapsed state (no group open)
+   *  ignores this and pins the strip to a compact header-only height.
+   *  Persisted so the user's dragged size survives restart. */
+  transferStripHeight: number;
+  /** Per-group expand flag for the bottom transfer strip. Not
+   *  persisted — session-scoped. TransferQueue reads / writes it via
+   *  `setTransferGroupExpanded`; RailFilesView subscribes to derive
+   *  the effective strip height + divider visibility. */
+  transferGroupExpanded: Record<string, boolean>;
 
   /** v0.5.7: transient state describing the file currently being
    *  drag-dropped between panes. Set on mousedown-then-move-past-
@@ -67,6 +77,19 @@ interface Actions {
   transfer(direction: "up" | "down"): void;
   setSplitterDraft(pct: number): void;
   setSplitter(pct: number): void;
+  setTransferStripHeightDraft(px: number): void;
+  setTransferStripHeight(px: number): void;
+  setTransferGroupExpanded(groupId: string, expanded: boolean): void;
+}
+
+// Bounds for the bottom transfer strip's height. `80` keeps the group
+// summary row + a splash of scroll always visible; `70vh` (resolved at
+// use-time) keeps at least a bit of file browser on screen.
+const TRANSFER_STRIP_MIN_PX = 80;
+const TRANSFER_STRIP_DEFAULT_PX = 220;
+function clampTransferStripPx(px: number): number {
+  const max = Math.max(TRANSFER_STRIP_MIN_PX + 40, Math.round(window.innerHeight * 0.7));
+  return Math.max(TRANSFER_STRIP_MIN_PX, Math.min(max, Math.round(px)));
 }
 
 const LS = "railFiles";
@@ -91,6 +114,7 @@ function persist(st: State) {
       } catch { return st.rightHost ? { [st.rightHost]: st.rightPath } : {}; }
     })(),
     splitterPercent: st.splitterPercent,
+    transferStripHeight: st.transferStripHeight,
   };
   localStorage.setItem(LS, JSON.stringify(pick));
 }
@@ -107,6 +131,10 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
   rightEntries: [], rightLoading: false, rightError: null, rightSelected: [],
 
   splitterPercent: typeof persisted.splitterPercent === "number" ? persisted.splitterPercent : 50,
+  transferStripHeight: typeof persisted.transferStripHeight === "number"
+    ? persisted.transferStripHeight
+    : TRANSFER_STRIP_DEFAULT_PX,
+  transferGroupExpanded: {},
   currentDrag: null,
 
   async setLeftPath(p) {
@@ -239,5 +267,22 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
     const clamped = Math.max(20, Math.min(80, pct));
     set({ splitterPercent: clamped });
     persist(get());
+  },
+
+  // Bottom-transfer-strip resize: draft during drag (no persist),
+  // commit on mouseup. The height ONLY applies while a group is
+  // expanded; collapsed state pins the strip to the compact height
+  // and ignores this value.
+  setTransferStripHeightDraft(px) {
+    set({ transferStripHeight: clampTransferStripPx(px) });
+  },
+  setTransferStripHeight(px) {
+    set({ transferStripHeight: clampTransferStripPx(px) });
+    persist(get());
+  },
+  setTransferGroupExpanded(groupId, expanded) {
+    set((st) => ({
+      transferGroupExpanded: { ...st.transferGroupExpanded, [groupId]: expanded },
+    }));
   },
 }));

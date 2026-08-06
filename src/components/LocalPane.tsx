@@ -235,7 +235,15 @@ export function LocalPane() {
         }}
       >
         {error && <div style={{ padding: "8px 10px", color: "var(--error)", fontSize: 11 }}>{error}</div>}
-        {loading && <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>Loading…</div>}
+        {loading && entries.length === 0 && (
+          // Only surface the Loading label on an EMPTY-state fetch —
+          // during a directory-upload transfer:done storm the pane
+          // refreshes every couple hundred ms, and each brief render
+          // of "Loading…" above the `..` row shifted everything down
+          // by a line, producing a flicker the user flagged. Once
+          // entries are present the refresh is invisible.
+          <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>Loading…</div>
+        )}
         {creatingFolder && (
           <div style={{ padding: "6px 10px", display: "flex", gap: 6 }}>
             <input
