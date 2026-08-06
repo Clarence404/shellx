@@ -4,7 +4,19 @@
 
 一个小巧、精致、可扩展的终端 + 文件传输客户端。跨平台（Windows / macOS / Linux），开源，基于 Tauri + Rust + React。
 
-## 版本状态：v0.5.8
+## 版本状态：v0.6.0
+
+v0.6.0 是"目录传输"版本。新 Rust IPC `sftp_upload_dir` /
+`sftp_download_dir` 遍历源目录树，每个文件一个子任务，全部共享一个
+`group_id`；前端把它们聚合成一行可展开的组，进度条整行铺满。任意进行
+中的传输（或整个组）都有真正能用的暂停 / 继续 / 取消按钮 —— `write_all`
+终于包在 `tokio::select!` 里，卡死的 SFTP 写不再把 cancel 信号吞掉。
+`SessionManager` 内部 map 改成 `Arc<Mutex<LiveConnection>>`，并发 SFTP
+操作不再互相踩 map 拿到 `Error::Closed`。新增 `sftp_remove_dir_recursive`
+让刚上传的非空目录能删掉（SFTP `RMDIR` 只接受空目录）。新 `transfer:state`
+事件让 paused 行样式立即翻转，不用等下一个 progress tick；`applyProgress`
+里加了 `queued → active` 自动升级，修好了从 v0.3 就存在的 "永远 queued"
+bug。下面这些仍然生效：
 
 v0.5.8 是叠在 v0.5.7 之上的一轮聚焦打磨。Files 字号有了独立滑块（跟 System
 font 大小完全解耦），并附带一个 4 行实时预览（跟真实 FileRow 布局一致）。
@@ -275,7 +287,6 @@ cargo --version && rustc --version        # 都要能输出
 ### v0.6+ Backlog
 
 - **Settings：Advanced 页** ——快捷键映射、log 级别、遥测开关。
-- **目录也能面板间拖拽** —— 目前基于 mouse 的 pane-to-pane 拖拽只处理普通文件；`sftpUpload`/`sftpDownload` 是单文件 IPC，拖文件夹是 no-op。递归目录传输（两个方向）需要新增 Rust IPC 走树；前端要么在 FileRow wrapper 的 `onMouseDown` 里对 `kind === "directory"` 提示不支持，要么等新递归后端接上后打开。
 - **重新审视紫色 accent** ——`#7c5cff` 用在 rail 图标和高亮态时略显刺眼；探索更柔和的 accent 变体（仍保持品牌调性），或把 accent 色相开放到 Settings 里给用户自选。
 - **安全相关规划** ——除已列的 host-key TOFU + 公钥认证外：审计远端返回字符串（尤其路径）的输入清洗、复核 keychain fallback 模式、落一份成文的威胁模型文档。
 - **Protocols 页面设计** ——目前是 `coming soon` 占位；v0.7 之前定型（列已注册的传输/协议实现？每协议激活开关？各会话协议层的实时健康度？）。

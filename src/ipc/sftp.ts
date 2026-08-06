@@ -16,6 +16,12 @@ export const sftpRemoveFile = (conn_id: string, path: string) =>
 export const sftpRemoveDir = (conn_id: string, path: string) =>
   invoke<void>("sftp_remove_dir", { args: { conn_id, path } });
 
+/** Recursive counterpart. RemotePane's onDelete for directories uses
+ *  this so freshly-uploaded folders (which contain files) can be
+ *  removed. Backing Rust walks the tree and removes bottom-up. */
+export const sftpRemoveDirRecursive = (conn_id: string, path: string) =>
+  invoke<void>("sftp_remove_dir_recursive", { args: { conn_id, path } });
+
 export const sftpMkdir = (conn_id: string, path: string) =>
   invoke<void>("sftp_mkdir", { args: { conn_id, path } });
 

@@ -14,8 +14,9 @@ use crate::transfer::{LiveTransfer, TransferId, TransferState};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::fs::File as LocalFile;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -24,9 +25,19 @@ use tokio::sync::{oneshot, Mutex};
 const CHUNK_SIZE: usize = 64 * 1024;
 const PROGRESS_EMIT_INTERVAL_MS: u128 = 100;
 const PROGRESS_EMIT_BYTES: u64 = 64 * 1024;
+/// While paused, the task polls the flag on this cadence. Short enough
+/// that resume feels instant, long enough not to burn CPU.
+const PAUSE_POLL_MS: u64 = 150;
 
 pub const EV_PROGRESS: &str = "transfer:progress";
 pub const EV_DONE: &str = "transfer:done";
+pub const EV_STATE: &str = "transfer:state";
+
+#[derive(Serialize, Clone)]
+pub struct StateEvent {
+    pub transfer_id: TransferId,
+    pub state: TransferState,
+}
 
 /// Internal-only marker distinguishing an operator-initiated cancel from an
 /// ordinary I/O/protocol failure when mapping the loop's `Result<()>` to a
@@ -120,6 +131,25 @@ async fn finish(app: &AppHandle, tasks: &TaskMap, id: TransferId, result: Result
     );
 }
 
+/// Blocks (yielding to the runtime) while the pause flag is set. Wakes
+/// on either the flag clearing OR a cancellation signal. Returns `Err`
+/// if the caller was cancelled during the pause; the caller should
+/// propagate that as the terminal state.
+async fn wait_while_paused(
+    pause_flag: &AtomicBool,
+    cancel_rx: &mut oneshot::Receiver<()>,
+) -> Result<()> {
+    while pause_flag.load(Ordering::Acquire) {
+        tokio::select! {
+            _ = &mut *cancel_rx => {
+                return Err(Error::Protocol(CANCELLED_MARKER.into()));
+            }
+            _ = tokio::time::sleep(Duration::from_millis(PAUSE_POLL_MS)) => {}
+        }
+    }
+    Ok(())
+}
+
 /// Pumps `local` -> `remote` over the connection's SFTP subsystem (opened
 /// lazily by `SessionManager::sftp_open_write` on first use).
 pub(crate) async fn run_upload(
@@ -129,6 +159,7 @@ pub(crate) async fn run_upload(
     local: PathBuf,
     remote: String,
     mut cancel_rx: oneshot::Receiver<()>,
+    pause_flag: Arc<AtomicBool>,
     session_mgr: SessionManager,
     conn_id: ConnectionId,
 ) {
@@ -147,21 +178,32 @@ pub(crate) async fn run_upload(
         let mut last_emit_bytes: u64 = 0;
 
         loop {
+            wait_while_paused(&pause_flag, &mut cancel_rx).await?;
+            // Read is quick (local fs); cancel is polled here.
+            let n = tokio::select! {
+                _ = &mut cancel_rx => {
+                    return Err(Error::Protocol(CANCELLED_MARKER.into()));
+                }
+                r = src.read(&mut buf) => r.map_err(Error::Io)?,
+            };
+            if n == 0 { break; }
+            // Write is the slow / potentially-blocked side (shared SFTP
+            // channel with 10 concurrent tasks). Wrap it in a second
+            // select so a `transferCancel` fires immediately even when
+            // the write is stalled — the previous shape only checked
+            // cancel between chunks, so a stuck write would swallow
+            // cancels indefinitely.
             tokio::select! {
                 _ = &mut cancel_rx => {
                     return Err(Error::Protocol(CANCELLED_MARKER.into()));
                 }
-                n = src.read(&mut buf) => {
-                    let n = n.map_err(Error::Io)?;
-                    if n == 0 { break; }
-                    dst.write_all(&buf[..n]).await.map_err(Error::Io)?;
-                    done += n as u64;
-                    maybe_emit_progress(
-                        &app, &tasks, transfer_id, done, total_bytes, start,
-                        &mut last_emit, &mut last_emit_bytes,
-                    ).await;
-                }
+                r = dst.write_all(&buf[..n]) => r.map_err(Error::Io)?,
             }
+            done += n as u64;
+            maybe_emit_progress(
+                &app, &tasks, transfer_id, done, total_bytes, start,
+                &mut last_emit, &mut last_emit_bytes,
+            ).await;
         }
         dst.shutdown().await.map_err(Error::Io)?;
         Ok(())
@@ -181,13 +223,11 @@ pub(crate) async fn run_download(
     remote: String,
     local: PathBuf,
     mut cancel_rx: oneshot::Receiver<()>,
+    pause_flag: Arc<AtomicBool>,
     session_mgr: SessionManager,
     conn_id: ConnectionId,
 ) {
     let result: Result<()> = async {
-        // Best-effort: an unreadable stat (e.g. server without fstat
-        // support) shouldn't abort the transfer, just leaves total_bytes at
-        // 0 (rate/percent-complete UI degrades gracefully).
         let total_bytes = session_mgr
             .sftp_stat(conn_id, &remote)
             .await
@@ -208,21 +248,27 @@ pub(crate) async fn run_download(
         let mut last_emit_bytes: u64 = 0;
 
         loop {
+            wait_while_paused(&pause_flag, &mut cancel_rx).await?;
+            // Read is the slow side for downloads (SFTP-over-SSH); wrap
+            // in select so cancel fires promptly even mid-stream.
+            let n = tokio::select! {
+                _ = &mut cancel_rx => {
+                    return Err(Error::Protocol(CANCELLED_MARKER.into()));
+                }
+                r = src.read(&mut buf) => r.map_err(Error::Io)?,
+            };
+            if n == 0 { break; }
             tokio::select! {
                 _ = &mut cancel_rx => {
                     return Err(Error::Protocol(CANCELLED_MARKER.into()));
                 }
-                n = src.read(&mut buf) => {
-                    let n = n.map_err(Error::Io)?;
-                    if n == 0 { break; }
-                    dst.write_all(&buf[..n]).await.map_err(Error::Io)?;
-                    done += n as u64;
-                    maybe_emit_progress(
-                        &app, &tasks, transfer_id, done, total_bytes, start,
-                        &mut last_emit, &mut last_emit_bytes,
-                    ).await;
-                }
+                r = dst.write_all(&buf[..n]) => r.map_err(Error::Io)?,
             }
+            done += n as u64;
+            maybe_emit_progress(
+                &app, &tasks, transfer_id, done, total_bytes, start,
+                &mut last_emit, &mut last_emit_bytes,
+            ).await;
         }
         dst.flush().await.map_err(Error::Io)?;
         Ok(())

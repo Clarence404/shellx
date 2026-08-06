@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { File as FileIcon } from "lucide-react";
+import { File as FileIcon, Folder } from "lucide-react";
 import { LocalPane } from "./LocalPane";
 import { RemotePane } from "./RemotePane";
 import { TransferQueue } from "./TransferQueue";
@@ -88,7 +88,9 @@ export function RailFilesView({ onConnectSavedHost }: Props = {}) {
           maxWidth: 320,
           opacity: 0.94,
         }}>
-          <FileIcon size={13} color="var(--text-3)" />
+          {drag.kind === "directory"
+            ? <Folder size={13} color="var(--text-2)" />
+            : <FileIcon size={13} color="var(--text-3)" />}
           <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {drag.name}
           </span>

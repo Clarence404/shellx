@@ -74,6 +74,19 @@ pub async fn sftp_remove_dir(
     mgr.sftp_remove_dir(args.conn_id, &args.path).await
 }
 
+/// Recursive counterpart of `sftp_remove_dir`. Walks the tree, removes
+/// every file, then removes directories bottom-up, then the root itself.
+/// v0.6 T1: needed once directory uploads landed — the SFTP protocol's
+/// RMDIR only accepts empty dirs, so removing a freshly-uploaded folder
+/// would otherwise fail on the outer sftp_remove_dir call.
+#[tauri::command]
+pub async fn sftp_remove_dir_recursive(
+    args: SftpRemoveDirArgs,
+    mgr: State<'_, SessionManager>,
+) -> Result<()> {
+    mgr.sftp_remove_dir_recursive(args.conn_id, &args.path).await
+}
+
 #[derive(Deserialize)]
 pub struct SftpMkdirArgs {
     pub conn_id: ConnectionId,

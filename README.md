@@ -4,7 +4,23 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.5.8
+## Status: v0.6.0
+
+v0.6.0 is the directory-transfer release. New Rust IPCs
+`sftp_upload_dir` / `sftp_download_dir` walk source trees and spawn one
+per-file child transfer per leaf, all sharing a `group_id` so the
+frontend renders them as one expandable row with a full-width progress
+fill. Every in-flight transfer (or an entire group) now has working
+pause / resume buttons plus cancel — `write_all` is finally wrapped in
+`tokio::select!` so a stalled SFTP write no longer swallows the cancel
+signal. `SessionManager` was refactored to `Arc<Mutex<LiveConnection>>`
+so concurrent SFTP operations don't race on the outer map's take-out
+pattern. New `sftp_remove_dir_recursive` lets freshly-uploaded folders
+actually be deleted (SFTP RMDIR requires an empty directory). New
+`transfer:state` event drives paused-row visuals without waiting on a
+progress tick, and a `queued → active` promotion inside `applyProgress`
+fixes the "transfer sits at queued forever" bug that existed since v0.3.
+Everything below still applies:
 
 v0.5.8 is a focused polish pass on top of v0.5.7. Files font size gets
 its own slider (independent of the System font size) with a live 4-row
@@ -286,7 +302,6 @@ The next natural steps (roughly the order of the spec's milestone roadmap):
 ### v0.6+ Backlog
 
 - **Settings: Advanced page** — keyboard-shortcut remapping, log level, telemetry toggle.
-- **Directory drag between panes** — the mouse-based pane-to-pane drag currently only transfers regular files. `sftpUpload`/`sftpDownload` are single-file only, so dragging a folder is a no-op. Recursive directory transfer (both directions) needs a new Rust IPC that walks the tree; UI-side the FileRow wrapper's onMouseDown should also skip the drag when `kind === "directory"` OR the new recursive backend must be wired up.
 - **Rethink the purple accent** — `#7c5cff` reads harsh in rail icons and selected states; explore a softer accent variant (still on-brand) or expose accent hue as a Setting.
 - **Security posture roadmap** — beyond host-key TOFU + pubkey auth already listed: audit path-sanitisation on remote-supplied strings, review keychain fallback modes, and land a written threat-model document.
 - **Protocols page design** — currently a `coming soon` placeholder; before v0.7 scope what it actually is (list of registered transport / protocol implementations? per-protocol activation UI? live health of each session's protocol layer?).

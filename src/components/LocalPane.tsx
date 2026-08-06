@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useRailFiles } from "../state/railFiles";
 import { useSessions } from "../state/sessions";
 import { localOpenInOs, localMkdir, localRename, localRemoveFile, localRemoveDir, localDefaultRoots, localCopyInto } from "../ipc/local";
-import { sftpUpload, sftpDownload } from "../ipc/transfers";
+import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
 import { LocalPathDropdown } from "./LocalPathDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow, buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
@@ -161,11 +161,18 @@ export function LocalPane() {
             await loadLeft();
           })();
         } else {
-          // Internal pane-to-pane drag from RemotePane.
+          // Internal pane-to-pane drag from RemotePane. Dispatch by
+          // kind: directories go through the recursive Rust IPC.
           const drag = useRailFiles.getState().currentDrag;
           useRailFiles.getState().setCurrentDrag(null);
           if (drag && drag.pane === "right" && rightHost) {
-            void sftpDownload(rightHost, joinPath(rightPath, drag.name), joinPath(leftPath, drag.name));
+            const src = joinPath(rightPath, drag.name);
+            const dst = joinPath(leftPath, drag.name);
+            if (drag.kind === "directory") {
+              void sftpDownloadDir(rightHost, src, dst);
+            } else {
+              void sftpDownload(rightHost, src, dst);
+            }
           }
         }
       }
@@ -291,6 +298,7 @@ export function LocalPane() {
                 const hoverTarget = paneAttr === "left" || paneAttr === "right" ? paneAttr : null;
                 useRailFiles.getState().setCurrentDrag({
                   pane: "left", name: e.name,
+                  kind: e.kind === "directory" ? "directory" : "file",
                   x: me.clientX, y: me.clientY,
                   hoverTarget,
                 });
@@ -307,7 +315,13 @@ export function LocalPane() {
                 const pane = el?.closest("[data-pane]")?.getAttribute("data-pane");
                 const st = useRailFiles.getState();
                 if (drag.pane === "left" && pane === "right" && st.rightHost) {
-                  void sftpUpload(st.rightHost, joinPath(st.leftPath, drag.name), joinPath(st.rightPath, drag.name));
+                  const src = joinPath(st.leftPath, drag.name);
+                  const dst = joinPath(st.rightPath, drag.name);
+                  if (drag.kind === "directory") {
+                    void sftpUploadDir(st.rightHost, src, dst);
+                  } else {
+                    void sftpUpload(st.rightHost, src, dst);
+                  }
                 }
               };
               document.addEventListener("mousemove", onMove);
@@ -337,12 +351,17 @@ export function LocalPane() {
               // meaning. onSendToRemote is the symmetric per-row
               // affordance (Send to remote → context menu item),
               // gated on RemotePane having an active session.
-              onSendToRemote={remoteConnected && e.kind !== "directory" ? () => {
-                void sftpUpload(
-                  rightHost!,
-                  joinPath(leftPath, e.name),
-                  joinPath(rightPath, e.name),
-                );
+              // v0.6 T1: dispatches to `sftpUploadDir` when the row
+              // itself is a directory — no more `kind === "file"`
+              // guard here.
+              onSendToRemote={remoteConnected ? () => {
+                const src = joinPath(leftPath, e.name);
+                const dst = joinPath(rightPath, e.name);
+                if (e.kind === "directory") {
+                  void sftpUploadDir(rightHost!, src, dst);
+                } else {
+                  void sftpUpload(rightHost!, src, dst);
+                }
               } : undefined}
               folderActions={folderActions}
             />

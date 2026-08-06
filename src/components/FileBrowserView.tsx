@@ -7,7 +7,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useFilesStore } from "../state/files";
 import { sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir, sftpRealpath } from "../ipc/sftp";
-import { sftpUpload, sftpDownload } from "../ipc/transfers";
+import { sftpUpload, sftpDownload, sftpDownloadDir } from "../ipc/transfers";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow } from "./FileRow";
 import { TransferQueue } from "./TransferQueue";
@@ -105,10 +105,19 @@ export function FileBrowserView({ connectionId }: Props) {
     }
   }
 
-  async function handleDownload(name: string) {
+  async function handleDownload(name: string, isDir: boolean) {
+    const remotePath = joinPath(state.cwd, name);
+    if (isDir) {
+      // v0.6 T1: directories go through the recursive Rust IPC. The
+      // native save dialog only picks files; ask for a destination
+      // directory instead and the remote folder's basename is appended.
+      const dstDir = await openDialog({ directory: true, multiple: false });
+      if (!dstDir || Array.isArray(dstDir)) return;
+      void sftpDownloadDir(connectionId, remotePath, joinPath(dstDir, name));
+      return;
+    }
     const savePath = await saveDialog({ defaultPath: name });
     if (!savePath) return;
-    const remotePath = joinPath(state.cwd, name);
     void sftpDownload(connectionId, remotePath, savePath);
   }
 
@@ -203,11 +212,11 @@ export function FileBrowserView({ connectionId }: Props) {
             size={entry.size}
             onOpen={() => {
               if (entry.kind === "directory") void loadDir(connectionId, joinPath(state.cwd, entry.name));
-              else void handleDownload(entry.name);
+              else void handleDownload(entry.name, false);
             }}
             onRename={(newName) => handleRename(entry.name, newName)}
             onDelete={() => handleDelete(entry.name, entry.kind === "directory")}
-            onDownload={() => handleDownload(entry.name)}
+            onDownload={() => handleDownload(entry.name, entry.kind === "directory")}
             folderActions={folderActions}
           />
         ))}
