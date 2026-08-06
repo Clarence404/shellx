@@ -3,6 +3,7 @@ export interface Settings {
   density: "compact" | "comfortable" | "spacious";
   systemFont: "system-default" | "segoe-ui" | "pingfang-sc" | "microsoft-yahei";
   systemFontSize: number;
+  filesFontSize: number;
   terminal: {
     fontFamily: "jetbrains-mono" | "sf-mono" | "fira-code" | "cascadia-code" | "consolas";
     fontSize: number;
@@ -16,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   density: "comfortable",
   systemFont: "system-default",
   systemFontSize: 13,
+  filesFontSize: 13,
   terminal: {
     fontFamily: "jetbrains-mono",
     fontSize: 13,
@@ -24,8 +26,16 @@ export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: 1,
 };
 
+// Unified range across every "size" slider in Appearance so identical
+// values (e.g. 13 px on both System and Files) put the thumbs at the same
+// spot on the track. Terminal keeps its own range because a wider spread
+// (10..=20) is standard for terminal legibility on very small / very large
+// monitors — it lives in its own section and isn't compared side-by-side.
 export const SYSTEM_FONT_SIZE_MIN = 11;
-export const SYSTEM_FONT_SIZE_MAX = 16;
+export const SYSTEM_FONT_SIZE_MAX = 18;
+
+export const FILES_FONT_SIZE_MIN = 11;
+export const FILES_FONT_SIZE_MAX = 18;
 
 export const FONT_MAP: Record<Settings["terminal"]["fontFamily"], string> = {
   "jetbrains-mono": '"JetBrains Mono", ui-monospace, monospace',

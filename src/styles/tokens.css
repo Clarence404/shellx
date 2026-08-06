@@ -26,6 +26,11 @@
      it: body (inherits everywhere), TabBar tab label, SettingsSidebar
      rows. File-list content stays on --font-body (density-controlled). */
   --font-ui-size: 13px;
+  /* Files-pane row font size (filename + meta). App.tsx re-sets this at
+     runtime from useSettingsStore.filesFontSize. Independent of the
+     density-driven --font-body so users can crank the file rows without
+     inflating every other density-sized element (row padding stays put). */
+  --font-files-size: 13px;
 
   /* v0.5.4: widened from 32 → 64 so each rail button (icon + label stacked)
      is a comfortable ~40 × 44 hit target. Icons alone at 32 were routinely

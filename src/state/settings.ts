@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import type { Settings } from "../types/settings";
-import { DEFAULT_SETTINGS, SYSTEM_FONT_SIZE_MIN, SYSTEM_FONT_SIZE_MAX, VALID_THEMES } from "../types/settings";
+import {
+  DEFAULT_SETTINGS,
+  SYSTEM_FONT_SIZE_MIN, SYSTEM_FONT_SIZE_MAX,
+  FILES_FONT_SIZE_MIN, FILES_FONT_SIZE_MAX,
+  VALID_THEMES,
+} from "../types/settings";
 import { loadSettings, saveSettings } from "../ipc/settings";
 
 interface State extends Settings {
@@ -9,6 +14,7 @@ interface State extends Settings {
   setDensity(id: Settings["density"]): void;
   setSystemFont(id: Settings["systemFont"]): void;
   setSystemFontSize(size: number): void;
+  setFilesFontSize(size: number): void;
   setTerminalFontFamily(id: Settings["terminal"]["fontFamily"]): void;
   setTerminalFontSize(size: number): void;
   setTerminalCursorStyle(style: Settings["terminal"]["cursorStyle"]): void;
@@ -24,6 +30,7 @@ function snapshotForSave(s: State): Settings {
     density: s.density,
     systemFont: s.systemFont,
     systemFontSize: s.systemFontSize,
+    filesFontSize: s.filesFontSize,
     terminal: s.terminal,
     schemaVersion: s.schemaVersion,
   };
@@ -79,6 +86,11 @@ export const useSettingsStore = create<State>((set, get) => ({
   setSystemFontSize(size) {
     const clamped = Math.max(SYSTEM_FONT_SIZE_MIN, Math.min(SYSTEM_FONT_SIZE_MAX, Math.round(size)));
     set({ systemFontSize: clamped });
+    scheduleSave(get);
+  },
+  setFilesFontSize(size) {
+    const clamped = Math.max(FILES_FONT_SIZE_MIN, Math.min(FILES_FONT_SIZE_MAX, Math.round(size)));
+    set({ filesFontSize: clamped });
     scheduleSave(get);
   },
   setTerminalFontFamily(id) {

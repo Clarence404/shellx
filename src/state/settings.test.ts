@@ -32,11 +32,11 @@ describe("useSettingsStore", () => {
     expect(useSettingsStore.getState().systemFont).toBe("segoe-ui");
   });
 
-  it("setSystemFontSize clamps to [11, 16]", () => {
+  it("setSystemFontSize clamps to [11, 18]", () => {
     useSettingsStore.getState().setSystemFontSize(5);
     expect(useSettingsStore.getState().systemFontSize).toBe(11);
     useSettingsStore.getState().setSystemFontSize(99);
-    expect(useSettingsStore.getState().systemFontSize).toBe(16);
+    expect(useSettingsStore.getState().systemFontSize).toBe(18);
     useSettingsStore.getState().setSystemFontSize(14);
     expect(useSettingsStore.getState().systemFontSize).toBe(14);
   });

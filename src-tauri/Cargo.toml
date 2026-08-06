@@ -2,7 +2,7 @@
 name = "shellx"
 version = "0.5.7"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["Clarence404"]
 license = ""
 repository = ""
 edition = "2021"

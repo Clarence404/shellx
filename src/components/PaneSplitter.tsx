@@ -26,7 +26,15 @@ export function PaneSplitter({ onChange, onCommit }: Props) {
       const parent = containerFinder.current?.parentElement;
       if (!parent) return;
       const rect = parent.getBoundingClientRect();
-      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      // Clamp each pane to a minimum 200 px so the toolbar / breadcrumb
+      // never crush into an unusable strip. Fall through if the container
+      // itself is narrower than 2*minPx (edge case on tiny windows).
+      const minPx = 200;
+      let px = e.clientX - rect.left;
+      if (rect.width >= minPx * 2) {
+        px = Math.max(minPx, Math.min(rect.width - minPx, px));
+      }
+      const pct = (px / rect.width) * 100;
       lastPct.current = pct;
       onChange(pct);
     }

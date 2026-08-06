@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 /**
  * Menu content model. Backwards-compatible with the original flat list
@@ -29,6 +29,27 @@ export function HostContextMenu({
   x: number; y: number; items: MenuItem[]; onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
+  // Anchor at the requested (x, y) first, then flip on the next paint if
+  // the measured menu would spill past the viewport. Rendered
+  // opacity: 0 on the first paint to avoid a visible jump from
+  // anchor → adjusted position.
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: y, left: x });
+  const [measured, setMeasured] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 4;
+    let top = y;
+    let left = x;
+    if (top + rect.height > vh - margin) top = Math.max(margin, y - rect.height);
+    if (left + rect.width > vw - margin) left = Math.max(margin, x - rect.width);
+    setPos({ top, left });
+    setMeasured(true);
+  }, [x, y]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -47,11 +68,12 @@ export function HostContextMenu({
 
   return (
     <div ref={ref} role="menu" style={{
-      position: "fixed", top: y, left: x,
+      position: "fixed", top: pos.top, left: pos.left,
       background: "var(--panel-2)", border: "1px solid var(--border)",
       borderRadius: 5, padding: 4, zIndex: 200,
       boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
       minWidth: 160,
+      opacity: measured ? 1 : 0,
     }}>
       {items.map((item, i) => {
         if ("kind" in item && item.kind === "separator") {
