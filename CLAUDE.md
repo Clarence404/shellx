@@ -2,17 +2,33 @@
 
 Standing rules for anyone (Claude, another agent, or a human) working on this repo. Read once at task start; skim on later turns.
 
+## Feature-branch workflow — new work does NOT land on `main` directly
+
+**Every new feature, bug fix, or non-trivial change starts on its own branch.** `main` is only touched via merge / fast-forward from a feature branch that the user has explicitly asked to land. Do not commit new work directly on `main` — even if the previous cycle committed there.
+
+The flow is:
+
+1. **Create a feature branch** at the start of the work. Name it after the feature (kebab-case): `feat/directory-transfer`, `fix/cancel-signal`, `polish/appearance-panel`. If the user's request implies a specific scope, use that scope name.
+2. **Commit the work on that branch.** Multiple commits are fine.
+3. **After the user has visually verified and explicitly approves** (see Ship gate below), merge into `main` — fast-forward if linear, `--no-ff` if the branch has multiple commits and the shape is worth preserving. Push `main` first, then the tag (see Ship gate).
+4. **Do NOT delete the branch on your own.** Leave it for the user to garbage-collect.
+5. Emergency hotfix directly on `main` is allowed ONLY if the user explicitly asks for it in so many words (e.g. "hotfix on main directly, no branch").
+
+Branch hygiene: never force-push `main`. Never rebase a branch that has already been pushed. If a rebase / squash is needed, ask first.
+
 ## Ship gate — user verification before every tag
 
 **Never version-bump, commit release notes, tag, or push a tag on your own.** After every substantive code change, hand the running app back to the user for visual verification and wait for their explicit approval before starting the release sequence.
 
+**Approval is required per release**, not once per session. A user saying "发版" for v0.6.0 does NOT authorize an automatic v0.6.1 later in the same session. Each tag needs its own explicit "发版" / "打 tag" / equivalent — silence, approval-for-a-different-thing, or a topic-change message never count.
+
 The flow is always:
 
-1. Make the code changes on `main` (or a feature branch, if the change is in flight).
+1. **Land the code changes** — normally on a feature branch per the workflow above; on `main` only when the user has explicitly asked to work directly on `main`.
 2. Confirm tests + tsc pass locally.
 3. **Auto-launch Tauri** — after every batch of substantive code changes finishes and passes tests, launch `pnpm tauri:dev` yourself if it's not already running (via `Start-Process cmd.exe /c "pnpm tauri:dev"` if `pnpm` is broken in bash — see the corepack workaround note further below). Do not ask the user to launch it. Do not wait for the user to say "启动" or "run it". If a previous instance is still running, HMR delivers pure frontend changes for free — but Rust changes need a rebuild, and Tauri handles that automatically once the process is up. Point out what to look at in one or two sentences after launching.
-4. **Stop and wait.** Do not proceed to tagging until the user gives explicit go-ahead (e.g. "打 tag", "发版", "OK", "看好了 → 发布"). Silence is not approval. A user message about a different topic is not approval.
-5. Only after explicit approval: bump the three version fields (see below), write both release-notes files (see below), commit, tag, push.
+4. **Stop and wait.** Do not proceed to tagging until the user gives explicit go-ahead (e.g. "打 tag", "发版", "OK", "看好了 → 发布"). Silence is not approval. A user message about a different topic is not approval. Approval for one release is not standing approval for future releases.
+5. Only after explicit approval: merge the feature branch into `main` (fast-forward or `--no-ff` as appropriate), bump the three version fields (see below), write both release-notes files (see below), commit on `main`, tag, push.
 
 **Corepack workaround (this environment specifically):** `pnpm` via bash sometimes hits `ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING` from corepack partway through a session. When that happens, launch pnpm from `cmd.exe` instead — `Start-Process -FilePath "cmd.exe" -ArgumentList "/c","pnpm tauri:dev > `"$env:TEMP\tauri-out.log`" 2>&1" -WorkingDirectory "<repo>" -WindowStyle Hidden` reliably works. Poll for `Get-Process shellx` to know when the window is up.
 
