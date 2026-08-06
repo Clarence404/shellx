@@ -271,6 +271,9 @@ The next natural steps (roughly the order of the spec's milestone roadmap):
 ### v0.6+ Backlog
 
 - **Settings: Advanced page** — keyboard-shortcut remapping, log level, telemetry toggle.
+- **Drag-drop with the OS** — dragging a Files row out of shellx should trigger a download to Windows Explorer / macOS Finder; dragging a file from the OS into a shellx pane should upload. Currently only pane-to-pane drag works (see `application/x-shellx-pane` data-transfer key). Needs Tauri's file-drop event on the receive side and a virtual-file drag-source on the send side.
+- **Terminal font live preview in Appearance** — when adjusting Terminal font family / size / cursor, render a small sample area (`root@host:~$ echo hi | grep hi` etc.) inside the settings panel so the user can compare presets without switching tabs.
+- **Pane toolbar click targets** — the `New folder` / `Refresh` / `Upload` icon buttons in LocalPane / RemotePane use 12 px icons with tight padding and mis-fire often. Bump to a 14 – 16 px icon + wider padding, and tie the icon size to a `--font-ui-size` derived scale so they grow with the System font-size slider (matches the rest of the sans chrome).
 - **Rethink the purple accent** — `#7c5cff` reads harsh in rail icons and selected states; explore a softer accent variant (still on-brand) or expose accent hue as a Setting.
 - **Files-pane content font size** — currently governed by density's `--font-body`; add an explicit Files font-size slider in Appearance → Files, parallel to Terminal font size, so remote/local browsing scales independently.
 - **PaneSplitter min-width guard** — the Files splitter can be dragged into unusable narrow panes; enforce a minimum (e.g. 200 px per side) with soft snap on release.

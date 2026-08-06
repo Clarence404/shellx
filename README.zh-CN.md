@@ -263,6 +263,9 @@ cargo --version && rustc --version        # 都要能输出
 ### v0.6+ Backlog
 
 - **Settings：Advanced 页** ——快捷键映射、log 级别、遥测开关。
+- **与操作系统的拖拽互通** —— 从 Files 面板行拖出去应该触发下载到 Windows Explorer / macOS Finder；从 OS 里拖文件进 shellx 面板应该上传。当前只支持面板之间的拖拽（见 `application/x-shellx-pane` 数据键）。接收侧需要 Tauri 的 file-drop 事件，发送侧需要虚拟文件 drag-source。
+- **Terminal 字体实时预览** —— 在 Appearance 面板调整 Terminal 字体族/字号/光标时，Settings 里渲染一段样本（比如 `root@host:~$ echo hi | grep hi`）供当场对比，不用来回切 Terminal tab。
+- **Pane 工具栏点击区域** —— LocalPane / RemotePane 顶部的 `New folder` / `Refresh` / `Upload` 图标按钮用 12 px 图标 + 紧凑内边距，经常点不上。加大到 14 – 16 px 图标 + 更大内边距，同时把图标 size 挂到 `--font-ui-size` 派生的比例上（跟系统字体大小同步缩放），跟其他 sans chrome 的行为对齐。
 - **重新审视紫色 accent** ——`#7c5cff` 用在 rail 图标和高亮态时略显刺眼；探索更柔和的 accent 变体（仍保持品牌调性），或把 accent 色相开放到 Settings 里给用户自选。
 - **Files 面板内容字号** ——目前由 density 的 `--font-body` 控制；在 Appearance → Files 里加一条独立的 Files 字号滑块（对标 Terminal font size），让远端/本地文件浏览的字号能独立调整。
 - **PaneSplitter 最小宽度保护** ——Files 视图的分栏可以拖到基本不可用的窄度；加最小宽度约束（比如每边 200 px），松手时软吸附回位。
