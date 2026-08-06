@@ -180,20 +180,18 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
     setDraft(name);
   }
 
-  // File-scope actions on top (Download/Rename/Delete), optionally
-  // followed by a separator + "This folder" section (New folder /
-  // Upload here / Refresh). Design #3. `Download` only surfaces when
-  // onDownload is passed AND the entry is a regular file — sftpDownload
-  // is single-file only, so offering it on a directory just leads to
-  // "io: Failure" from the Rust side. Recursive directory download is
-  // a v0.6+ backlog item.
+  // File-scope actions. In v0.6 T1, Download / Send to remote also
+  // apply to directories — the parent pane dispatches to the recursive
+  // Rust IPC (`sftp_upload_dir` / `sftp_download_dir`). Section header
+  // adapts to whether the row is a file or a directory.
+  const isDir = kind === "directory";
   const items: MenuItem[] = [
-    { kind: "section", label: "This file" },
-    ...(onDownload && kind !== "directory" ? [{
+    { kind: "section", label: isDir ? "This folder" : "This file" },
+    ...(onDownload ? [{
       label: "Download", onClick: onDownload,
       icon: <Download size={12} />,
     } as MenuItem] : []),
-    ...(onSendToRemote && kind !== "directory" ? [{
+    ...(onSendToRemote ? [{
       label: "Send to remote", onClick: onSendToRemote,
       icon: <ArrowRightToLine size={12} />,
     } as MenuItem] : []),
@@ -203,7 +201,10 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
   const folderItems = folderActions ? buildFolderMenuItems(folderActions) : [];
   if (folderItems.length > 0) {
     items.push({ kind: "separator" });
-    items.push({ kind: "section", label: "This folder" });
+    // When the row itself is a directory, the first section already read
+    // "This folder" — the parent-scope group needs a different label to
+    // avoid two identical section headers stacked next to each other.
+    items.push({ kind: "section", label: isDir ? "Parent folder" : "This folder" });
     items.push(...folderItems);
   }
 

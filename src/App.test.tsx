@@ -82,6 +82,7 @@ vi.mock("./ipc/transfers", () => ({
   onTransferStarted: vi.fn().mockResolvedValue(() => {}),
   onTransferProgress: vi.fn().mockResolvedValue(() => {}),
   onTransferDone: vi.fn().mockResolvedValue(() => {}),
+  onTransferState: vi.fn().mockResolvedValue(() => {}),
 }));
 
 vi.mock("./ipc/settings", () => ({

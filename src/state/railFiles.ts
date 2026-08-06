@@ -43,6 +43,10 @@ interface State {
   currentDrag: {
     pane: "left" | "right";
     name: string;
+    /** v0.6 T1: distinguishes file vs directory drag so the drop
+     *  handler can route to `sftpUploadDir` / `sftpDownloadDir` for
+     *  folders instead of the single-file IPCs. */
+    kind: "file" | "directory";
     x: number;
     y: number;
     hoverTarget: "left" | "right" | null;

@@ -5,9 +5,9 @@ import { useRailFiles } from "../state/railFiles";
 import { useSessions } from "../state/sessions";
 import { useHostsStore } from "../state/hosts";
 import {
-  sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir,
+  sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDirRecursive,
 } from "../ipc/sftp";
-import { sftpUpload, sftpDownload } from "../ipc/transfers";
+import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
 import { HostDropdown } from "./HostDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow, buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
@@ -127,11 +127,18 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
             void sftpUpload(rightHost, localPath, remotePath);
           }
         } else {
-          // Internal drag from LocalPane.
+          // Internal drag from LocalPane. Route by kind so folders
+          // hit the recursive Rust IPC (v0.6 T1).
           const drag = useRailFiles.getState().currentDrag;
           useRailFiles.getState().setCurrentDrag(null);
           if (drag && drag.pane === "left") {
-            void sftpUpload(rightHost, joinPath(leftPath, drag.name), joinPath(rightPath, drag.name));
+            const src = joinPath(leftPath, drag.name);
+            const dst = joinPath(rightPath, drag.name);
+            if (drag.kind === "directory") {
+              void sftpUploadDir(rightHost, src, dst);
+            } else {
+              void sftpUpload(rightHost, src, dst);
+            }
           }
         }
       }
@@ -312,6 +319,7 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                     const hoverTarget = paneAttr === "left" || paneAttr === "right" ? paneAttr : null;
                     useRailFiles.getState().setCurrentDrag({
                       pane: "right", name: e.name,
+                      kind: e.kind === "directory" ? "directory" : "file",
                       x: me.clientX, y: me.clientY,
                       hoverTarget,
                     });
@@ -328,7 +336,13 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                     const pane = el?.closest("[data-pane]")?.getAttribute("data-pane");
                     const st = useRailFiles.getState();
                     if (drag.pane === "right" && pane === "left") {
-                      void sftpDownload(rightHost, joinPath(st.rightPath, drag.name), joinPath(st.leftPath, drag.name));
+                      const src = joinPath(st.rightPath, drag.name);
+                      const dst = joinPath(st.leftPath, drag.name);
+                      if (drag.kind === "directory") {
+                        void sftpDownloadDir(rightHost, src, dst);
+                      } else {
+                        void sftpDownload(rightHost, src, dst);
+                      }
                     }
                   };
                   document.addEventListener("mousemove", onMove);
@@ -350,11 +364,19 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                   }}
                   onDelete={async () => {
                     if (!confirm(`Delete "${e.name}"?`)) return;
-                    if (e.kind === "directory") await sftpRemoveDir(rightHost, joinPath(rightPath, e.name));
+                    if (e.kind === "directory") await sftpRemoveDirRecursive(rightHost, joinPath(rightPath, e.name));
                     else await sftpRemoveFile(rightHost, joinPath(rightPath, e.name));
                     await loadRight();
                   }}
-                  onDownload={() => void sftpDownload(rightHost, joinPath(rightPath, e.name), joinPath(leftPath, e.name))}
+                  onDownload={() => {
+                    const src = joinPath(rightPath, e.name);
+                    const dst = joinPath(leftPath, e.name);
+                    if (e.kind === "directory") {
+                      void sftpDownloadDir(rightHost, src, dst);
+                    } else {
+                      void sftpDownload(rightHost, src, dst);
+                    }
+                  }}
                   folderActions={folderActions}
                 />
               </div>

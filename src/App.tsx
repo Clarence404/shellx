@@ -17,7 +17,7 @@ import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
 import { getHostPassword } from "./ipc/hosts";
 import { onConnectionClosed } from "./ipc/events";
-import { onTransferStarted, onTransferProgress, onTransferDone } from "./ipc/transfers";
+import { onTransferStarted, onTransferProgress, onTransferDone, onTransferState } from "./ipc/transfers";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
 import type { HostInfo } from "./types/host";
 
@@ -106,6 +106,10 @@ export function App() {
       unlistens.push(u);
     });
     onTransferProgress((ev) => store.applyProgress(ev)).then((u) => {
+      if (cancelled) { u(); return; }
+      unlistens.push(u);
+    });
+    onTransferState((ev) => store.applyState(ev)).then((u) => {
       if (cancelled) { u(); return; }
       unlistens.push(u);
     });

@@ -7,9 +7,14 @@
 //! connection only; `open_shell` lazily opens the shell channel and spawns
 //! the byte-pumping driver task. The IPC layer currently calls both back to
 //! back to preserve the v0.2 UX (connect always opens a terminal).
+//!
+//! v0.6: each `LiveConnection` is wrapped in its own `Arc<Mutex<...>>` so
+//! multiple concurrent SFTP operations (10-way directory transfers) can
+//! serialize per-connection without racing on the outer map's take-out /
+//! put-back pattern that the earlier design used.
 
 use crate::error::{Error, Result};
-use crate::protocol::sftp_types::Entry;
+use crate::protocol::sftp_types::{Entry, EntryKind};
 use crate::protocol::{AuthConfig, Connection, ShellHandle, SftpHandle, SshProtocol};
 use crate::session::{ConnectionId, ConnectionInfo, ConnectionKind, ConnectionState};
 use std::collections::HashMap;
@@ -17,11 +22,11 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
-struct LiveConnection {
-    info: ConnectionInfo,
-    conn: Box<dyn Connection>,
-    shell: Option<ShellDriver>,
-    sftp: Option<SftpHandle>,
+pub(crate) struct LiveConnection {
+    pub(crate) info: ConnectionInfo,
+    pub(crate) conn: Box<dyn Connection>,
+    pub(crate) shell: Option<ShellDriver>,
+    pub(crate) sftp: Option<SftpHandle>,
 }
 
 /// Handle to the background task pumping bytes for this connection's shell
@@ -29,7 +34,7 @@ struct LiveConnection {
 /// `LiveConnection` from the map without sending `Close`) causes
 /// `shell_driver_loop`'s `writes.recv()` to resolve to `None`, which the
 /// loop treats the same as an explicit `Close`.
-struct ShellDriver {
+pub(crate) struct ShellDriver {
     writer: mpsc::Sender<ShellCmd>,
 }
 
@@ -55,7 +60,11 @@ enum ShellCmd {
 /// in IPC handlers is unaffected.
 #[derive(Clone)]
 pub struct SessionManager {
-    inner: Arc<Mutex<HashMap<ConnectionId, LiveConnection>>>,
+    // Per-connection mutex: outer lock is held only for map lookup / insert /
+    // remove; per-connection Mutex is held across the SFTP or shell-open
+    // .await so concurrent ops on the same connection serialize cleanly
+    // instead of racing on a take-out / put-back pattern.
+    inner: Arc<Mutex<HashMap<ConnectionId, Arc<Mutex<LiveConnection>>>>>,
     // For subscribe(): map id -> channel to forward read bytes to. Only a
     // single consumer per connection is supported (see driver_loop invariant
     // carried over from v0.1/v0.2).
@@ -95,35 +104,35 @@ impl SessionManager {
             shell: None,
             sftp: None,
         };
-        self.inner.lock().await.insert(id, live);
+        self.inner
+            .lock()
+            .await
+            .insert(id, Arc::new(Mutex::new(live)));
         Ok(info)
+    }
+
+    /// Cheap Arc-clone lookup. Callers get an owned handle to the live
+    /// entry's per-connection mutex and can `.await` on it without holding
+    /// the outer map lock.
+    async fn live(&self, id: ConnectionId) -> Result<Arc<Mutex<LiveConnection>>> {
+        self.inner
+            .lock()
+            .await
+            .get(&id)
+            .cloned()
+            .ok_or(Error::Closed)
     }
 
     /// Lazily opens the shell channel on an already-established connection
     /// and spawns the byte-pumping driver task. Idempotent: calling it again
     /// once a shell is already open is a no-op.
     pub async fn open_shell(&self, id: ConnectionId) -> Result<()> {
-        // Take the LiveConnection out of the map so we can await on it
-        // (channel_open_session, request_pty, request_shell) without
-        // holding the map mutex across that I/O.
-        let mut live = {
-            let mut map = self.inner.lock().await;
-            map.remove(&id).ok_or(Error::Closed)?
-        };
+        let live_arc = self.live(id).await?;
+        let mut live = live_arc.lock().await;
         if live.shell.is_some() {
-            // Already open — put back and return.
-            self.inner.lock().await.insert(id, live);
             return Ok(());
         }
-        let shell_handle = match live.conn.open_shell().await {
-            Ok(h) => h,
-            Err(e) => {
-                // Put the connection back so it isn't silently dropped on a
-                // failed attempt; the caller can retry or close it.
-                self.inner.lock().await.insert(id, live);
-                return Err(e);
-            }
-        };
+        let shell_handle = live.conn.open_shell().await?;
         let (writer_tx, writer_rx) = mpsc::channel::<ShellCmd>(64);
         let subs_arc = self.subs.clone();
         let inner_arc = self.inner.clone();
@@ -135,7 +144,6 @@ impl SessionManager {
             inner_arc,
         ));
         live.shell = Some(ShellDriver { writer: writer_tx });
-        self.inner.lock().await.insert(id, live);
         Ok(())
     }
 
@@ -158,32 +166,32 @@ impl SessionManager {
     }
 
     async fn shell_writer(&self, id: ConnectionId) -> Result<mpsc::Sender<ShellCmd>> {
-        let map = self.inner.lock().await;
-        let live = map.get(&id).ok_or(Error::Closed)?;
+        let live_arc = self.live(id).await?;
+        let live = live_arc.lock().await;
         let shell = live.shell.as_ref().ok_or(Error::Closed)?;
         Ok(shell.writer.clone())
     }
 
     pub async fn subscribe(&self, id: ConnectionId) -> Result<mpsc::Receiver<Vec<u8>>> {
-        let map = self.inner.lock().await;
-        if !map.contains_key(&id) {
-            return Err(Error::Closed);
+        // Just check presence without holding the per-connection mutex.
+        {
+            let map = self.inner.lock().await;
+            if !map.contains_key(&id) {
+                return Err(Error::Closed);
+            }
         }
-        drop(map);
         let (tx, rx) = mpsc::channel::<Vec<u8>>(64);
         self.subs.lock().await.insert(id, tx);
         Ok(rx)
     }
 
     pub async fn close(&self, id: ConnectionId) -> Result<()> {
-        let live = self.inner.lock().await.remove(&id);
-        if let Some(mut live) = live {
+        let removed = self.inner.lock().await.remove(&id);
+        if let Some(live_arc) = removed {
+            let mut live = live_arc.lock().await;
             if let Some(shell) = live.shell.take() {
-                // Tell the driver to close the channel + exit its loop.
                 let _ = shell.writer.send(ShellCmd::Close).await;
             }
-            // Whole-connection teardown: send SSH_MSG_DISCONNECT gracefully.
-            // Runs whether or not a shell was ever opened.
             let _ = live.conn.disconnect().await;
         }
         self.subs.lock().await.remove(&id);
@@ -191,29 +199,15 @@ impl SessionManager {
     }
 
     pub async fn list(&self) -> Vec<ConnectionInfo> {
-        self.inner
-            .lock()
-            .await
-            .values()
-            .map(|s| s.info.clone())
-            .collect()
+        let arcs: Vec<_> = self.inner.lock().await.values().cloned().collect();
+        let mut result = Vec::with_capacity(arcs.len());
+        for a in arcs {
+            result.push(a.lock().await.info.clone());
+        }
+        result
     }
 
     // --- SFTP delegation -------------------------------------------------
-    //
-    // Same "take the LiveConnection out of the map, await on it, put it
-    // back" pattern `open_shell` established above — never hold the map's
-    // MutexGuard across an unrelated `.await`. `LiveConnection.sftp` starts
-    // `None`; `ensure_sftp` lazily opens the subsystem on first use and
-    // every method below reuses the same handle afterwards.
-
-    async fn take_live(&self, id: ConnectionId) -> Result<LiveConnection> {
-        self.inner.lock().await.remove(&id).ok_or(Error::Closed)
-    }
-
-    async fn put_live(&self, id: ConnectionId, live: LiveConnection) {
-        self.inner.lock().await.insert(id, live);
-    }
 
     async fn ensure_sftp(live: &mut LiveConnection) -> Result<()> {
         if live.sftp.is_none() {
@@ -228,14 +222,10 @@ impl SessionManager {
         id: ConnectionId,
         path: &str,
     ) -> Result<russh_sftp::client::fs::File> {
-        let mut live = self.take_live(id).await?;
-        let result = async {
-            Self::ensure_sftp(&mut live).await?;
-            live.sftp.as_ref().unwrap().open_write_stream(path).await
-        }
-        .await;
-        self.put_live(id, live).await;
-        result
+        let live_arc = self.live(id).await?;
+        let mut live = live_arc.lock().await;
+        Self::ensure_sftp(&mut live).await?;
+        live.sftp.as_ref().unwrap().open_write_stream(path).await
     }
 
     pub async fn sftp_open_read(
@@ -243,92 +233,158 @@ impl SessionManager {
         id: ConnectionId,
         path: &str,
     ) -> Result<russh_sftp::client::fs::File> {
-        let mut live = self.take_live(id).await?;
-        let result = async {
-            Self::ensure_sftp(&mut live).await?;
-            live.sftp.as_ref().unwrap().open_read_stream(path).await
-        }
-        .await;
-        self.put_live(id, live).await;
-        result
+        let live_arc = self.live(id).await?;
+        let mut live = live_arc.lock().await;
+        Self::ensure_sftp(&mut live).await?;
+        live.sftp.as_ref().unwrap().open_read_stream(path).await
     }
 
     pub async fn sftp_list_dir(&self, id: ConnectionId, path: &str) -> Result<Vec<Entry>> {
-        let mut live = self.take_live(id).await?;
-        let result = async {
-            Self::ensure_sftp(&mut live).await?;
-            live.sftp.as_ref().unwrap().list_dir(path).await
-        }
-        .await;
-        self.put_live(id, live).await;
-        result
+        let live_arc = self.live(id).await?;
+        let mut live = live_arc.lock().await;
+        Self::ensure_sftp(&mut live).await?;
+        live.sftp.as_ref().unwrap().list_dir(path).await
     }
 
     pub async fn sftp_stat(&self, id: ConnectionId, path: &str) -> Result<Entry> {
-        let mut live = self.take_live(id).await?;
-        let result = async {
-            Self::ensure_sftp(&mut live).await?;
-            live.sftp.as_ref().unwrap().stat(path).await
-        }
-        .await;
-        self.put_live(id, live).await;
-        result
+        let live_arc = self.live(id).await?;
+        let mut live = live_arc.lock().await;
+        Self::ensure_sftp(&mut live).await?;
+        live.sftp.as_ref().unwrap().stat(path).await
     }
 
     pub async fn sftp_rename(&self, id: ConnectionId, from: &str, to: &str) -> Result<()> {
-        let mut live = self.take_live(id).await?;
-        let result = async {
-            Self::ensure_sftp(&mut live).await?;
-            live.sftp.as_ref().unwrap().rename(from, to).await
-        }
-        .await;
-        self.put_live(id, live).await;
-        result
+        let live_arc = self.live(id).await?;
+        let mut live = live_arc.lock().await;
+        Self::ensure_sftp(&mut live).await?;
+        live.sftp.as_ref().unwrap().rename(from, to).await
     }
 
     pub async fn sftp_remove_file(&self, id: ConnectionId, path: &str) -> Result<()> {
-        let mut live = self.take_live(id).await?;
-        let result = async {
-            Self::ensure_sftp(&mut live).await?;
-            live.sftp.as_ref().unwrap().remove_file(path).await
-        }
-        .await;
-        self.put_live(id, live).await;
-        result
+        let live_arc = self.live(id).await?;
+        let mut live = live_arc.lock().await;
+        Self::ensure_sftp(&mut live).await?;
+        live.sftp.as_ref().unwrap().remove_file(path).await
     }
 
     pub async fn sftp_remove_dir(&self, id: ConnectionId, path: &str) -> Result<()> {
-        let mut live = self.take_live(id).await?;
-        let result = async {
-            Self::ensure_sftp(&mut live).await?;
-            live.sftp.as_ref().unwrap().remove_dir(path).await
-        }
-        .await;
-        self.put_live(id, live).await;
-        result
+        let live_arc = self.live(id).await?;
+        let mut live = live_arc.lock().await;
+        Self::ensure_sftp(&mut live).await?;
+        live.sftp.as_ref().unwrap().remove_dir(path).await
     }
 
     pub async fn sftp_mkdir(&self, id: ConnectionId, path: &str) -> Result<()> {
-        let mut live = self.take_live(id).await?;
-        let result = async {
-            Self::ensure_sftp(&mut live).await?;
-            live.sftp.as_ref().unwrap().mkdir(path).await
-        }
-        .await;
-        self.put_live(id, live).await;
-        result
+        let live_arc = self.live(id).await?;
+        let mut live = live_arc.lock().await;
+        Self::ensure_sftp(&mut live).await?;
+        live.sftp.as_ref().unwrap().mkdir(path).await
     }
 
     pub async fn sftp_realpath(&self, id: ConnectionId, path: &str) -> Result<String> {
-        let mut live = self.take_live(id).await?;
-        let result = async {
-            Self::ensure_sftp(&mut live).await?;
-            live.sftp.as_ref().unwrap().realpath(path).await
-        }
-        .await;
-        self.put_live(id, live).await;
-        result
+        let live_arc = self.live(id).await?;
+        let mut live = live_arc.lock().await;
+        Self::ensure_sftp(&mut live).await?;
+        live.sftp.as_ref().unwrap().realpath(path).await
     }
+
+    /// Recursively removes a remote directory and every file/dir under it.
+    /// Files first (any order), then directories deepest-first — SFTP RMDIR
+    /// requires an empty directory, so subdirs must be gone before their
+    /// parents. Finally removes `root` itself.
+    pub async fn sftp_remove_dir_recursive(
+        &self,
+        id: ConnectionId,
+        root: &str,
+    ) -> Result<()> {
+        let walked = self.sftp_walk_dir(id, root).await?;
+        // Files first — no ordering constraint between siblings.
+        for e in walked.iter().filter(|e| e.kind == WalkedKind::File) {
+            let abs = format!("{}/{}", root.trim_end_matches('/'), e.rel_path);
+            self.sftp_remove_file(id, &abs).await?;
+        }
+        // Then directories, deepest-first. `sftp_walk_dir` returns dirs
+        // sorted parents-first (for mkdir); reverse for bottom-up removal.
+        let mut subdirs: Vec<&WalkedEntry> = walked
+            .iter()
+            .filter(|e| e.kind == WalkedKind::Directory)
+            .collect();
+        subdirs.reverse();
+        for e in subdirs {
+            let abs = format!("{}/{}", root.trim_end_matches('/'), e.rel_path);
+            self.sftp_remove_dir(id, &abs).await?;
+        }
+        // Finally the root itself.
+        self.sftp_remove_dir(id, root).await
+    }
+
+    /// Recursive remote walk starting at `root`. Returns entries in
+    /// deterministic order: directories first (parent before children,
+    /// enabling mkdir bottom-up), then files. Each entry's `name` is the
+    /// path RELATIVE to `root` (with forward-slash separators); use
+    /// `join_remote` to compose the destination path in the caller.
+    /// Symlinks are skipped (kept out of scope for T1's directory
+    /// transfer — cyclic-symlink handling is a T2 concern).
+    pub async fn sftp_walk_dir(
+        &self,
+        id: ConnectionId,
+        root: &str,
+    ) -> Result<Vec<WalkedEntry>> {
+        let mut dirs: Vec<String> = Vec::new(); // relative paths ("" = root)
+        let mut files: Vec<WalkedEntry> = Vec::new();
+        let mut queue: Vec<(String, String)> = vec![(root.to_string(), String::new())];
+        while let Some((abs, rel)) = queue.pop() {
+            let entries = self.sftp_list_dir(id, &abs).await?;
+            for e in entries {
+                if e.name == "." || e.name == ".." {
+                    continue;
+                }
+                let child_rel = if rel.is_empty() {
+                    e.name.clone()
+                } else {
+                    format!("{}/{}", rel, e.name)
+                };
+                let child_abs = format!("{}/{}", abs.trim_end_matches('/'), e.name);
+                match e.kind {
+                    EntryKind::Directory => {
+                        dirs.push(child_rel.clone());
+                        queue.push((child_abs, child_rel));
+                    }
+                    EntryKind::File => files.push(WalkedEntry {
+                        rel_path: child_rel,
+                        kind: WalkedKind::File,
+                        size: e.size,
+                    }),
+                    EntryKind::Symlink | EntryKind::Other => {} // skip in T1
+                }
+            }
+        }
+        // Sort dirs by depth so parents come before children (mkdir order).
+        dirs.sort_by_key(|s| s.matches('/').count());
+        let mut out: Vec<WalkedEntry> = dirs
+            .into_iter()
+            .map(|d| WalkedEntry {
+                rel_path: d,
+                kind: WalkedKind::Directory,
+                size: 0,
+            })
+            .collect();
+        out.extend(files);
+        Ok(out)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WalkedKind {
+    Directory,
+    File,
+}
+
+#[derive(Debug, Clone)]
+pub struct WalkedEntry {
+    pub rel_path: String,
+    pub kind: WalkedKind,
+    pub size: u64,
 }
 
 impl Default for SessionManager {
@@ -345,7 +401,7 @@ async fn shell_driver_loop(
     mut shell: ShellHandle,
     mut writes: mpsc::Receiver<ShellCmd>,
     subs: Arc<Mutex<HashMap<ConnectionId, mpsc::Sender<Vec<u8>>>>>,
-    inner: Arc<Mutex<HashMap<ConnectionId, LiveConnection>>>,
+    inner: Arc<Mutex<HashMap<ConnectionId, Arc<Mutex<LiveConnection>>>>>,
 ) {
     let mut read_buf = Vec::with_capacity(4096);
     loop {
@@ -365,11 +421,6 @@ async fn shell_driver_loop(
             read = shell.read_output(&mut read_buf) => match read {
                 Ok(0) => break,
                 Ok(_) => {
-                    // Take the accumulated bytes and forward them if (and
-                    // only if) a subscriber is currently registered. Reads
-                    // that happen before anyone calls subscribe() are
-                    // dropped -- an explicit v0.1 simplification, carried
-                    // forward.
                     let chunk = std::mem::take(&mut read_buf);
                     let tx = subs.lock().await.get(&id).cloned();
                     if let Some(tx) = tx {
@@ -380,12 +431,6 @@ async fn shell_driver_loop(
             },
         }
     }
-    // Every exit path above (remote EOF, I/O error, explicit Close, or the
-    // write sender being dropped) lands here. Release this connection's
-    // entry from both maps so the IPC bridge's `rx.recv()` loop terminates
-    // (letting it emit `EV_CLOSED`) and `list()` stops reporting a dead
-    // connection as live. `close()` already removes from `inner` itself;
-    // the second removal here is a harmless no-op in that case.
     subs.lock().await.remove(&id);
     inner.lock().await.remove(&id);
 }
@@ -452,23 +497,13 @@ mod tests {
         let info = open_ssh_with_shell(&mgr, port, "test").await;
 
         let mut rx = mgr.subscribe(info.id).await.unwrap();
-
-        // Drive the loop to its Close exit path (stands in for a remote EOF
-        // / I/O-error exit -- all three converge on the same cleanup code).
         mgr.close(info.id).await.unwrap();
 
-        // The subscription channel's Sender must have been dropped from
-        // `subs` by the driver loop, so recv() resolves to None instead of
-        // hanging forever (the bug this test guards against: the IPC
-        // bridge's `while let Some(chunk) = rx.recv().await` never seeing
-        // a close and staying parked forever).
         let closed = tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv())
             .await
             .expect("timed out waiting for subscription channel to close");
         assert!(closed.is_none(), "expected subscription channel to close");
 
-        // `inner` must also have released the id so list() stops reporting
-        // a dead connection as alive.
         assert!(
             mgr.list().await.is_empty(),
             "expected no live connections after driver exit"
@@ -482,14 +517,9 @@ mod tests {
         let info = open_ssh_with_shell(&mgr, port, "eof-test").await;
         let mut rx = mgr.subscribe(info.id).await.unwrap();
 
-        // Force the server to drop the connection -- simulates remote EOF.
         server_handle.abort();
         let _ = server_handle.await;
 
-        // The driver_loop's read side should see EOF/error within a couple
-        // seconds and clean up subs + inner. Prove it by waiting for the
-        // subscription receiver to close (returns None) and by asserting
-        // list() is empty.
         let recv_result = tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv()).await;
         assert!(
             recv_result.is_ok(),
@@ -505,13 +535,6 @@ mod tests {
         );
     }
 
-    /// Fake `Connection` whose `open_shell` always fails -- stands in for an
-    /// sshd that authenticates but rejects the shell subsystem (e.g.
-    /// `ForceCommand internal-sftp`, unusual `PermitOpen` policy). Used by
-    /// the regression test below for the `open_connection` IPC leak: driving
-    /// a real SSH test fixture into refusing `request_shell` would hang
-    /// waiting on a reply the fixture's default handler never sends, so this
-    /// stubs the failure directly instead (acceptable per the fix brief).
     struct ShellRejectingConnection;
 
     #[async_trait]
@@ -529,15 +552,6 @@ mod tests {
 
     #[tokio::test]
     async fn open_shell_failure_leaves_connection_for_caller_to_close() {
-        // Regression test for the open_connection IPC leak (final-fixes
-        // brief, finding 2). open_shell's own failure path intentionally
-        // puts the LiveConnection back into `inner` (so a caller can retry
-        // instead of silently losing the transport) -- which is exactly why
-        // the authenticated transport used to leak for the process lifetime
-        // when the IPC handler's `?` just propagated the error without ever
-        // calling `close()`. This test proves both halves: the connection is
-        // still live right after the failed open_shell, and `close()` (what
-        // ipc::open_connection's error path now calls) removes it.
         let mgr = SessionManager::new();
         let id = Uuid::new_v4();
         let info = ConnectionInfo {
@@ -549,12 +563,12 @@ mod tests {
         };
         mgr.inner.lock().await.insert(
             id,
-            LiveConnection {
+            Arc::new(Mutex::new(LiveConnection {
                 info,
                 conn: Box::new(ShellRejectingConnection),
                 shell: None,
                 sftp: None,
-            },
+            })),
         );
 
         let result = mgr.open_shell(id).await;

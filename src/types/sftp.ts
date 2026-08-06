@@ -14,6 +14,7 @@ export type TransferId = string;
 export type TransferState =
   | { kind: "queued" }
   | { kind: "active" }
+  | { kind: "paused" }
   | { kind: "done" }
   | { kind: "cancelled" }
   | { kind: "failed"; error: string };
@@ -28,4 +29,9 @@ export interface TransferInfo {
   bytes_done: number;
   state: TransferState;
   started_at: number;
+  /** Set when this transfer is one of N children spawned by a directory
+   * upload / download (v0.6 T1). Frontend groups children by this id so
+   * the Transfers view can render them under one expandable parent row.
+   * Single-file transfers leave this undefined. */
+  groupId?: TransferId;
 }
