@@ -221,24 +221,31 @@ export function App() {
     },
   });
 
-  async function handleConnectSavedHost(host: HostInfo) {
-    // Ignore double-clicks during an in-flight handshake for the same host.
-    // Two openConnection calls to the same server would both succeed but only
-    // one tab would win the fight for activeId — the other is orphaned.
+  async function handleConnectSavedHost(host: HostInfo, forceNew: boolean = false) {
+    // Ignore concurrent in-flight handshakes for the same host — two
+    // simultaneous `open_connection` calls would both succeed but only
+    // one tab could win the fight for activeId. The `forceNew` path
+    // still respects this to avoid spawning a second session on a
+    // brief second click during the first connection.
     const st = useSessions.getState();
     if (st.connecting[host.id]) return;
 
-    // v0.5.7: if this host already has a live session, focus its tab
-    // instead of opening a duplicate. Prevents the "two tabs for same
-    // host after Files-view round-trip" bug. Closed sessions don't
-    // count (state !== "active"), so Reconnect from DisconnectedPanel
-    // still creates a fresh session as intended.
-    const existing = st.sessions.find(
-      (s) => s.host_id === host.id && s.state === "active",
-    );
-    if (existing) {
-      setActive(existing.id);
-      return;
+    // Single-click semantics (default): if the host already has a live
+    // session, focus that tab instead of opening a duplicate. This
+    // prevents the "two tabs for same host after Files-view round-trip"
+    // bug. Closed sessions don't count so Reconnect from
+    // DisconnectedPanel still creates a fresh session as intended.
+    //
+    // `forceNew = true` skips the dedup so a double-click on a host row
+    // opens a second concurrent shell to the same server.
+    if (!forceNew) {
+      const existing = st.sessions.find(
+        (s) => s.host_id === host.id && s.state === "active",
+      );
+      if (existing) {
+        setActive(existing.id);
+        return;
+      }
     }
 
     // Try to fetch password from keychain; if missing, prompt via ConnectDialog
@@ -281,7 +288,7 @@ export function App() {
         }}
         onNewConnection={() => setDialog({ mode: "create" })}
         onEditHost={(host) => setDialog({ mode: "edit", initial: host })}
-        onConnectHost={(host) => void handleConnectSavedHost(host)}
+        onConnectHost={(host, forceNew) => void handleConnectSavedHost(host, forceNew)}
       >
         {/* Tab body stays mounted whenever activeId exists — hide via
             display:none when the user is on a rail-level view (Files /

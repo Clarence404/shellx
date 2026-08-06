@@ -218,8 +218,14 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
         onClick={disabled ? undefined : onClick}
         onDoubleClick={onOpen}
         onContextMenu={handleContextMenu}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        // Disabled rows (the `..` parent-nav pseudo-entry) skip hover
+        // tracking: during a pointer-based drag the cursor transits the
+        // `..` row on its way to a drop target and each mouseenter/leave
+        // would flash the row's background between transparent and the
+        // border tint. `..` is not a real, actionable row anyway — no
+        // hover feedback expected.
+        onMouseEnter={disabled ? undefined : () => setHovered(true)}
+        onMouseLeave={disabled ? undefined : () => setHovered(false)}
         style={{
           display: "flex", alignItems: "center", gap: 10,
           padding: "var(--pad-row-y) var(--pad-row-x)", fontSize: "var(--font-files-size)",

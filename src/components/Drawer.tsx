@@ -11,7 +11,7 @@ interface Props {
   view: RailView;
   onNewConnection?: () => void;
   onEditHost?: (host: HostInfo) => void;
-  onConnectHost?: (host: HostInfo) => void;
+  onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
 }
 
 export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Props) {
@@ -123,6 +123,7 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
               isConnected={connected}
               isConnecting={!!connecting[h.id]}
               onConnect={() => onConnectHost?.(h)}
+              onOpenNewShell={() => onConnectHost?.(h, true)}
               // Disconnect only surfaces when at least one live session
               // matches this host_id — otherwise there's nothing to close
               // and the menu item would confuse.
