@@ -63,6 +63,7 @@ fn main() {
             ipc::transfer::sftp_download_dir,
             ipc::transfer::transfer_list,
             ipc::transfer::transfer_cancel,
+            ipc::transfer::transfer_cancel_group,
             ipc::transfer::transfer_pause,
             ipc::transfer::transfer_resume,
             ipc::local::local_list_dir,

@@ -16,7 +16,7 @@ use crate::error::Result;
 use crate::session::manager::SessionManager;
 use crate::session::ConnectionId;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -99,13 +99,54 @@ pub(crate) struct LiveTransfer {
 /// follows for shell channels.
 pub struct TransferManager {
     tasks: Arc<Mutex<HashMap<TransferId, LiveTransfer>>>,
+    /// Groups the user has explicitly cancelled. `sftp_upload_dir` /
+    /// `sftp_download_dir`'s enumeration loop consults this on every
+    /// iteration so a cancel click on a 2 500-file directory doesn't
+    /// keep spawning new children after the click — the loop breaks
+    /// early. Group ids are UUIDv4 random and the set never gets
+    /// cleaned up (a few bytes per group), which is fine for the size
+    /// of state a user could plausibly accumulate.
+    cancelled_groups: Arc<Mutex<HashSet<TransferId>>>,
 }
 
 impl TransferManager {
     pub fn new() -> Self {
         Self {
             tasks: Arc::new(Mutex::new(HashMap::new())),
+            cancelled_groups: Arc::new(Mutex::new(HashSet::new())),
         }
+    }
+
+    /// Consulted by `sftp_upload_dir` / `sftp_download_dir` between
+    /// per-file iterations. Returns true once the caller has invoked
+    /// `cancel_group` for this id — the loop should break out of its
+    /// remaining spawn work.
+    pub async fn is_group_cancelled(&self, group_id: TransferId) -> bool {
+        self.cancelled_groups.lock().await.contains(&group_id)
+    }
+
+    /// Cancels every currently-spawned child of the group AND flags
+    /// the group so any not-yet-spawned children are skipped by the
+    /// enumeration loop. This is what the frontend's group `✕` button
+    /// hits — the previous approach (loop `transferCancel(id)` over
+    /// `childIds` on the JS side) couldn't stop mid-enumeration
+    /// spawns because those child ids didn't yet exist.
+    pub async fn cancel_group(&self, group_id: TransferId) -> Result<()> {
+        self.cancelled_groups.lock().await.insert(group_id);
+        // Snapshot the id list first so we don't hold `tasks.lock` across
+        // the individual `cancel(id).await` calls (each takes the same
+        // lock briefly).
+        let ids: Vec<TransferId> = {
+            let map = self.tasks.lock().await;
+            map.iter()
+                .filter(|(_, t)| t.info.group_id == Some(group_id))
+                .map(|(id, _)| *id)
+                .collect()
+        };
+        for id in ids {
+            let _ = self.cancel(id).await;
+        }
+        Ok(())
     }
 
     pub async fn list(&self) -> Vec<TransferInfo> {

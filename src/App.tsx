@@ -12,6 +12,7 @@ import { useSessions } from "./state/sessions";
 import { useHostsStore } from "./state/hosts";
 import { useSettingsStore } from "./state/settings";
 import { useRailFiles } from "./state/railFiles";
+import { useFilesStore } from "./state/files";
 import { SYSTEM_FONT_MAP } from "./types/settings";
 import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
@@ -113,16 +114,30 @@ export function App() {
       if (cancelled) { u(); return; }
       unlistens.push(u);
     });
+    // Coalesce the post-transfer refresh across bursts of
+    // `transfer:done` events. A 30-file directory upload was firing
+    // 30 back-to-back loadLeft / loadRight pairs — 60 SFTP list_dir
+    // calls total. Debouncing lets the pane refresh once ~300 ms
+    // after the LAST child finishes, and the intermediate refreshes
+    // don't pound the SFTP subchannel (or paint "Loading…" flashes).
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     onTransferDone((ev) => {
       store.applyDone(ev);
-      // v0.5.7: refresh RailFiles panes on every completed transfer so
-      // the new file appears immediately without a manual refresh. We
-      // don't filter by direction — either side of a completed transfer
-      // may have gained a new entry, so re-listing both keeps them
-      // in sync with minimal overhead.
-      const rf = useRailFiles.getState();
-      if (rf.leftPath) void rf.loadLeft();
-      if (rf.rightHost) void rf.loadRight();
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        const rf = useRailFiles.getState();
+        if (rf.leftPath) void rf.loadLeft();
+        if (rf.rightHost) void rf.loadRight();
+        // Also refresh any per-connection FileBrowserView views —
+        // Hosts > Files subscribes to `useFilesStore.perConnection`,
+        // and without a reload here the newly-uploaded file only
+        // showed up after a manual refresh click.
+        const fs = useFilesStore.getState();
+        for (const [connId, ps] of Object.entries(fs.perConnection)) {
+          if (ps?.cwd) void fs.loadDir(connId, ps.cwd);
+        }
+      }, 300);
     }).then((u) => {
       if (cancelled) { u(); return; }
       unlistens.push(u);

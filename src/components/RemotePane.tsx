@@ -283,7 +283,12 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
             }}
           >
             {error && <div style={{ padding: "8px 10px", color: "var(--error)", fontSize: 11 }}>{error}</div>}
-            {loading && <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>Loading…</div>}
+            {loading && entries.length === 0 && (
+              // Skip Loading label when we already have entries —
+              // otherwise directory-transfer's per-child refresh
+              // storm flickers the label above the `..` row.
+              <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>Loading…</div>
+            )}
             {rightPath !== "" && rightPath !== "/" && (
               // Also skip when rightPath is empty — that window (between
               // setRightHost's synchronous reset and sftpRealpath resolving

@@ -99,6 +99,19 @@ pub async fn transfer_pause(
     transfer_mgr.pause(app, args.transfer_id).await
 }
 
+#[derive(Deserialize)]
+pub struct CancelGroupArgs {
+    pub group_id: TransferId,
+}
+
+#[tauri::command]
+pub async fn transfer_cancel_group(
+    args: CancelGroupArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<()> {
+    transfer_mgr.cancel_group(args.group_id).await
+}
+
 #[tauri::command]
 pub async fn transfer_resume(
     args: CancelArgs,
@@ -153,6 +166,11 @@ pub async fn sftp_upload_dir(
     // Create subdirectories parent-first so per-file uploads never race to
     // create a common ancestor. `walk_local` already sorts dirs by depth.
     for d in &dirs {
+        if transfer_mgr.is_group_cancelled(group_id).await {
+            return Ok(DirTransferInit {
+                group_id, file_count: 0, transfer_ids: vec![], total_bytes: 0,
+            });
+        }
         let remote_sub = join_remote(&args.remote_dir, d);
         let _ = session_mgr.sftp_mkdir(args.conn_id, &remote_sub).await;
     }
@@ -160,6 +178,12 @@ pub async fn sftp_upload_dir(
     let mut ids = Vec::with_capacity(files.len());
     let mut total_bytes: u64 = 0;
     for (rel, size) in files {
+        // The user might cancel the group mid-enumeration on a huge
+        // directory (2 500+ files spawn takes multiple seconds).
+        // Break early so no additional children get registered.
+        if transfer_mgr.is_group_cancelled(group_id).await {
+            break;
+        }
         let local_abs = local_root.join(rel_to_path(&rel));
         let remote_abs = join_remote(&args.remote_dir, &rel);
         let id = transfer_mgr
@@ -214,6 +238,11 @@ pub async fn sftp_download_dir(
 
     // First pass: mkdir all local subdirs.
     for e in walked.iter().filter(|e| e.kind == WalkedKind::Directory) {
+        if transfer_mgr.is_group_cancelled(group_id).await {
+            return Ok(DirTransferInit {
+                group_id, file_count: 0, transfer_ids: vec![], total_bytes: 0,
+            });
+        }
         let sub = local_root.join(rel_to_path(&e.rel_path));
         tokio::fs::create_dir_all(&sub).await.map_err(Error::Io)?;
     }
@@ -221,6 +250,10 @@ pub async fn sftp_download_dir(
     let mut ids = Vec::new();
     let mut total_bytes: u64 = 0;
     for e in walked.into_iter().filter(|e| e.kind == WalkedKind::File) {
+        // Break early on user cancel — symmetric with `sftp_upload_dir`.
+        if transfer_mgr.is_group_cancelled(group_id).await {
+            break;
+        }
         let remote_abs = format!(
             "{}/{}",
             args.remote_dir.trim_end_matches('/'),

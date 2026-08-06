@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { File as FileIcon, Folder } from "lucide-react";
 import { LocalPane } from "./LocalPane";
 import { RemotePane } from "./RemotePane";
-import { TransferQueue } from "./TransferQueue";
+import { TransferStripSection } from "./TransferStripSection";
 import { ConnectDialog } from "./ConnectDialog";
 import { PaneSplitter } from "./PaneSplitter";
 import { useSessions } from "../state/sessions";
@@ -21,6 +21,7 @@ export function RailFilesView({ onConnectSavedHost }: Props = {}) {
   const setSplitterDraft = useRailFiles((s) => s.setSplitterDraft);
   const setSplitter = useRailFiles((s) => s.setSplitter);
   const drag = useRailFiles((s) => s.currentDrag);
+
 
   // Auto-select the newly-connected host as the remote pane's host whenever
   // the session list grows (e.g. after ConnectDialog resolves a connection).
@@ -67,7 +68,7 @@ export function RailFilesView({ onConnectSavedHost }: Props = {}) {
           />
         </div>
       </div>
-      <TransferQueue showAll />
+      <TransferStripSection showAll />
       <ConnectDialog open={dialogOpen} mode="create" onClose={() => setDialogOpen(false)} />
       {/* Drag ghost — follows the cursor with a small offset so it
           doesn't sit under the pointer and block elementFromPoint
