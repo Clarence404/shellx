@@ -4,7 +4,19 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.6.0
+## Status: v0.6.1
+
+v0.6.1 polishes the transfer strip: group `✕` now cancels
+mid-enumeration on huge directories (a 2 500-file cancel used to keep
+spawning children for another second or two), the compact strip is a
+flush 36 px row that hugs the bottom with no divider until you expand
+a group, sticky group headers keep the pause / cancel buttons visible
+while scrolling long child lists, and pause / resume / cancel now flip
+the UI optimistically for instant feedback. Delete errors on remote
+folders finally `alert()` instead of silently no-op'ing, freshly-
+uploaded non-empty folders are recursively removable, and Hosts > Files
+gained the same OS drop-target outline plus auto-refresh after
+transfers. Docs went English-only. Everything below still applies:
 
 v0.6.0 is the directory-transfer release. New Rust IPCs
 `sftp_upload_dir` / `sftp_download_dir` walk source trees and spawn one

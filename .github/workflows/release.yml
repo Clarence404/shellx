@@ -87,13 +87,8 @@ jobs:
 
       # Load per-version release notes from docs/release-notes/<TAG>.md so
       # each release page opens with the human-written changelog instead of
-      # a generic banner. Supports a bilingual layout: if the sibling file
-      # docs/release-notes/<TAG>.zh-CN.md exists too, both are concatenated
-      # under anchor-linked headings so readers pick their language from
-      # the top of the Release page. When only one exists, that one is
-      # used verbatim (backward-compatible with English-only releases).
-      # When neither exists (forgotten commit, ad-hoc tag), a placeholder
-      # keeps the release shipping.
+      # a generic banner. When the file is missing (forgotten commit, ad-hoc
+      # tag), a placeholder keeps the release shipping.
       # Emitted via GH_OUTPUT multiline heredoc — the delimiter (EOF_NOTES)
       # must not appear in any file body, hence the distinctive marker.
       - name: Load release notes
@@ -101,35 +96,15 @@ jobs:
         shell: bash
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          EN_FILE="docs/release-notes/${TAG}.md"
-          ZH_FILE="docs/release-notes/${TAG}.zh-CN.md"
+          NOTES_FILE="docs/release-notes/${TAG}.md"
           {
             echo "body<<EOF_NOTES"
-            if [ -f "$EN_FILE" ] && [ -f "$ZH_FILE" ]; then
-              # Both languages present — anchor switcher + stacked content.
-              # GitHub's markdown auto-slugs "## English" → #english and
-              # "## 简体中文" → #简体中文, which the anchor links target.
-              echo "[English](#english) · [简体中文](#简体中文)"
-              echo
-              echo "## English"
-              echo
-              cat "$EN_FILE"
-              echo
-              echo "---"
-              echo
-              echo "## 简体中文"
-              echo
-              cat "$ZH_FILE"
-              echo
-            elif [ -f "$EN_FILE" ]; then
-              cat "$EN_FILE"
-              echo
-            elif [ -f "$ZH_FILE" ]; then
-              cat "$ZH_FILE"
+            if [ -f "$NOTES_FILE" ]; then
+              cat "$NOTES_FILE"
               echo
             else
               echo "Auto-built from the tagged commit — release notes file"
-              echo "\`$EN_FILE\` was not present at build time."
+              echo "\`$NOTES_FILE\` was not present at build time."
               echo
             fi
             echo "---"
