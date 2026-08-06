@@ -364,8 +364,21 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                   }}
                   onDelete={async () => {
                     if (!confirm(`Delete "${e.name}"?`)) return;
-                    if (e.kind === "directory") await sftpRemoveDirRecursive(rightHost, joinPath(rightPath, e.name));
-                    else await sftpRemoveFile(rightHost, joinPath(rightPath, e.name));
+                    try {
+                      if (e.kind === "directory") {
+                        await sftpRemoveDirRecursive(rightHost, joinPath(rightPath, e.name));
+                      } else {
+                        await sftpRemoveFile(rightHost, joinPath(rightPath, e.name));
+                      }
+                    } catch (err) {
+                      // The SFTP subsystem could refuse for a bunch of
+                      // reasons (permission, still-open file handle on a
+                      // freshly-uploaded row, name with unusual bytes on
+                      // a server that can't stat it). Silent failure was
+                      // the pre-v0.6.1 pattern — surface the message so
+                      // the user knows what happened.
+                      alert(`Delete failed: ${err}`);
+                    }
                     await loadRight();
                   }}
                   onDownload={() => {

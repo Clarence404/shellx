@@ -14,7 +14,7 @@ interface Props {
   onTabsClose?: (ids: string[]) => void;
   onNewConnection?: () => void;
   onEditHost?: (host: HostInfo) => void;
-  onConnectHost?: (host: HostInfo) => void;
+  onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
   children?: ReactNode;
 }
 

@@ -1,5 +1,5 @@
 import { MoreHorizontal } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HostContextMenu } from "./HostContextMenu";
 import { useIconSizes } from "../state/settings";
 import type { HostInfo } from "../types/host";
@@ -9,6 +9,11 @@ interface Props {
   isConnected: boolean;
   isConnecting?: boolean;
   onConnect: () => void;
+  /** Fires on double-click. Opens a NEW session to the same host,
+   *  bypassing the single-click dedup that switches to an existing tab.
+   *  Wire only when the caller wants to allow concurrent shells to the
+   *  same server. */
+  onOpenNewShell?: () => void;
   /** Provided only when the host has at least one active session — hides
    *  the Disconnect item otherwise, since there's nothing to close. */
   onDisconnect?: () => void;
@@ -17,10 +22,35 @@ interface Props {
   onDelete: () => void;
 }
 
-export function HostRow({ host, isConnected, isConnecting, onConnect, onDisconnect, onEdit, onDuplicate, onDelete }: Props) {
+const DOUBLE_CLICK_MS = 250;
+
+export function HostRow({ host, isConnected, isConnecting, onConnect, onOpenNewShell, onDisconnect, onEdit, onDuplicate, onDelete }: Props) {
   const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [hovered, setHovered] = useState(false);
+  // Click / double-click disambiguation: a single click fires
+  // `onConnect` (dedup to existing tab), a double click fires
+  // `onOpenNewShell` (force a second session). Because the browser
+  // fires `click` twice before it fires `dblclick`, we defer the
+  // single-click action ~250ms so a following dblclick can cancel it.
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+  }, []);
+  const handleRowClick = () => {
+    if (clickTimerRef.current) return; // a click is already pending
+    clickTimerRef.current = setTimeout(() => {
+      clickTimerRef.current = null;
+      onConnect();
+    }, DOUBLE_CLICK_MS);
+  };
+  const handleRowDoubleClick = () => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    onOpenNewShell?.();
+  };
 
   // Disconnect appears right below Connect so the "session lifecycle"
   // actions cluster, followed by a separator, then the saved-host
@@ -67,7 +97,9 @@ export function HostRow({ host, isConnected, isConnecting, onConnect, onDisconne
         <button
           aria-label={host.label}
           aria-describedby={isConnected ? `conn-status-${host.id}` : undefined}
-          onClick={onConnect}
+          onClick={handleRowClick}
+          onDoubleClick={handleRowDoubleClick}
+          title={onOpenNewShell ? "Click to open · double-click to open a second shell" : undefined}
           onContextMenu={handleContextMenu}
           style={{
             flex: 1, minWidth: 0, padding: "6px 8px", borderRadius: 5,
