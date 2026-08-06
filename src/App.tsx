@@ -11,6 +11,7 @@ import { SettingsView } from "./components/settings/SettingsView";
 import { useSessions } from "./state/sessions";
 import { useHostsStore } from "./state/hosts";
 import { useSettingsStore } from "./state/settings";
+import { useRailFiles } from "./state/railFiles";
 import { SYSTEM_FONT_MAP } from "./types/settings";
 import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
@@ -100,7 +101,17 @@ export function App() {
       if (cancelled) { u(); return; }
       unlistens.push(u);
     });
-    onTransferDone((ev) => store.applyDone(ev)).then((u) => {
+    onTransferDone((ev) => {
+      store.applyDone(ev);
+      // v0.5.7: refresh RailFiles panes on every completed transfer so
+      // the new file appears immediately without a manual refresh. We
+      // don't filter by direction — either side of a completed transfer
+      // may have gained a new entry, so re-listing both keeps them
+      // in sync with minimal overhead.
+      const rf = useRailFiles.getState();
+      if (rf.leftPath) void rf.loadLeft();
+      if (rf.rightHost) void rf.loadRight();
+    }).then((u) => {
       if (cancelled) { u(); return; }
       unlistens.push(u);
     });
@@ -204,6 +215,19 @@ export function App() {
     // one tab would win the fight for activeId — the other is orphaned.
     const st = useSessions.getState();
     if (st.connecting[host.id]) return;
+
+    // v0.5.7: if this host already has a live session, focus its tab
+    // instead of opening a duplicate. Prevents the "two tabs for same
+    // host after Files-view round-trip" bug. Closed sessions don't
+    // count (state !== "active"), so Reconnect from DisconnectedPanel
+    // still creates a fresh session as intended.
+    const existing = st.sessions.find(
+      (s) => s.host_id === host.id && s.state === "active",
+    );
+    if (existing) {
+      setActive(existing.id);
+      return;
+    }
 
     // Try to fetch password from keychain; if missing, prompt via ConnectDialog
     const password = await getHostPassword(host.id);

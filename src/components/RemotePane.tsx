@@ -42,6 +42,10 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
   const paneRef = useRef<HTMLDivElement | null>(null);
   const [osDragOver, setOsDragOver] = useState(false);
   const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null);
+  const internalDragOver = useRailFiles((s) =>
+    s.currentDrag?.pane === "left" && s.currentDrag.hoverTarget === "right",
+  );
+  const dropHighlight = osDragOver || internalDragOver;
 
   // Actions are dispatched via getState() at call time rather than a
   // hook-captured reference, so each invocation always reaches the store's
@@ -85,14 +89,12 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // v0.5.6: OS drag-drop upload. Files dragged from Explorer / Finder
-  // into the pane trigger sftpUpload against the current rightPath. We
-  // listen to Tauri's native onDragDropEvent (the browser-level `drop`
-  // handler doesn't get OS paths for security reasons) and hit-test the
-  // physical-pixel position against the pane's client rect converted to
-  // physical pixels. dpr scaling happens on `event.position.x/y` since
-  // Tauri reports in physical pixels and getBoundingClientRect returns
-  // CSS pixels.
+  // v0.5.7: unified drag-drop via Tauri's onDragDropEvent — handles
+  // BOTH OS drops (paths.length > 0) AND internal pane-to-pane drags
+  // from LocalPane (paths.length === 0, currentDrag in store).
+  // HTML5 DataTransfer proved unreliable across WebView2 + Tauri's
+  // dragDropEnabled: true. Position hit-test against paneRef's client
+  // rect (CSS px) using physical-px position / devicePixelRatio.
   useEffect(() => {
     if (!rightHost || isDisconnected) return;
     let unlisten: (() => void) | undefined;
@@ -117,10 +119,20 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
       } else if (p.type === "drop") {
         setOsDragOver(false);
         if (!inside(p.position.x, p.position.y)) return;
-        for (const localPath of p.paths) {
-          const filename = localPath.split(/[\\/]/).pop() || "unknown";
-          const remotePath = joinPath(rightPath, filename);
-          void sftpUpload(rightHost, localPath, remotePath);
+        if (p.paths && p.paths.length > 0) {
+          // OS drop — upload each file to remote via sftp.
+          for (const localPath of p.paths) {
+            const filename = localPath.split(/[\\/]/).pop() || "unknown";
+            const remotePath = joinPath(rightPath, filename);
+            void sftpUpload(rightHost, localPath, remotePath);
+          }
+        } else {
+          // Internal drag from LocalPane.
+          const drag = useRailFiles.getState().currentDrag;
+          useRailFiles.getState().setCurrentDrag(null);
+          if (drag && drag.pane === "left") {
+            void sftpUpload(rightHost, joinPath(leftPath, drag.name), joinPath(rightPath, drag.name));
+          }
         }
       }
     }).then((u) => {
@@ -129,7 +141,7 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
     });
 
     return () => { cancelled = true; unlisten?.(); };
-  }, [rightHost, rightPath, isDisconnected]);
+  }, [rightHost, rightPath, leftPath, isDisconnected]);
 
   function handleReconnect() {
     if (savedHostForReconnect && onConnectSavedHost) {
@@ -200,13 +212,18 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
   return (
     <div
       ref={paneRef}
+      data-pane="right"
       style={{
         display: "flex", flexDirection: "column", height: "100%", minHeight: 0,
-        // Highlight border while dragging OS files over the pane, so the
-        // user knows the drop will land on THIS host at THIS path.
-        outline: osDragOver ? "2px dashed var(--accent)" : "none",
+        // Highlight border while dragging over the pane — both OS
+        // drops (from Explorer/Finder) and internal cross-pane drags
+        // from LocalPane share the same visual.
+        outline: dropHighlight ? "2px dashed var(--accent)" : "none",
         outlineOffset: -2,
         transition: "outline-color 120ms ease",
+        // Prevent browser text-selection during pointer-based drag.
+        userSelect: "none",
+        WebkitUserSelect: "none",
       }}
     >
       <div style={{
@@ -252,12 +269,7 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
             <PathBreadcrumb path={rightPath} onNavigate={setRightPath} />
           </div>
           <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              const src = e.dataTransfer.getData("application/x-shellx-pane");
-              if (src === "left") transfer("up");
-            }}
+            // outer paneRef div owns the drop handler now
             onContextMenu={(e) => {
               e.preventDefault();
               setBlankMenu({ x: e.clientX, y: e.clientY });
@@ -282,8 +294,46 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
               />
             )}
             {entries.map((e) => (
-              <div key={e.name} draggable
-                onDragStart={(ev) => ev.dataTransfer.setData("application/x-shellx-pane", "right")}
+              <div key={e.name}
+                // Mouse-based drag (see LocalPane for rationale).
+                onMouseDown={(ev) => {
+                  if (ev.button !== 0) return;
+                  ev.preventDefault();
+                  const startX = ev.clientX, startY = ev.clientY;
+                  let dragging = false;
+                  const onMove = (me: MouseEvent) => {
+                    if (!dragging) {
+                      if (Math.hypot(me.clientX - startX, me.clientY - startY) < 5) return;
+                      dragging = true;
+                      document.body.style.cursor = "grabbing";
+                    }
+                    const el = document.elementFromPoint(me.clientX, me.clientY);
+                    const paneAttr = el?.closest("[data-pane]")?.getAttribute("data-pane");
+                    const hoverTarget = paneAttr === "left" || paneAttr === "right" ? paneAttr : null;
+                    useRailFiles.getState().setCurrentDrag({
+                      pane: "right", name: e.name,
+                      x: me.clientX, y: me.clientY,
+                      hoverTarget,
+                    });
+                  };
+                  const onUp = (up: MouseEvent) => {
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                    document.body.style.cursor = "";
+                    if (!dragging) return;
+                    const drag = useRailFiles.getState().currentDrag;
+                    useRailFiles.getState().setCurrentDrag(null);
+                    if (!drag || !rightHost) return;
+                    const el = document.elementFromPoint(up.clientX, up.clientY);
+                    const pane = el?.closest("[data-pane]")?.getAttribute("data-pane");
+                    const st = useRailFiles.getState();
+                    if (drag.pane === "right" && pane === "left") {
+                      void sftpDownload(rightHost, joinPath(st.rightPath, drag.name), joinPath(st.leftPath, drag.name));
+                    }
+                  };
+                  document.addEventListener("mousemove", onMove);
+                  document.addEventListener("mouseup", onUp);
+                }}
               >
                 <FileRow
                   name={e.name} kind={e.kind} size={e.size}

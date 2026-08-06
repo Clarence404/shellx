@@ -28,19 +28,35 @@ export const useFilesStore = create<FilesStore>((set, get) => ({
         [connId]: { ...(st.perConnection[connId] ?? {}), cwd: path, loading: true, error: null, entries: [], selectedNames: [] },
       },
     }));
-    try {
-      const entries = await ipc.sftpListDir(connId, path);
+
+    // v0.5.7: soft-retry on "closed" — the freshly-connected session's
+    // SFTP subchannel can transiently report closed before the russh
+    // handshake fully completes (same race as useRailFiles.setRightHost
+    // handled). Retry once after a short delay before surfacing an
+    // error to the pane. Any other error class errors out immediately.
+    const attemptList = async (): Promise<{ ok: true; entries: SftpEntry[] } | { ok: false; error: string }> => {
+      try { return { ok: true, entries: await ipc.sftpListDir(connId, path) }; }
+      catch (e) { return { ok: false, error: String(e) }; }
+    };
+
+    let result = await attemptList();
+    if (!result.ok && /closed/i.test(result.error)) {
+      await new Promise((r) => setTimeout(r, 250));
+      result = await attemptList();
+    }
+
+    if (result.ok) {
       set((st) => ({
         perConnection: {
           ...st.perConnection,
-          [connId]: { cwd: path, entries, loading: false, error: null, selectedNames: [] },
+          [connId]: { cwd: path, entries: result.entries, loading: false, error: null, selectedNames: [] },
         },
       }));
-    } catch (e) {
+    } else {
       set((st) => ({
         perConnection: {
           ...st.perConnection,
-          [connId]: { ...(st.perConnection[connId] ?? { cwd: path, entries: [], selectedNames: [] }), loading: false, error: String(e) },
+          [connId]: { ...(st.perConnection[connId] ?? { cwd: path, entries: [], selectedNames: [] }), loading: false, error: result.error },
         },
       }));
     }

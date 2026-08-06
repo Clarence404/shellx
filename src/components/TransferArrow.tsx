@@ -11,27 +11,33 @@ export function TransferArrow() {
   const rightHas = rightSel.length > 0;
   const enabled = !!rightHost && (leftHas !== rightHas); // exactly one side selected
 
-  const direction = leftHas ? "up" : rightHas ? "down" : null;
-  const tooltip = !enabled
-    ? "Select on exactly one side to transfer"
-    : direction === "up"
-      ? `Upload ${leftSel.length} item(s) →`
-      : `← Download ${rightSel.length} item(s)`;
+  // v0.5.7: only render when there's an actual transfer to trigger.
+  // Previously the button sat visible-but-disabled at 50 % height,
+  // overlapping file rows underneath and offering no info. With
+  // drag-drop + right-click menus available, the ⇄ button is a
+  // secondary path — hiding it when idle stops it from obstructing
+  // the file list.
+  if (!enabled) return null;
+
+  const direction = leftHas ? "up" : "down";
+  const tooltip = direction === "up"
+    ? `Upload ${leftSel.length} item(s) →`
+    : `← Download ${rightSel.length} item(s)`;
 
   return (
     <button
-      onClick={() => { if (enabled && direction) useRailFiles.getState().transfer(direction); }}
-      disabled={!enabled}
+      onClick={() => useRailFiles.getState().transfer(direction)}
       title={tooltip}
       aria-label={tooltip}
       style={{
         position: "absolute", top: "50%", left: `${percent}%`,
         transform: "translate(-50%, -50%)", zIndex: 5,
         width: 28, height: 28, borderRadius: "50%",
-        background: enabled ? "var(--accent)" : "var(--border)",
-        color: enabled ? "var(--text-on-accent)" : "var(--text-3)",
-        border: "none", cursor: enabled ? "pointer" : "not-allowed",
+        background: "var(--accent)",
+        color: "var(--text-on-accent)",
+        border: "none", cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.35)",
       }}
     >
       <ArrowLeftRight size={14} />

@@ -24,3 +24,6 @@ export const localRemoveDir = (path: string) =>
 
 export const localOpenInOs = (path: string) =>
   invoke<void>("local_open_in_os", { args: { path } });
+
+export const localCopyInto = (src: string, dstDir: string) =>
+  invoke<void>("local_copy_into", { args: { src, dstDir } });

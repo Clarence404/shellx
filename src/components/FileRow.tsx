@@ -4,6 +4,7 @@ import {
   FileText, FileCode, FileJson, FileImage, FileArchive,
   FileTerminal, FileAudio, FileVideo, FileLock, FileSpreadsheet,
   Database, Download, Edit, Trash2, FolderPlus, Upload, RefreshCw,
+  ArrowRightToLine,
   type LucideIcon,
 } from "lucide-react";
 import { HostContextMenu, type MenuItem } from "./HostContextMenu";
@@ -112,7 +113,16 @@ interface Props {
   onOpen: () => void;
   onRename: (newName: string) => void;
   onDelete: () => void;
-  onDownload: () => void;
+  /** Optional: shows a `Download` item in the file-scope section. Only
+   *  meaningful for remote panes — LocalPane doesn't pass it because
+   *  "download a local file" has no defined semantics. */
+  onDownload?: () => void;
+  /** Optional: shows a `Send to remote →` item in the file-scope
+   *  section. LocalPane passes this when the RemotePane has an active
+   *  host, so the user can upload the individual row without needing
+   *  to multi-select + click the ⇄ splitter button. Symmetric to
+   *  onDownload on the remote side. */
+  onSendToRemote?: () => void;
   disabled?: boolean;
   selected?: boolean;
   onClick?: (e: React.MouseEvent) => void;
@@ -134,7 +144,7 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(1)} ${units[i]}`;
 }
 
-export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownload, disabled, selected, onClick, folderActions }: Props) {
+export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownload, onSendToRemote, disabled, selected, onClick, folderActions }: Props) {
   const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -172,10 +182,21 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
 
   // File-scope actions on top (Download/Rename/Delete), optionally
   // followed by a separator + "This folder" section (New folder /
-  // Upload here / Refresh). Design #3.
+  // Upload here / Refresh). Design #3. `Download` only surfaces when
+  // onDownload is passed AND the entry is a regular file — sftpDownload
+  // is single-file only, so offering it on a directory just leads to
+  // "io: Failure" from the Rust side. Recursive directory download is
+  // a v0.6+ backlog item.
   const items: MenuItem[] = [
     { kind: "section", label: "This file" },
-    { label: "Download", onClick: onDownload, icon: <Download size={12} /> },
+    ...(onDownload && kind !== "directory" ? [{
+      label: "Download", onClick: onDownload,
+      icon: <Download size={12} />,
+    } as MenuItem] : []),
+    ...(onSendToRemote && kind !== "directory" ? [{
+      label: "Send to remote", onClick: onSendToRemote,
+      icon: <ArrowRightToLine size={12} />,
+    } as MenuItem] : []),
     { label: "Rename", onClick: startRename, icon: <Edit size={12} /> },
     { label: "Delete", onClick: onDelete, variant: "danger", icon: <Trash2 size={12} /> },
   ];

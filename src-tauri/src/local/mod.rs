@@ -129,6 +129,47 @@ pub fn remove_dir(path: &str) -> Result<()> {
         .map_err(|e| Error::Protocol(format!("remove_dir {}: {e}", p.display())))
 }
 
+/// Copy a file or directory FROM `src` INTO the directory at `dst_dir`
+/// (a folder), preserving the source's basename. Used by LocalPane's
+/// OS drag-drop handler so files dropped from Explorer/Finder land in
+/// the current pane directory. Directories copy recursively. Errors
+/// bubble up to the caller (frontend surfaces them via toast).
+pub fn copy_into(src: &str, dst_dir: &str) -> Result<()> {
+    let src_path = expand(src)?;
+    let dst_dir_path = expand(dst_dir)?;
+    let name = src_path.file_name()
+        .ok_or_else(|| Error::Protocol(format!("copy_into: src has no basename: {}", src_path.display())))?;
+    let dst_path = dst_dir_path.join(name);
+    if src_path.is_dir() {
+        copy_dir_recursive(&src_path, &dst_path)
+    } else {
+        std::fs::copy(&src_path, &dst_path)
+            .map(|_| ())
+            .map_err(|e| Error::Protocol(format!("copy {} → {}: {e}", src_path.display(), dst_path.display())))
+    }
+}
+
+fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
+    std::fs::create_dir_all(dst)
+        .map_err(|e| Error::Protocol(format!("mkdir {}: {e}", dst.display())))?;
+    for entry in std::fs::read_dir(src)
+        .map_err(|e| Error::Protocol(format!("read_dir {}: {e}", src.display())))?
+    {
+        let entry = entry.map_err(|e| Error::Protocol(format!("read_dir entry: {e}")))?;
+        let src_child = entry.path();
+        let dst_child = dst.join(entry.file_name());
+        let ft = entry.file_type()
+            .map_err(|e| Error::Protocol(format!("file_type: {e}")))?;
+        if ft.is_dir() {
+            copy_dir_recursive(&src_child, &dst_child)?;
+        } else {
+            std::fs::copy(&src_child, &dst_child)
+                .map_err(|e| Error::Protocol(format!("copy {} → {}: {e}", src_child.display(), dst_child.display())))?;
+        }
+    }
+    Ok(())
+}
+
 pub fn open_in_os(path: &str) -> Result<()> {
     let p = expand(path)?;
     let path_str = p.to_string_lossy();
