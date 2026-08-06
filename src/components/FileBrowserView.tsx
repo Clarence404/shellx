@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, Upload, FolderPlus } from "lucide-react";
+import { PaneToolbarButton } from "./PaneToolbarButton";
+import { HostContextMenu } from "./HostContextMenu";
+import { buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useFilesStore } from "../state/files";
@@ -26,6 +29,16 @@ export function FileBrowserView({ connectionId }: Props) {
   const loadDir = useFilesStore((s) => s.loadDir);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [mkdirName, setMkdirName] = useState("");
+  const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null);
+
+  // v0.5.6: Same three folder-scope actions the toolbar exposes, packaged
+  // for the file-row + empty-area context menus. Definition kept near the
+  // toolbar handlers below (they all close over the same state).
+  const folderActions: FolderMenuHandlers = {
+    onNewFolder: () => setCreatingFolder(true),
+    onUpload: () => void handleUploadClick(),
+    onRefresh: () => void loadDir(connectionId, state?.cwd ?? "/"),
+  };
 
   // Initial load: resolve "." to the login shell's home as an absolute path so
   // the breadcrumb, goUp, and joinPath all speak in absolute paths from the
@@ -140,26 +153,30 @@ export function FileBrowserView({ connectionId }: Props) {
         display: "flex", alignItems: "center", gap: 8,
       }}>
         <PathBreadcrumb path={state.cwd} onNavigate={(p) => loadDir(connectionId, p)} />
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={() => setCreatingFolder(true)}
+        <PaneToolbarButton
           title="New folder"
-          style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, color: "var(--text-2)" }}
-        >
-          <FolderPlus size={12} /> New folder
-        </button>
-        <button onClick={() => loadDir(connectionId, state.cwd)} title="Refresh"
-          style={{ display: "flex", alignItems: "center", color: "var(--text-2)" }}>
-          <RefreshCw size={12} />
-        </button>
-        <button onClick={handleUploadClick} style={{
-          display: "flex", alignItems: "center", gap: 4, fontSize: 10,
-          color: "var(--text-2)",
-        }}>
-          <Upload size={12} /> Upload
-        </button>
+          onClick={() => setCreatingFolder(true)}>
+          {(size) => <FolderPlus size={size} />}
+        </PaneToolbarButton>
+        <PaneToolbarButton title="Refresh"
+          onClick={() => loadDir(connectionId, state.cwd)}>
+          {(size) => <RefreshCw size={size} />}
+        </PaneToolbarButton>
+        <PaneToolbarButton
+          title="Upload"
+          onClick={handleUploadClick}>
+          {(size) => <Upload size={size} />}
+        </PaneToolbarButton>
       </div>
-      <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+      <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}
+        onContextMenu={(e) => {
+          // Empty-area right-click: FileRow.handleContextMenu stops
+          // propagation, so this only fires on the scroll container
+          // itself (background between/below rows).
+          e.preventDefault();
+          setBlankMenu({ x: e.clientX, y: e.clientY });
+        }}
+      >
         {state.error && (
           <div style={{ padding: "8px 10px", color: "var(--error)", fontSize: 11 }}>{state.error}</div>
         )}
@@ -191,6 +208,7 @@ export function FileBrowserView({ connectionId }: Props) {
             onRename={(newName) => handleRename(entry.name, newName)}
             onDelete={() => handleDelete(entry.name, entry.kind === "directory")}
             onDownload={() => handleDownload(entry.name)}
+            folderActions={folderActions}
           />
         ))}
         {creatingFolder && (
@@ -215,6 +233,13 @@ export function FileBrowserView({ connectionId }: Props) {
         )}
       </div>
       <TransferQueue connectionId={connectionId} />
+      {blankMenu && (
+        <HostContextMenu
+          x={blankMenu.x} y={blankMenu.y}
+          items={buildFolderMenuItems(folderActions)}
+          onClose={() => setBlankMenu(null)}
+        />
+      )}
     </div>
   );
 }

@@ -75,7 +75,21 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(hostRef.current);
+    // Two-phase fit: React can commit the DOM before the browser has
+    // finalised layout, so hostRef.current.offsetWidth/Height in the
+    // same tick as `term.open()` is occasionally a transient small
+    // value (~10 cols). That would let the shell's first prompt bytes
+    // arrive and get written at the wrong width, producing a stale
+    // truncated line at the top of the terminal (e.g. "root@ubunt")
+    // once ResizeObserver catches up and widens the grid. Running fit
+    // once now for a first-cut, then again on the next animation frame
+    // (after layout has committed) gives the initial write the correct
+    // cols/rows on nearly every mount. ResizeObserver still handles
+    // subsequent size changes.
     fit.fit();
+    requestAnimationFrame(() => {
+      if (hostRef.current && hostRef.current.offsetHeight > 0) fit.fit();
+    });
     termRef.current = term;
     fitRef.current = fit;
 

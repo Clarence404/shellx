@@ -4,14 +4,19 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.5.5
+## Status: v0.5.6
 
-v0.5.5 is a polish + robustness pass: a proper `DisconnectedPanel` when a
-Files-view session dies (with a one-click Reconnect using saved credentials),
-muted-sage terminal green so `ls`'s other-writable directory colouring is
-finally readable, host-delete cascades to its live tabs + panes, host drawer
-auto-hides when empty, `New SSH connection` field labels no longer wash out,
-and `PathBreadcrumb`'s `C:` chip actually navigates to the drive root.
+v0.5.6 is a big polish + integration pass. Config directory moved to
+`~/.shellx/` (auto-migrated) and configurable via `SHELLX_CONFIG_DIR`.
+OS drag-drop upload — drop files from Explorer / Finder onto RemotePane
+and they SFTP-upload. Terminal font gets a live preview in Appearance.
+File panes get an icon-only toolbar with hitboxes tied to the System
+font-size slider, plus right-click menus in both the empty area and on
+file rows (rows get a `THIS FILE` / `THIS FOLDER` split). Long paths in
+the breadcrumb now scroll internally instead of pushing toolbar buttons
+off screen. App identifier + publisher rebranded to
+`io.github.clarence404.shellx` / `Clarence404`.
+
 Everything below still applies:
 
 v0.5.4 widened the activity rail (icon + label under each button) and made

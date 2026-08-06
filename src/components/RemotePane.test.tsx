@@ -15,6 +15,16 @@ vi.mock("../ipc/transfers", () => ({
   sftpUpload: vi.fn(),
 }));
 
+// v0.5.6 added an OS drag-drop listener via getCurrentWindow(). In jsdom
+// there's no `window.__TAURI_INTERNALS__`, so the real getCurrentWindow
+// throws on the useEffect mount. Mock returns a stub whose
+// onDragDropEvent resolves to a no-op unlisten fn.
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    onDragDropEvent: () => Promise.resolve(() => {}),
+  }),
+}));
+
 describe("RemotePane", () => {
   beforeEach(() => {
     useSessions.setState({ sessions: [], activeId: null, activeActivity: {}, connecting: {}, railView: "files" });

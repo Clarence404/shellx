@@ -1,3 +1,4 @@
+pub mod config_paths;
 pub mod error;
 pub mod ipc;
 pub mod local;

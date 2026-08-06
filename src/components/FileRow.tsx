@@ -3,11 +3,41 @@ import {
   Folder, File as FileIcon,
   FileText, FileCode, FileJson, FileImage, FileArchive,
   FileTerminal, FileAudio, FileVideo, FileLock, FileSpreadsheet,
-  Database, type LucideIcon,
+  Database, Download, Edit, Trash2, FolderPlus, Upload, RefreshCw,
+  type LucideIcon,
 } from "lucide-react";
-import { HostContextMenu } from "./HostContextMenu";
+import { HostContextMenu, type MenuItem } from "./HostContextMenu";
 import { useIconSizes } from "../state/settings";
 import type { EntryKind } from "../types/sftp";
+
+/** Folder-scope actions the file-row context menu can offer under a
+ *  "This folder" section, plus what an empty-area right-click surfaces.
+ *  All three are optional — pass whichever the current pane supports. */
+export interface FolderMenuHandlers {
+  onNewFolder?: () => void;
+  onUpload?: () => void;
+  onRefresh?: () => void;
+}
+
+/** Build the "This folder" section as MenuItems. Used by FileRow's
+ *  extended context menu AND by empty-area right-click handlers in
+ *  LocalPane / RemotePane / FileBrowserView (via buildFolderMenuItems). */
+export function buildFolderMenuItems(h: FolderMenuHandlers): MenuItem[] {
+  const items: MenuItem[] = [];
+  if (h.onNewFolder) items.push({
+    label: "New folder", onClick: h.onNewFolder,
+    icon: <FolderPlus size={12} />,
+  });
+  if (h.onUpload) items.push({
+    label: "Upload here", onClick: h.onUpload,
+    icon: <Upload size={12} />,
+  });
+  if (h.onRefresh) items.push({
+    label: "Refresh", onClick: h.onRefresh,
+    icon: <RefreshCw size={12} />,
+  });
+  return items;
+}
 
 const EXT_ICON: Record<string, [LucideIcon, string]> = {
   // text / config
@@ -86,6 +116,10 @@ interface Props {
   disabled?: boolean;
   selected?: boolean;
   onClick?: (e: React.MouseEvent) => void;
+  /** Optional folder-scope handlers. When any are provided, the row's
+   *  right-click menu appends a "This folder" section (see Design #3).
+   *  Undefined leaves the menu at just file-scope actions (back-compat). */
+  folderActions?: FolderMenuHandlers;
 }
 
 function formatBytes(bytes: number): string {
@@ -100,7 +134,7 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(1)} ${units[i]}`;
 }
 
-export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownload, disabled, selected, onClick }: Props) {
+export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownload, disabled, selected, onClick, folderActions }: Props) {
   const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -115,6 +149,9 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
   function handleContextMenu(e: React.MouseEvent) {
     if (disabled) return;
     e.preventDefault();
+    // Stop propagation so the pane's empty-area onContextMenu doesn't
+    // ALSO fire and double-open a menu. FileRow claims the click.
+    e.stopPropagation();
     setMenu({ x: e.clientX, y: e.clientY });
   }
 
@@ -133,11 +170,21 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
     setDraft(name);
   }
 
-  const items = [
-    { label: "Download", onClick: onDownload },
-    { label: "Rename", onClick: startRename },
-    { label: "Delete", onClick: onDelete, variant: "danger" as const },
+  // File-scope actions on top (Download/Rename/Delete), optionally
+  // followed by a separator + "This folder" section (New folder /
+  // Upload here / Refresh). Design #3.
+  const items: MenuItem[] = [
+    { kind: "section", label: "This file" },
+    { label: "Download", onClick: onDownload, icon: <Download size={12} /> },
+    { label: "Rename", onClick: startRename, icon: <Edit size={12} /> },
+    { label: "Delete", onClick: onDelete, variant: "danger", icon: <Trash2 size={12} /> },
   ];
+  const folderItems = folderActions ? buildFolderMenuItems(folderActions) : [];
+  if (folderItems.length > 0) {
+    items.push({ kind: "separator" });
+    items.push({ kind: "section", label: "This folder" });
+    items.push(...folderItems);
+  }
 
   const { Icon, color: iconColor } = iconForFile(name, kind);
 

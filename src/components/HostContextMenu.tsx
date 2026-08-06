@@ -1,10 +1,27 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
-interface MenuItem {
-  label: string;
-  onClick: () => void;
-  variant?: "danger";
-}
+/**
+ * Menu content model. Backwards-compatible with the original flat list
+ * shape (an object with just `label` + `onClick` renders as a clickable
+ * row), and additionally supports:
+ * - `kind: "separator"` — a 0.5 px divider between item groups
+ * - `kind: "section"` — a small-caps subheading (no click) to label a
+ *   group. Used by the file-row context menu (v0.5.6) to split
+ *   file-scope actions (Download/Rename/Delete) from folder-scope
+ *   actions (New folder/Upload/Refresh).
+ * - `icon` — optional leading icon (any ReactNode; typically a lucide
+ *   `<Icon size={12} />`).
+ */
+export type MenuItem =
+  | {
+      kind?: "item";
+      label: string;
+      onClick: () => void;
+      variant?: "danger";
+      icon?: ReactNode;
+    }
+  | { kind: "separator" }
+  | { kind: "section"; label: string };
 
 export function HostContextMenu({
   x, y, items, onClose,
@@ -34,24 +51,53 @@ export function HostContextMenu({
       background: "var(--panel-2)", border: "1px solid var(--border)",
       borderRadius: 5, padding: 4, zIndex: 200,
       boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-      minWidth: 130,
+      minWidth: 160,
     }}>
-      {items.map((item, i) => (
-        <button
-          key={i}
-          role="menuitem"
-          onClick={() => { item.onClick(); onClose(); }}
-          style={{
-            display: "block", width: "100%", padding: "5px 10px",
-            fontSize: "var(--font-ui-size)", textAlign: "left",
-            color: item.variant === "danger" ? "var(--error)" : "var(--text-1)",
-            borderRadius: 3,
-            background: "transparent",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--border)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >{item.label}</button>
-      ))}
+      {items.map((item, i) => {
+        if ("kind" in item && item.kind === "separator") {
+          return (
+            <div key={`sep-${i}`} style={{
+              height: "0.5px", background: "var(--border)",
+              margin: "4px 2px",
+            }} />
+          );
+        }
+        if ("kind" in item && item.kind === "section") {
+          return (
+            <div key={`sec-${i}`} style={{
+              padding: "4px 10px 2px", fontSize: 10,
+              color: "var(--text-3)", fontWeight: 500,
+              textTransform: "uppercase", letterSpacing: 0.8,
+            }}>{item.label}</div>
+          );
+        }
+        // item (default kind)
+        return (
+          <button
+            key={`it-${i}`}
+            role="menuitem"
+            onClick={() => { item.onClick(); onClose(); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              width: "100%", padding: "5px 10px",
+              fontSize: "var(--font-ui-size)", textAlign: "left",
+              color: item.variant === "danger" ? "var(--error)" : "var(--text-1)",
+              borderRadius: 3,
+              background: "transparent",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--border)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            {item.icon && (
+              <span style={{
+                display: "inline-flex", alignItems: "center",
+                color: item.variant === "danger" ? "var(--error)" : "var(--text-2)",
+              }}>{item.icon}</span>
+            )}
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
