@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "shellx",
   "version": "0.5.5",
-  "identifier": "com.accuenergy.shellx",
+  "identifier": "io.github.clarence404.shellx",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -28,6 +28,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Clarence404",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
