@@ -268,8 +268,6 @@ cargo --version && rustc --version        # 都要能输出
 - **Settings：Advanced 页** ——快捷键映射、log 级别、遥测开关。
 - **目录也能面板间拖拽** —— 目前基于 mouse 的 pane-to-pane 拖拽只处理普通文件；`sftpUpload`/`sftpDownload` 是单文件 IPC，拖文件夹是 no-op。递归目录传输（两个方向）需要新增 Rust IPC 走树；前端要么在 FileRow wrapper 的 `onMouseDown` 里对 `kind === "directory"` 提示不支持，要么等新递归后端接上后打开。
 - **右键菜单被边缘裁掉** —— pane 靠底部的文件行右键时，`HostContextMenu` 用固定 `top: y` 渲染在光标下方，超出 pane 外层滚动区就被裁掉。应该 mount 时测菜单高度，`click.y + menuHeight` 超过视口/pane clip rect 时翻到光标上方。靠右边缘的点击同理水平翻转。
-- **Terminal 字体实时预览** —— 在 Appearance 面板调整 Terminal 字体族/字号/光标时，Settings 里渲染一段样本（比如 `root@host:~$ echo hi | grep hi`）供当场对比，不用来回切 Terminal tab。
-- **Pane 工具栏点击区域** —— LocalPane / RemotePane 顶部的 `New folder` / `Refresh` / `Upload` 图标按钮用 12 px 图标 + 紧凑内边距，经常点不上。加大到 14 – 16 px 图标 + 更大内边距，同时把图标 size 挂到 `--font-ui-size` 派生的比例上（跟系统字体大小同步缩放），跟其他 sans chrome 的行为对齐。
 - **重新审视紫色 accent** ——`#7c5cff` 用在 rail 图标和高亮态时略显刺眼；探索更柔和的 accent 变体（仍保持品牌调性），或把 accent 色相开放到 Settings 里给用户自选。
 - **Files 面板内容字号** ——目前由 density 的 `--font-body` 控制；在 Appearance → Files 里加一条独立的 Files 字号滑块（对标 Terminal font size），让远端/本地文件浏览的字号能独立调整。
 - **PaneSplitter 最小宽度保护** ——Files 视图的分栏可以拖到基本不可用的窄度；加最小宽度约束（比如每边 200 px），松手时软吸附回位。
@@ -278,7 +276,7 @@ cargo --version && rustc --version        # 都要能输出
 - **Host-key TOFU + known_hosts 持久化** ——SSH host key 首次信任；指纹落 `~/.ssh/known_hosts`。
 - **公钥认证** ——RSA / Ed25519 密钥对 + 系统 keychain 存 passphrase。
 - **安装包签名** ——Windows Authenticode + macOS 公证。
-- **拖放单行传输** ——拖一行文件时只传那一行，不是当前选区全体。
+- **OS 拖出下载** —— 从 Files 面板行拖到 Windows Explorer / macOS Finder 上应该触发下载到那个位置。目前只有接收侧实现（OS→shellx 已通过 Tauri 的 onDragDropEvent 工作）。
 - **Cargo.toml authors 字段** ——把 `authors = ["you"]` 占位符换成真实维护者。
 - **隐藏文件过滤** ——本地/远程双栏切换显示 dotfile。
 - **上传冲突对话框** ——覆盖远端已有文件时提示。

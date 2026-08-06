@@ -277,8 +277,6 @@ The next natural steps (roughly the order of the spec's milestone roadmap):
 - **Settings: Advanced page** — keyboard-shortcut remapping, log level, telemetry toggle.
 - **Directory drag between panes** — the mouse-based pane-to-pane drag currently only transfers regular files. `sftpUpload`/`sftpDownload` are single-file only, so dragging a folder is a no-op. Recursive directory transfer (both directions) needs a new Rust IPC that walks the tree; UI-side the FileRow wrapper's onMouseDown should also skip the drag when `kind === "directory"` OR the new recursive backend must be wired up.
 - **Context menu clipping near pane edges** — when a file row near the bottom of the pane is right-clicked, `HostContextMenu` renders below the cursor with fixed `top: y` and gets clipped by the pane's outer scroll boundary. Should measure the menu's height on mount and flip upward when the click's y + menuHeight overflows the viewport (or the pane's clip rect). Mirror horizontally for near-right-edge clicks.
-- **Terminal font live preview in Appearance** — when adjusting Terminal font family / size / cursor, render a small sample area (`root@host:~$ echo hi | grep hi` etc.) inside the settings panel so the user can compare presets without switching tabs.
-- **Pane toolbar click targets** — the `New folder` / `Refresh` / `Upload` icon buttons in LocalPane / RemotePane use 12 px icons with tight padding and mis-fire often. Bump to a 14 – 16 px icon + wider padding, and tie the icon size to a `--font-ui-size` derived scale so they grow with the System font-size slider (matches the rest of the sans chrome).
 - **Rethink the purple accent** — `#7c5cff` reads harsh in rail icons and selected states; explore a softer accent variant (still on-brand) or expose accent hue as a Setting.
 - **Files-pane content font size** — currently governed by density's `--font-body`; add an explicit Files font-size slider in Appearance → Files, parallel to Terminal font size, so remote/local browsing scales independently.
 - **PaneSplitter min-width guard** — the Files splitter can be dragged into unusable narrow panes; enforce a minimum (e.g. 200 px per side) with soft snap on release.
@@ -287,7 +285,7 @@ The next natural steps (roughly the order of the spec's milestone roadmap):
 - **Host-key TOFU + known_hosts persistence** — trust-on-first-use SSH host-key verification; save fingerprints to `~/.ssh/known_hosts`.
 - **Public-key authentication** — RSA / Ed25519 key pairs with passphrase in system keychain.
 - **Installer code signing** — Windows authenticode + macOS notarization.
-- **Drag-drop row transfer** — dragging a specific file row should transfer only that row, not the entire current selection.
+- **OS drag-out download** — dragging a Files row out of shellx to Windows Explorer / macOS Finder should trigger a download to that location. Only the receive side is implemented today (OS→shellx works via Tauri's onDragDropEvent).
 - **Cargo.toml authors field** — replace `authors = ["you"]` placeholder with actual maintainer names.
 - **Hidden-file filter** — toggle to show/hide dotfiles in local and remote panes.
 - **Upload conflict dialog** — prompt user when overwriting existing remote files.
