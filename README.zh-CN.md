@@ -4,7 +4,16 @@
 
 一个小巧、精致、可扩展的终端 + 文件传输客户端。跨平台（Windows / macOS / Linux），开源，基于 Tauri + Rust + React。
 
-## 版本状态：v0.5.7
+## 版本状态：v0.5.8
+
+v0.5.8 是叠在 v0.5.7 之上的一轮聚焦打磨。Files 字号有了独立滑块（跟 System
+font 大小完全解耦），并附带一个 4 行实时预览（跟真实 FileRow 布局一致）。
+靠近 pane 底部 / 右边缘的右键菜单现在会自动向上 / 向左翻，不再被 pane 的
+overflow 裁掉。PaneSplitter 硬夹在每边 200 px。System / Files 滑块统一到
+11-18 区间，相同数值 thumb 位置对齐。Appearance 面板重排成两列网格，分区
+更清晰，所有内联控件统一 320 px 宽，右边缘对齐。
+
+下面这些仍然生效：
 
 v0.5.7 让面板间拖拽真正能用了 —— HTML5 drag 在 WebView2 + Tauri `dragDropEnabled: true`
 下不可靠，整套改成 pointer 事件跟踪 + 浮动 ghost + 目标 pane 高亮。中间的 ⇄
@@ -267,17 +276,13 @@ cargo --version && rustc --version        # 都要能输出
 
 - **Settings：Advanced 页** ——快捷键映射、log 级别、遥测开关。
 - **目录也能面板间拖拽** —— 目前基于 mouse 的 pane-to-pane 拖拽只处理普通文件；`sftpUpload`/`sftpDownload` 是单文件 IPC，拖文件夹是 no-op。递归目录传输（两个方向）需要新增 Rust IPC 走树；前端要么在 FileRow wrapper 的 `onMouseDown` 里对 `kind === "directory"` 提示不支持，要么等新递归后端接上后打开。
-- **右键菜单被边缘裁掉** —— pane 靠底部的文件行右键时，`HostContextMenu` 用固定 `top: y` 渲染在光标下方，超出 pane 外层滚动区就被裁掉。应该 mount 时测菜单高度，`click.y + menuHeight` 超过视口/pane clip rect 时翻到光标上方。靠右边缘的点击同理水平翻转。
 - **重新审视紫色 accent** ——`#7c5cff` 用在 rail 图标和高亮态时略显刺眼；探索更柔和的 accent 变体（仍保持品牌调性），或把 accent 色相开放到 Settings 里给用户自选。
-- **Files 面板内容字号** ——目前由 density 的 `--font-body` 控制；在 Appearance → Files 里加一条独立的 Files 字号滑块（对标 Terminal font size），让远端/本地文件浏览的字号能独立调整。
-- **PaneSplitter 最小宽度保护** ——Files 视图的分栏可以拖到基本不可用的窄度；加最小宽度约束（比如每边 200 px），松手时软吸附回位。
 - **安全相关规划** ——除已列的 host-key TOFU + 公钥认证外：审计远端返回字符串（尤其路径）的输入清洗、复核 keychain fallback 模式、落一份成文的威胁模型文档。
 - **Protocols 页面设计** ——目前是 `coming soon` 占位；v0.7 之前定型（列已注册的传输/协议实现？每协议激活开关？各会话协议层的实时健康度？）。
 - **Host-key TOFU + known_hosts 持久化** ——SSH host key 首次信任；指纹落 `~/.ssh/known_hosts`。
 - **公钥认证** ——RSA / Ed25519 密钥对 + 系统 keychain 存 passphrase。
 - **安装包签名** ——Windows Authenticode + macOS 公证。
 - **OS 拖出下载** —— 从 Files 面板行拖到 Windows Explorer / macOS Finder 上应该触发下载到那个位置。目前只有接收侧实现（OS→shellx 已通过 Tauri 的 onDragDropEvent 工作）。
-- **Cargo.toml authors 字段** ——把 `authors = ["you"]` 占位符换成真实维护者。
 - **隐藏文件过滤** ——本地/远程双栏切换显示 dotfile。
 - **上传冲突对话框** ——覆盖远端已有文件时提示。
 - **v0.7+** ——传统 FTP / FTPS、跨平台签名 CI。

@@ -4,7 +4,18 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.5.7
+## Status: v0.5.8
+
+v0.5.8 is a focused polish pass on top of v0.5.7. Files font size gets
+its own slider (independent of the System font size) with a live 4-row
+preview that mirrors the real FileRow layout. Right-click menus that
+land near a pane's bottom or right edge now flip upward / leftward
+instead of getting clipped by the pane's overflow. PaneSplitter hard-
+clamps each side to a 200 px minimum. System / Files sliders now share
+the same 11-18 range so equal values put both thumbs at the same track
+position. Appearance panel restructured into a two-column grid with
+distinct sections and unified 320 px control width so labels and right
+edges line up. Everything below still applies:
 
 v0.5.7 makes pane-to-pane drag actually work — the previous HTML5-drag
 attempt was unreliable inside WebView2 + Tauri's `dragDropEnabled: true`,
@@ -276,17 +287,13 @@ The next natural steps (roughly the order of the spec's milestone roadmap):
 
 - **Settings: Advanced page** — keyboard-shortcut remapping, log level, telemetry toggle.
 - **Directory drag between panes** — the mouse-based pane-to-pane drag currently only transfers regular files. `sftpUpload`/`sftpDownload` are single-file only, so dragging a folder is a no-op. Recursive directory transfer (both directions) needs a new Rust IPC that walks the tree; UI-side the FileRow wrapper's onMouseDown should also skip the drag when `kind === "directory"` OR the new recursive backend must be wired up.
-- **Context menu clipping near pane edges** — when a file row near the bottom of the pane is right-clicked, `HostContextMenu` renders below the cursor with fixed `top: y` and gets clipped by the pane's outer scroll boundary. Should measure the menu's height on mount and flip upward when the click's y + menuHeight overflows the viewport (or the pane's clip rect). Mirror horizontally for near-right-edge clicks.
 - **Rethink the purple accent** — `#7c5cff` reads harsh in rail icons and selected states; explore a softer accent variant (still on-brand) or expose accent hue as a Setting.
-- **Files-pane content font size** — currently governed by density's `--font-body`; add an explicit Files font-size slider in Appearance → Files, parallel to Terminal font size, so remote/local browsing scales independently.
-- **PaneSplitter min-width guard** — the Files splitter can be dragged into unusable narrow panes; enforce a minimum (e.g. 200 px per side) with soft snap on release.
 - **Security posture roadmap** — beyond host-key TOFU + pubkey auth already listed: audit path-sanitisation on remote-supplied strings, review keychain fallback modes, and land a written threat-model document.
 - **Protocols page design** — currently a `coming soon` placeholder; before v0.7 scope what it actually is (list of registered transport / protocol implementations? per-protocol activation UI? live health of each session's protocol layer?).
 - **Host-key TOFU + known_hosts persistence** — trust-on-first-use SSH host-key verification; save fingerprints to `~/.ssh/known_hosts`.
 - **Public-key authentication** — RSA / Ed25519 key pairs with passphrase in system keychain.
 - **Installer code signing** — Windows authenticode + macOS notarization.
 - **OS drag-out download** — dragging a Files row out of shellx to Windows Explorer / macOS Finder should trigger a download to that location. Only the receive side is implemented today (OS→shellx works via Tauri's onDragDropEvent).
-- **Cargo.toml authors field** — replace `authors = ["you"]` placeholder with actual maintainer names.
 - **Hidden-file filter** — toggle to show/hide dotfiles in local and remote panes.
 - **Upload conflict dialog** — prompt user when overwriting existing remote files.
 - **v0.7+** — traditional FTP / FTPS, signed cross-platform CI.
