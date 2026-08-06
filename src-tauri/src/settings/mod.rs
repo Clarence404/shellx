@@ -15,12 +15,17 @@ pub struct Settings {
     /// files (pre-v0.5.3) — serde default resolves to 13.
     #[serde(default = "default_system_font_size")]
     pub system_font_size: u32,
+    /// Files-pane row font size in px, 11..=18. Missing on old
+    /// settings.json files (pre-v0.5.8) — serde default resolves to 13.
+    #[serde(default = "default_files_font_size")]
+    pub files_font_size: u32,
     pub terminal: TerminalSettings,
     pub schema_version: u32,
 }
 
 fn default_system_font() -> String { "system-default".into() }
 fn default_system_font_size() -> u32 { 13 }
+fn default_files_font_size() -> u32 { 13 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -84,6 +89,7 @@ mod tests {
             density: "compact".into(),
             system_font: "segoe-ui".into(),
             system_font_size: 14,
+            files_font_size: 15,
             terminal: TerminalSettings {
                 font_family: "fira-code".into(),
                 font_size: 14,
@@ -104,6 +110,7 @@ mod tests {
         let got = store.load().unwrap().unwrap();
         assert_eq!(got.system_font, "system-default");
         assert_eq!(got.system_font_size, 13);
+        assert_eq!(got.files_font_size, 13);
     }
 
     #[test]

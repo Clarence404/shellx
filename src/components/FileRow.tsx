@@ -221,7 +221,7 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
         onMouseLeave={() => setHovered(false)}
         style={{
           display: "flex", alignItems: "center", gap: 10,
-          padding: "var(--pad-row-y) var(--pad-row-x)", fontSize: "var(--font-body)",
+          padding: "var(--pad-row-y) var(--pad-row-x)", fontSize: "var(--font-files-size)",
           fontFamily: '"JetBrains Mono", var(--font-mono)',
           color: disabled ? "var(--text-3)" : "var(--text-1)",
           background: selected ? "var(--accent-fade)" : hovered ? "var(--border)" : "transparent",

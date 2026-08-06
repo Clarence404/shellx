@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
+import { Folder, File as FileIcon, FileCode, FileJson } from "lucide-react";
 import { useSettingsStore } from "../../state/settings";
 import {
   THEME_META, DENSITY_META, FONT_MAP, SYSTEM_FONT_META,
   SYSTEM_FONT_SIZE_MIN, SYSTEM_FONT_SIZE_MAX,
+  FILES_FONT_SIZE_MIN, FILES_FONT_SIZE_MAX,
 } from "../../types/settings";
 import type { Settings } from "../../types/settings";
 
@@ -18,6 +20,7 @@ export function AppearancePanel() {
   const density = useSettingsStore((s) => s.density);
   const systemFont = useSettingsStore((s) => s.systemFont);
   const systemFontSize = useSettingsStore((s) => s.systemFontSize);
+  const filesFontSize = useSettingsStore((s) => s.filesFontSize);
   const terminal = useSettingsStore((s) => s.terminal);
 
   const setTheme = (id: Settings["themeId"]) => useSettingsStore.getState().setTheme(id);
@@ -25,6 +28,7 @@ export function AppearancePanel() {
   const setSystemFont = (id: Settings["systemFont"]) =>
     useSettingsStore.getState().setSystemFont(id);
   const setSystemFontSize = (n: number) => useSettingsStore.getState().setSystemFontSize(n);
+  const setFilesFontSize = (n: number) => useSettingsStore.getState().setFilesFontSize(n);
   const setFontFamily = (id: Settings["terminal"]["fontFamily"]) =>
     useSettingsStore.getState().setTerminalFontFamily(id);
   const setFontSize = (n: number) => useSettingsStore.getState().setTerminalFontSize(n);
@@ -34,17 +38,17 @@ export function AppearancePanel() {
   return (
     <div style={{ padding: "20px 24px", overflowY: "auto", color: "var(--text-1)", flex: 1 }}>
       <h3 style={{ fontSize: FS_HEADING, fontWeight: 500, margin: "0 0 6px" }}>Appearance</h3>
-      <div style={{ fontSize: FS_META, color: "var(--text-3)", marginBottom: 20 }}>
+      <div style={{ fontSize: FS_META, color: "var(--text-3)", marginBottom: 18 }}>
         Changes apply live · saved to settings.json in your config directory
       </div>
 
       <SectionHeader>Interface</SectionHeader>
 
-      <Field label="Theme">
+      <TwoColField label="Theme">
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-          gap: 10, maxWidth: 620,
+          gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+          gap: 8, maxWidth: 420,
         }}>
           {THEME_META.map((t) => (
             <div
@@ -53,90 +57,112 @@ export function AppearancePanel() {
               aria-pressed={themeId === t.id}
               onClick={() => setTheme(t.id)}
               style={{
-                padding: "10px 8px", cursor: "pointer",
+                padding: "8px 8px", cursor: "pointer",
                 border: themeId === t.id
                   ? "1px solid var(--accent)" : "1px solid var(--border)",
                 boxShadow: themeId === t.id
                   ? "0 0 0 2px var(--accent-fade)" : undefined,
-                borderRadius: 6, background: "var(--panel-1)",
+                borderRadius: 5, background: "var(--panel-1)",
               }}
             >
-              <div style={{ display: "flex", gap: 3, marginBottom: 8, height: 12 }}>
+              <div style={{ display: "flex", gap: 3, marginBottom: 6, height: 10 }}>
                 {t.swatch.map((c, i) => (
                   <span key={i} style={{ flex: 1, borderRadius: 2, background: c }} />
                 ))}
               </div>
-              <div style={{ fontSize: FS_BODY, color: "var(--text-1)" }}>{t.label}</div>
+              <div style={{ fontSize: FS_META, color: "var(--text-1)" }}>{t.label}</div>
             </div>
           ))}
         </div>
-      </Field>
+      </TwoColField>
 
-      <Field label="Density">
+      <TwoColField label="Density">
         <Segmented
           options={DENSITY_META.map((d) => ({ id: d.id, label: d.label }))}
           value={density}
           onChange={(id) => setDensity(id as Settings["density"])}
         />
-      </Field>
+      </TwoColField>
 
-      <Field
-        label="System font"
-        hint="Controls sans UI — tabs, buttons, section headers."
+      <SectionHeader>System font</SectionHeader>
+
+      <TwoColField
+        label="Family"
+        hint="Sans UI — tabs, buttons, section headers."
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <select
-            value={systemFont}
-            onChange={(e) => setSystemFont(e.target.value as Settings["systemFont"])}
-            aria-label="System font"
-            style={{
-              padding: "6px 10px", fontSize: FS_BODY, color: "var(--text-1)",
-              background: "var(--panel-1)", border: "1px solid var(--border)",
-              borderRadius: 5, minWidth: 180,
-            }}
-          >
-            {SYSTEM_FONT_META.map((f) => (
-              <option key={f.id} value={f.id}>{f.label}</option>
-            ))}
-          </select>
-          <SizeSlider
-            aria-label="System font size"
-            min={SYSTEM_FONT_SIZE_MIN} max={SYSTEM_FONT_SIZE_MAX}
-            value={systemFontSize}
-            onChange={setSystemFontSize}
-          />
-        </div>
-      </Field>
+        <select
+          value={systemFont}
+          onChange={(e) => setSystemFont(e.target.value as Settings["systemFont"])}
+          aria-label="System font"
+          style={{
+            padding: "5px 10px", fontSize: FS_BODY, color: "var(--text-1)",
+            background: "var(--panel-1)", border: "1px solid var(--border)",
+            borderRadius: 5, width: 320, maxWidth: "100%",
+          }}
+        >
+          {SYSTEM_FONT_META.map((f) => (
+            <option key={f.id} value={f.id}>{f.label}</option>
+          ))}
+        </select>
+      </TwoColField>
+
+      <TwoColField label="Size">
+        <SizeSlider
+          aria-label="System font size"
+          min={SYSTEM_FONT_SIZE_MIN} max={SYSTEM_FONT_SIZE_MAX}
+          value={systemFontSize}
+          onChange={setSystemFontSize}
+        />
+      </TwoColField>
+
+      <SectionHeader>Files</SectionHeader>
+
+      <TwoColField
+        label="Size"
+        hint="Filename + meta text in the Files panes. Independent of System font."
+      >
+        <SizeSlider
+          aria-label="Files font size"
+          min={FILES_FONT_SIZE_MIN} max={FILES_FONT_SIZE_MAX}
+          value={filesFontSize}
+          onChange={setFilesFontSize}
+        />
+      </TwoColField>
+
+      <TwoColField label="Preview">
+        <FilesPreview fontSize={filesFontSize} />
+      </TwoColField>
 
       <SectionHeader>Terminal</SectionHeader>
 
-      <Field label="Terminal font">
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <select
-            value={terminal.fontFamily}
-            onChange={(e) => setFontFamily(e.target.value as Settings["terminal"]["fontFamily"])}
-            aria-label="Terminal font"
-            style={{
-              padding: "6px 10px", fontSize: FS_BODY, color: "var(--text-1)",
-              background: "var(--panel-1)", border: "1px solid var(--border)",
-              borderRadius: 5, minWidth: 180,
-              fontFamily: '"JetBrains Mono", var(--font-mono)',
-            }}
-          >
-            {(Object.keys(FONT_MAP) as Array<Settings["terminal"]["fontFamily"]>).map((k) => (
-              <option key={k} value={k}>{humanFont(k)}</option>
-            ))}
-          </select>
-          <SizeSlider
-            aria-label="Terminal font size"
-            min={10} max={20}
-            value={terminal.fontSize}
-            onChange={setFontSize}
-          />
-        </div>
-      </Field>
+      <TwoColField label="Family">
+        <select
+          value={terminal.fontFamily}
+          onChange={(e) => setFontFamily(e.target.value as Settings["terminal"]["fontFamily"])}
+          aria-label="Terminal font"
+          style={{
+            padding: "5px 10px", fontSize: FS_BODY, color: "var(--text-1)",
+            background: "var(--panel-1)", border: "1px solid var(--border)",
+            borderRadius: 5, width: 320, maxWidth: "100%",
+            fontFamily: '"JetBrains Mono", var(--font-mono)',
+          }}
+        >
+          {(Object.keys(FONT_MAP) as Array<Settings["terminal"]["fontFamily"]>).map((k) => (
+            <option key={k} value={k}>{humanFont(k)}</option>
+          ))}
+        </select>
+      </TwoColField>
 
-      <Field label="Cursor style">
+      <TwoColField label="Size">
+        <SizeSlider
+          aria-label="Terminal font size"
+          min={10} max={20}
+          value={terminal.fontSize}
+          onChange={setFontSize}
+        />
+      </TwoColField>
+
+      <TwoColField label="Cursor">
         <Segmented
           options={[
             { id: "block", label: "Block" },
@@ -146,15 +172,55 @@ export function AppearancePanel() {
           value={terminal.cursorStyle}
           onChange={(id) => setCursorStyle(id as Settings["terminal"]["cursorStyle"])}
         />
-      </Field>
+      </TwoColField>
 
-      <Field label="Preview" hint="Live sample using the selected font, size, and cursor style.">
+      <TwoColField label="Preview">
         <TerminalPreview
           fontFamily={terminal.fontFamily}
           fontSize={terminal.fontSize}
           cursorStyle={terminal.cursorStyle}
         />
-      </Field>
+      </TwoColField>
+    </div>
+  );
+}
+
+// Mini file list mock — mirrors FileRow's layout (icon + monospace name +
+// right-aligned size) so what you see here is what you get in the panes.
+// Static rows, no store reads — the fontSize prop tracks the slider live.
+function FilesPreview({ fontSize }: { fontSize: number }) {
+  const rows: Array<{ name: string; Icon: typeof Folder; color: string; size: string | null }> = [
+    { name: "documents",  Icon: Folder,   color: "var(--text-2)", size: null },
+    { name: "server.log", Icon: FileIcon, color: "var(--text-3)", size: "128 KB" },
+    { name: "config.json", Icon: FileJson, color: "#a6e3a1", size: "4.2 KB" },
+    { name: "main.rs",    Icon: FileCode, color: "#f2c8a2", size: "9.8 KB" },
+  ];
+  return (
+    <div style={{
+      background: "var(--panel-1)", borderRadius: 4,
+      border: "0.5px solid var(--border)",
+      padding: "4px 0", maxWidth: 460, overflow: "hidden",
+    }}>
+      {rows.map((r) => (
+        <div key={r.name} style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "5px 12px", fontSize,
+          fontFamily: '"JetBrains Mono", var(--font-mono)',
+          color: "var(--text-1)",
+        }}>
+          <r.Icon size={fontSize + 2} color={r.color} />
+          <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {r.name}
+          </span>
+          {r.size && (
+            <span style={{
+              color: "var(--text-3)",
+              fontSize: Math.max(9, fontSize - 3),
+              minWidth: 56, textAlign: "right",
+            }}>{r.size}</span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -228,27 +294,42 @@ function TerminalPreview({
 function SectionHeader({ children }: { children: ReactNode }) {
   return (
     <div style={{
-      fontSize: FS_META, textTransform: "uppercase", letterSpacing: 1.2,
-      color: "var(--text-3)", fontWeight: 500,
-      marginTop: 4, marginBottom: 12, paddingBottom: 6,
-      borderBottom: "1px solid var(--border)",
+      fontSize: FS_BODY, textTransform: "uppercase", letterSpacing: 1.4,
+      color: "var(--text-1)", fontWeight: 600,
+      marginTop: 20, marginBottom: 12, paddingBottom: 6,
+      borderBottom: "1px solid var(--border-hi)",
     }}>{children}</div>
   );
 }
 
-function Field({ label, hint, children }: {
+// Two-column row: fixed-width left label, control on the right. Keeps
+// everything aligned in a tidy grid instead of the old stacked layout
+// where each Field's label sat above its control on its own line —
+// which made the panel feel long and jumpy.
+function TwoColField({ label, hint, children }: {
   label: string; hint?: string; children: ReactNode;
 }) {
   return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: FS_BODY, color: "var(--text-2)", marginBottom: 8 }}>{label}</div>
-      {children}
-      {hint && (
-        <div style={{ fontSize: FS_META, color: "var(--text-3)", marginTop: 6 }}>{hint}</div>
-      )}
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "110px 1fr",
+      alignItems: "center",
+      gap: 16, marginBottom: 10,
+    }}>
+      <div style={{ fontSize: FS_BODY, color: "var(--text-2)" }}>{label}</div>
+      <div>
+        {children}
+        {hint && (
+          <div style={{ fontSize: FS_META, color: "var(--text-3)", marginTop: 4 }}>{hint}</div>
+        )}
+      </div>
     </div>
   );
 }
+
+// Every inline control (select, slider, segmented) uses this width so
+// their right edges line up across the panel. Previews are wider by design.
+const CONTROL_WIDTH = 320;
 
 function SizeSlider({ min, max, value, onChange, ...aria }: {
   min: number; max: number; value: number;
@@ -256,7 +337,10 @@ function SizeSlider({ min, max, value, onChange, ...aria }: {
   "aria-label": string;
 }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, maxWidth: 260 }}>
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10,
+      width: CONTROL_WIDTH, maxWidth: "100%",
+    }}>
       <input
         type="range" min={min} max={max} step={1}
         value={value}
@@ -288,7 +372,7 @@ function Segmented({ options, value, onChange }: {
           aria-pressed={value === o.id}
           onClick={() => onChange(o.id)}
           style={{
-            padding: "5px 12px", fontSize: FS_BODY, borderRadius: 3,
+            padding: "4px 12px", fontSize: FS_BODY, borderRadius: 3,
             background: value === o.id ? "var(--accent)" : "transparent",
             color: value === o.id ? "var(--text-on-accent)" : "var(--text-2)",
             cursor: "pointer", border: "none",

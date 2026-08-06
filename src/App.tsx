@@ -40,6 +40,7 @@ export function App() {
   const density = useSettingsStore((s) => s.density);
   const systemFont = useSettingsStore((s) => s.systemFont);
   const systemFontSize = useSettingsStore((s) => s.systemFontSize);
+  const filesFontSize = useSettingsStore((s) => s.filesFontSize);
 
   const [dialog, setDialog] = useState<
     | { mode: "create" }
@@ -82,6 +83,13 @@ export function App() {
   useEffect(() => {
     document.documentElement.style.setProperty("--font-ui-size", `${systemFontSize}px`);
   }, [systemFontSize]);
+
+  // Sync filesFontSize to --font-files-size. FileRow's filename / meta
+  // pick this up. Kept separate from --font-body so cranking file rows
+  // doesn't inflate row padding or every other density-sized element.
+  useEffect(() => {
+    document.documentElement.style.setProperty("--font-files-size", `${filesFontSize}px`);
+  }, [filesFontSize]);
 
   // Wire transfer started/progress/done events into the transfers store. Uses
   // the `cancelled` flag guard (see FileBrowserView's drag-drop listener)
