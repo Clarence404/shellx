@@ -19,6 +19,30 @@ input { font: inherit; color: inherit; }
   50%      { opacity: 1;   box-shadow: 0 0 0 4px transparent; }
 }
 
+/* RemotePane's Reconnecting panel — animated plug icons drifting toward
+   the center and back out, plus a three-dot pulse between them. Two
+   separate keyframes so the left/right plugs oppose each other. */
+@keyframes shellx-plug-left {
+  0%, 100% { transform: translateX(-4px); opacity: 0.55; }
+  50%      { transform: translateX(0);    opacity: 1; }
+}
+@keyframes shellx-plug-right {
+  0%, 100% { transform: translateX(4px);  opacity: 0.55; }
+  50%      { transform: translateX(0);    opacity: 1; }
+}
+@keyframes shellx-dot-pulse {
+  0%, 80%, 100% { opacity: 0.25; }
+  40%           { opacity: 1; }
+}
+
+/* Modal fade-in. Used by ErrorDialog's backdrop so the dialog doesn't
+   slam in on first paint. Purely visual — the dialog is functional
+   without the animation on browsers that ignore it. */
+@keyframes shellx-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* Warm-Minimal scrollbar — the WebView2 default is nearly invisible on dark. */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }

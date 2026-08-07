@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { LocalEntry, DefaultRoots } from "../types/local";
+import type { LocalEntry, DefaultRoots, LocalDisk } from "../types/local";
 
 export const localListDir = (path: string) =>
   invoke<LocalEntry[]>("local_list_dir", { args: { path } });
@@ -16,6 +16,9 @@ export const localIsDir = (path: string) =>
 
 export const localDefaultRoots = () =>
   invoke<DefaultRoots>("local_default_roots");
+
+export const localListDisks = () =>
+  invoke<LocalDisk[]>("local_list_disks");
 
 export const localMkdir = (path: string) =>
   invoke<void>("local_mkdir", { args: { path } });
