@@ -104,6 +104,22 @@ pub fn default_roots() -> DefaultRoots {
     }
 }
 
+/// True if `path` refers to an existing directory. Used by the frontend
+/// OS-drop handlers to route between `sftp_upload` (single file) and
+/// `sftp_upload_dir` (recursive) — dropping a folder from Explorer
+/// previously silently failed because `sftp_upload` called
+/// `LocalFile::open(dir)` and the error was swallowed by the fire-and-
+/// forget `void invoke(...)` on the JS side.
+pub fn is_dir(path: &str) -> Result<bool> {
+    let p = expand(path)?;
+    match std::fs::metadata(&p) {
+        Ok(m) => Ok(m.is_dir()),
+        // Missing path or permission error → treat as "not a directory"
+        // and let the file-upload path surface the real error.
+        Err(_) => Ok(false),
+    }
+}
+
 pub fn mkdir(path: &str) -> Result<()> {
     let p = expand(path)?;
     std::fs::create_dir(&p)

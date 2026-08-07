@@ -7,6 +7,13 @@ export const localListDir = (path: string) =>
 export const localRealpath = (path: string) =>
   invoke<string>("local_realpath", { args: { path } });
 
+/** True if the local path is a directory. OS drop handlers use this
+ *  to route between `sftp_upload` (single file) and `sftp_upload_dir`
+ *  (recursive) — a dropped folder previously silently failed because
+ *  `sftp_upload` opened it as a file. */
+export const localIsDir = (path: string) =>
+  invoke<boolean>("local_is_dir", { args: { path } });
+
 export const localDefaultRoots = () =>
   invoke<DefaultRoots>("local_default_roots");
 
