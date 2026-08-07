@@ -68,6 +68,25 @@ tempfile = "3"
 # to use it from `tests/`).
 russh-sftp = "2"
 
+# Integration tests consume the crate from outside, so `#[cfg(test)]` on
+# `protocol::ssh::testing` doesn't apply to them — they can only see it
+# when the `test-fixtures` feature is enabled. `required-features` here
+# tells Cargo to SKIP these tests (instead of failing with "unresolved
+# import ::testing") when the feature isn't on, and IDE tooling picks
+# up the flag so its analyser stops flagging the imports as broken.
+#
+# Run them explicitly with:
+#   cargo test --features test-fixtures
+[[test]]
+name = "sftp_integration"
+path = "tests/sftp_integration.rs"
+required-features = ["test-fixtures"]
+
+[[test]]
+name = "ssh_integration"
+path = "tests/ssh_integration.rs"
+required-features = ["test-fixtures"]
+
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
 
