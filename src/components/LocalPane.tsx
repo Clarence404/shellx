@@ -3,7 +3,7 @@ import { RefreshCw, FolderPlus } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useRailFiles } from "../state/railFiles";
 import { useSessions } from "../state/sessions";
-import { localOpenInOs, localMkdir, localRename, localRemoveFile, localRemoveDir, localDefaultRoots, localCopyInto } from "../ipc/local";
+import { localOpenInOs, localMkdir, localRename, localRemoveFile, localRemoveDir, localDefaultRoots, localCopyInto, localListDisks } from "../ipc/local";
 import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
 import { LocalPathDropdown } from "./LocalPathDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
@@ -221,7 +221,7 @@ export function LocalPane() {
       </div>
       <div style={{ height: 30, padding: "0 10px", display: "flex", alignItems: "center",
         background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)" }}>
-        <PathBreadcrumb path={leftPath} onNavigate={setLeftPath} />
+        <PathBreadcrumb path={leftPath} onNavigate={setLeftPath} onListDisks={localListDisks} />
       </div>
       <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}
         // outer paneRef div now owns the drop handler; inner list

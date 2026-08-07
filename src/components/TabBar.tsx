@@ -1,7 +1,9 @@
-import { Plus, ChevronLeft, ChevronRight, List } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight, List, TerminalSquare, Plug } from "lucide-react";
 import { forwardRef, useEffect, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { HostContextMenu } from "./HostContextMenu";
+import { useHostsStore } from "../state/hosts";
+import type { HostInfo } from "../types/host";
 
 export type Tab = { id: string; title: string; state?: "active" | "closed" };
 
@@ -12,19 +14,29 @@ interface Props {
   onClose: (id: string) => void;
   onCloseTabs?: (ids: string[]) => void;
   onNewConnection?: () => void;
+  onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
 }
 
+// v0.6.3: cap the quick-connect list so a large saved-hosts inventory
+// doesn't spill the popover off-screen. Same six-item ceiling used by
+// the file-manager's "recent folders" affordance.
+const QUICK_CONNECT_LIMIT = 6;
+
 export function TabBar({
-  tabs, activeTabId, onSelect, onClose, onCloseTabs, onNewConnection,
+  tabs, activeTabId, onSelect, onClose, onCloseTabs, onNewConnection, onConnectHost,
 }: Props) {
+  const savedHosts = useHostsStore((s) => s.hosts);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef<HTMLDivElement | null>(null);
   const listBtnRef = useRef<HTMLButtonElement | null>(null);
   const listPopRef = useRef<HTMLDivElement | null>(null);
+  const plusBtnRef = useRef<HTMLButtonElement | null>(null);
+  const plusPopRef = useRef<HTMLDivElement | null>(null);
 
   // Which end can still scroll. Both false → no overflow, hide all controls.
   const [overflow, setOverflow] = useState({ left: false, right: false });
   const [listOpen, setListOpen] = useState(false);
+  const [plusOpen, setPlusOpen] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string } | null>(null);
 
   // Recompute overflow state on scroll, resize, or tabs change. Runs on
@@ -76,6 +88,24 @@ export function TabBar({
       document.removeEventListener("keydown", onEsc);
     };
   }, [listOpen]);
+
+  // Same outside-click / Escape handling for the + button's popover.
+  useEffect(() => {
+    if (!plusOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!plusBtnRef.current?.contains(t) && !plusPopRef.current?.contains(t)) {
+        setPlusOpen(false);
+      }
+    };
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && setPlusOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [plusOpen]);
 
   const hasOverflow = overflow.left || overflow.right;
 
@@ -184,8 +214,11 @@ export function TabBar({
         ))}
         {onNewConnection && (
           <button
-            onClick={onNewConnection}
-            aria-label="new connection"
+            ref={plusBtnRef}
+            onClick={() => setPlusOpen((o) => !o)}
+            aria-label="new tab"
+            aria-haspopup="menu"
+            aria-expanded={plusOpen}
             style={{
               padding: "6px 10px", marginLeft: 4,
               background: "transparent", color: "var(--text-3)",
@@ -278,6 +311,16 @@ export function TabBar({
         </div>
       )}
 
+      {plusOpen && (
+        <PlusMenu
+          popRef={plusPopRef}
+          anchor={plusBtnRef.current}
+          savedHosts={savedHosts}
+          onNewConnection={() => { setPlusOpen(false); onNewConnection?.(); }}
+          onQuickConnect={(host) => { setPlusOpen(false); onConnectHost?.(host); }}
+        />
+      )}
+
       {ctxMenu && (
         <HostContextMenu
           x={ctxMenu.x} y={ctxMenu.y}
@@ -286,6 +329,129 @@ export function TabBar({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Popover shown when the tab bar's + button is clicked. Three sections:
+ *
+ *   1. New local terminal — disabled, "Soon" badge. Placeholder for the
+ *      future ConPTY / forkpty backend feature.
+ *   2. Quick connect — up to 6 saved hosts. Single click starts a fresh
+ *      connect via `onConnectHost` (defers to App's existing dedup logic).
+ *   3. New SSH connection — opens the full ConnectDialog.
+ *
+ * Anchor is computed once from the + button's client rect; the popover
+ * uses `position: fixed` so it isn't clipped by TabBar's overflow.
+ */
+function PlusMenu({
+  popRef, anchor, savedHosts, onNewConnection, onQuickConnect,
+}: {
+  popRef: React.RefObject<HTMLDivElement>;
+  anchor: HTMLButtonElement | null;
+  savedHosts: HostInfo[];
+  onNewConnection: () => void;
+  onQuickConnect: (host: HostInfo) => void;
+}) {
+  const rect = anchor?.getBoundingClientRect();
+  const top = (rect?.bottom ?? 32) + 2;
+  const left = rect?.left ?? 0;
+  const quick = savedHosts.slice(0, QUICK_CONNECT_LIMIT);
+
+  return (
+    <div
+      ref={popRef}
+      role="menu"
+      style={{
+        position: "fixed", top, left,
+        minWidth: 240, maxWidth: 320,
+        background: "var(--panel-2)", border: "0.5px solid var(--border)",
+        borderRadius: 6, padding: 4, zIndex: 300,
+        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+        fontSize: "var(--font-ui-size)",
+      }}>
+      <MenuItem
+        icon={<TerminalSquare size={14} />}
+        label="New local terminal"
+        disabled
+        badge="Soon"
+      />
+      {quick.length > 0 && (
+        <>
+          <MenuDivider />
+          <MenuHeading>Quick connect</MenuHeading>
+          {quick.map((h) => (
+            <MenuItem
+              key={h.id}
+              icon={<span style={{
+                display: "inline-block", width: 6, height: 6, borderRadius: 3,
+                background: "var(--success, #7c9c80)",
+              }} />}
+              label={h.label || h.host}
+              onClick={() => onQuickConnect(h)}
+            />
+          ))}
+        </>
+      )}
+      <MenuDivider />
+      <MenuItem
+        icon={<Plug size={14} />}
+        label="New SSH connection…"
+        onClick={onNewConnection}
+      />
+    </div>
+  );
+}
+
+function MenuItem({
+  icon, label, onClick, disabled, badge,
+}: {
+  icon: ReactNode;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  badge?: string;
+}) {
+  return (
+    <div
+      role="menuitem"
+      onClick={disabled ? undefined : onClick}
+      onMouseEnter={(e) => {
+        if (!disabled) (e.currentTarget as HTMLElement).style.background = "var(--border)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLElement).style.background = "transparent";
+      }}
+      style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "6px 10px", borderRadius: 4,
+        color: disabled ? "var(--text-3)" : "var(--text-1)",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.55 : 1,
+      }}>
+      <span style={{ display: "inline-flex", width: 14, justifyContent: "center", color: "var(--text-2)" }}>{icon}</span>
+      <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+      {badge && (
+        <span style={{
+          fontSize: 9, padding: "1px 5px", borderRadius: 3,
+          background: "var(--border)", color: "var(--text-3)",
+          textTransform: "uppercase", letterSpacing: 0.4,
+        }}>{badge}</span>
+      )}
+    </div>
+  );
+}
+
+function MenuDivider() {
+  return <div style={{ height: "0.5px", background: "var(--border)", margin: "4px 2px" }} />;
+}
+
+function MenuHeading({ children }: { children: ReactNode }) {
+  return (
+    <div style={{
+      padding: "6px 10px 2px", fontSize: 10, color: "var(--text-3)",
+      textTransform: "uppercase", letterSpacing: 0.4,
+    }}>{children}</div>
   );
 }
 
