@@ -4,7 +4,16 @@
 
 A tiny, pretty, extensible terminal + file-transfer client. Cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-## Status: v0.6.1
+## Status: v0.6.2
+
+v0.6.2 fixes the two rough edges left over from v0.6.1: dragging a
+folder from Explorer / Finder to the remote pane now recursively
+uploads it (previously silently failed because `sftp_upload` opened
+the local directory as a file), and the transfer strip disappears the
+instant everything's done rather than lingering for five seconds.
+Cargo integration tests declare `required-features = ["test-fixtures"]`
+so `cargo test` on the default feature set stops failing with
+`unresolved import ::testing`. Everything below still applies:
 
 v0.6.1 polishes the transfer strip: group `✕` now cancels
 mid-enumeration on huge directories (a 2 500-file cancel used to keep
