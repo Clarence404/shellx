@@ -42,6 +42,7 @@ export function AppShell({
         onTabSelect={onTabSelect} onTabClose={onTabClose}
         onTabsClose={onTabsClose}
         onNewConnection={onNewConnection}
+        onConnectHost={onConnectHost}
       />
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
         <ActivityRail />

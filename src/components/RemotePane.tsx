@@ -14,6 +14,8 @@ import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow, buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
 import { PaneToolbarButton } from "./PaneToolbarButton";
 import { HostContextMenu } from "./HostContextMenu";
+import { ConnectingPanel } from "./ConnectingPanel";
+import { ErrorDialog } from "./ErrorDialog";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import type { HostInfo } from "../types/host";
@@ -38,11 +40,19 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
   const selected = useRailFiles((s) => s.rightSelected);
   const sessions = useSessions((s) => s.sessions);
   const savedHosts = useHostsStore((s) => s.hosts);
+  // True while the SSH handshake is in flight for the saved host this pane
+  // is attached to. Drives the "Reconnecting…" transition panel in place of
+  // DisconnectedPanel; flips back to false once addSession or endConnecting
+  // fires (success or failure).
+  const reconnecting = useSessions((s) =>
+    rightSavedHostId ? !!s.connecting[rightSavedHostId] : false,
+  );
   // Ref to the pane's outer div so we can hit-test the drag-drop event's
   // physical-pixel position against the pane's CSS-pixel bounding rect.
   const paneRef = useRef<HTMLDivElement | null>(null);
   const [osDragOver, setOsDragOver] = useState(false);
   const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const internalDragOver = useRailFiles((s) =>
     s.currentDrag?.pane === "left" && s.currentDrag.hoverTarget === "right",
   );
@@ -72,6 +82,17 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
   // Label to show in the HostDropdown after the closed session is
   // purged from useSessions.sessions.
   const fallbackLabel = savedHostForReconnect?.label ?? currentSession?.label ?? null;
+
+  // When the pane transitions to disconnected, wipe any stale
+  // `connecting[savedHostId]` flag left over from a previous failed
+  // connect. The early-return guard in `handleConnectSavedHost`
+  // consults this flag, so a stuck-true value would silently swallow
+  // every subsequent Reconnect click — the exact "点击没反应" symptom.
+  useEffect(() => {
+    if (isDisconnected && rightSavedHostId) {
+      useSessions.getState().endConnecting(rightSavedHostId);
+    }
+  }, [isDisconnected, rightSavedHostId]);
 
   // Mount-only rehydration guard: useRailFiles's initial state restores
   // rightHost/rightPath directly from localStorage (bypassing setRightHost
@@ -279,12 +300,28 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
       </div>
 
       {isDisconnected ? (
-        <DisconnectedPanel
-          hostLabel={fallbackLabel ?? "this host"}
-          canReconnect={!!savedHostForReconnect}
-          onReconnect={handleReconnect}
-          onPickDifferent={() => setRightHost(null)}
-        />
+        reconnecting ? (
+          <ConnectingPanel
+            hostLabel={fallbackLabel ?? "this host"}
+            title={`Reconnecting to ${fallbackLabel ?? "this host"}…`}
+            subtitle="Re-establishing the SSH session."
+            onCancel={() => {
+              // Best-effort cancel — the underlying SSH handshake can't be
+              // aborted mid-flight, so we just detach from it. If the connect
+              // completes anyway, addSession still adds the session (findable
+              // via the tab bar) and the connecting flag clears itself.
+              if (rightSavedHostId) useSessions.getState().endConnecting(rightSavedHostId);
+              setRightHost(null);
+            }}
+          />
+        ) : (
+          <DisconnectedPanel
+            hostLabel={fallbackLabel ?? "this host"}
+            canReconnect={!!savedHostForReconnect}
+            onReconnect={handleReconnect}
+            onPickDifferent={() => setRightHost(null)}
+          />
+        )
       ) : (
         <>
           <div style={{ height: 30, padding: "0 10px", display: "flex", alignItems: "center",
@@ -398,7 +435,7 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                       // a server that can't stat it). Silent failure was
                       // the pre-v0.6.1 pattern — surface the message so
                       // the user knows what happened.
-                      alert(`Delete failed: ${err}`);
+                      setErrorMsg(`Delete failed: ${err}`);
                     }
                     await loadRight();
                   }}
@@ -425,6 +462,7 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
           onClose={() => setBlankMenu(null)}
         />
       )}
+      <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />
     </div>
   );
 }
@@ -485,3 +523,4 @@ function DisconnectedPanel({
     </div>
   );
 }
+

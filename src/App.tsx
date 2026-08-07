@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import { EmptyState } from "./components/EmptyState";
+import { ConnectingPanel } from "./components/ConnectingPanel";
+import { ErrorDialog } from "./components/ErrorDialog";
 import { TerminalView } from "./components/TerminalView";
 import { ActivityToolbar } from "./components/ActivityToolbar";
 import { FileBrowserView } from "./components/FileBrowserView";
@@ -35,6 +37,21 @@ export function App() {
   const setActivity = useSessions((s) => s.setActivity);
   const railView = useSessions((s) => s.railView);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
+  // First host-id currently mid-connect. Drives the Connecting panel that
+  // fills the main pane while the SSH handshake is in flight and there's
+  // no active session yet (the very-first-connect flow). If more than one
+  // handshake is running we just surface the first — the tab bar / rail
+  // pulse still communicates the rest.
+  const connectingHostId = useSessions((s) => Object.keys(s.connecting)[0] ?? null);
+  // Look up the label for the connecting host from the saved-hosts store.
+  // Falls back to the raw id (a UUID) — ugly but non-blank if the host was
+  // somehow removed mid-connect. Subscribing to hosts here so a rename
+  // during handshake re-renders the panel.
+  const connectingHostLabel = useHostsStore((s) => {
+    if (!connectingHostId) return "";
+    const h = s.hosts.find((x) => x.id === connectingHostId);
+    return h?.label ?? h?.host ?? connectingHostId;
+  });
 
   const loadHosts = useHostsStore((s) => s.load);
   const themeId = useSettingsStore((s) => s.themeId);
@@ -49,6 +66,10 @@ export function App() {
     | null
   >(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // In-app error banner. Replaces window.alert() which uses the OS's
+  // native positioning (WebView2 opens it at the top-left of the app
+  // window on Windows, floating disconnected from shellx's chrome).
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => { void loadHosts(); }, [loadHosts]);
 
@@ -242,8 +263,15 @@ export function App() {
     // one tab could win the fight for activeId. The `forceNew` path
     // still respects this to avoid spawning a second session on a
     // brief second click during the first connection.
+    //
+    // RemotePane's disconnected-state effect clears this flag when a
+    // session ends, so a Reconnect click coming out of DisconnectedPanel
+    // sees a clean slate.
     const st = useSessions.getState();
-    if (st.connecting[host.id]) return;
+    if (st.connecting[host.id]) {
+      console.warn("[handleConnectSavedHost] already connecting to", host.id, host.label);
+      return;
+    }
 
     // Single-click semantics (default): if the host already has a live
     // session, focus that tab instead of opening a duplicate. This
@@ -281,7 +309,7 @@ export function App() {
       addSession(info);  // clears the connecting flag as part of the same set
     } catch (e) {
       useSessions.getState().endConnecting(host.id);
-      alert(`Connection failed: ${e}`);
+      setErrorMsg(`Connection failed: ${e}`);
     }
   }
 
@@ -321,17 +349,52 @@ export function App() {
               onChange={(a) => setActivity(activeId, a)}
             />
             <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-              <div style={{ display: activeActivity === "terminal" ? "block" : "none", height: "100%" }}>
-                <TerminalView sessionId={activeId} />
-              </div>
-              <div style={{ display: activeActivity === "files" ? "block" : "none", height: "100%" }}>
-                <FileBrowserView connectionId={activeId} />
-              </div>
+              {/* One TerminalView + FileBrowserView per session, always
+                  mounted, toggled via display. Rendering only the active
+                  session (previous shape) forced xterm.js to dispose and
+                  recreate on every tab switch — the shell process kept
+                  running on the backend but its accumulated output (welcome
+                  banner, PS1 prompt) was written to a Terminal that no
+                  longer existed. When the tab was re-visited, the new
+                  Terminal instance only received bytes from that point on,
+                  so the top rows read blank until the user hit Enter and
+                  the shell echoed a fresh prompt. Keeping every session's
+                  view mounted means each xterm keeps its own scrollback
+                  intact across tab switches. */}
+              {sessions.map((s) => {
+                const isActive = s.id === activeId;
+                return (
+                  <div key={s.id} style={{
+                    display: isActive ? "block" : "none",
+                    position: "absolute", inset: 0,
+                  }}>
+                    <div style={{ display: activeActivity === "terminal" ? "block" : "none", height: "100%" }}>
+                      <TerminalView sessionId={s.id} />
+                    </div>
+                    <div style={{ display: activeActivity === "files" ? "block" : "none", height: "100%" }}>
+                      <FileBrowserView connectionId={s.id} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {railView === "hosts" && !activeId && (
+        {railView === "hosts" && !activeId && connectingHostId && (
+          // First-connect from the Hosts sidebar: no session yet, but a
+          // handshake is in flight. Show the shared ConnectingPanel here
+          // instead of EmptyState so the user sees an unmistakable signal
+          // while the SSH negotiation runs. Cancel calls endConnecting;
+          // the underlying openConnection can't be aborted mid-flight so
+          // if it happens to succeed anyway, the session still lands
+          // (addSession fires and swaps this panel out for the terminal).
+          <ConnectingPanel
+            hostLabel={connectingHostLabel}
+            onCancel={() => useSessions.getState().endConnecting(connectingHostId)}
+          />
+        )}
+        {railView === "hosts" && !activeId && !connectingHostId && (
           <EmptyState onNewConnection={() => setDialog({ mode: "create" })} />
         )}
         {railView === "files" && (
@@ -358,6 +421,7 @@ export function App() {
         onClose={() => setPaletteOpen(false)}
         onConnect={(host) => void handleConnectSavedHost(host)}
       />
+      <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />
     </>
   );
 }

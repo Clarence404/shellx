@@ -11,6 +11,7 @@ vi.mock("../ipc/local", () => ({
   localRealpath: vi.fn(async (p: string) => p),
   localListDir: vi.fn(async () => []),
   localCopyInto: vi.fn().mockResolvedValue(undefined),
+  localListDisks: vi.fn().mockResolvedValue([]),
 }));
 
 // v0.5.7 added an OS drag-drop listener via getCurrentWindow(). Same

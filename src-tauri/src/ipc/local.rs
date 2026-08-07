@@ -3,7 +3,7 @@
 //! a unified pane component.
 
 use crate::error::Result;
-use crate::local::{self, DefaultRoots, LocalEntry};
+use crate::local::{self, DefaultRoots, LocalDisk, LocalEntry};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -45,6 +45,11 @@ pub async fn local_is_dir(args: LocalPathArgs) -> Result<bool> {
 #[tauri::command]
 pub async fn local_default_roots() -> Result<DefaultRoots> {
     Ok(local::default_roots())
+}
+
+#[tauri::command]
+pub async fn local_list_disks() -> Result<Vec<LocalDisk>> {
+    local::list_disks()
 }
 
 #[tauri::command]

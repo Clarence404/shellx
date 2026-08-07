@@ -13,3 +13,10 @@ export interface DefaultRoots {
   desktop: string;
   downloads: string;
 }
+
+export interface LocalDisk {
+  /** Path to navigate to on select — `C:/`, `/`, `/Volumes/Foo`, ... */
+  path: string;
+  /** Short label — drive letter on Windows, basename on POSIX, `/` for root. */
+  label: string;
+}
