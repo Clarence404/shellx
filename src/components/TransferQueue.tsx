@@ -55,34 +55,17 @@ interface SoloEntry {
  *  whether to render surrounding chrome (a resize splitter, a fixed-
  *  height wrapper) that would otherwise sit above an empty strip.
  *
- *  Mirrors TransferQueue's own visibility rules exactly:
- *   - Solo transfers (no groupId): visible unless cancelled — done and
- *     failed linger for the `applyDone`-scheduled 5 s removal so a fast
- *     OS drop doesn't just flash by unnoticed.
- *   - Grouped transfers: the group is visible only while at least one
- *     child is queued / active / paused. Done-only or all-cancelled
- *     groups drop out immediately so a leftover group with no active
- *     work doesn't hold an empty compact strip open. */
+ *  Only in-flight states (queued / active / paused) count as visible —
+ *  a completed or failed transfer hides the strip immediately (no
+ *  linger window). Mirrors TransferQueue's own solo + group filters. */
 export function useHasVisibleTransfers(connectionId?: string, showAll?: boolean): boolean {
   return useTransfersStore((s) => {
     const scoped = showAll
       ? s.list
       : s.list.filter((t) => t.connection_id === connectionId);
-    for (const t of scoped) {
-      if (!t.groupId) {
-        if (t.state.kind !== "cancelled") return true;
-      }
-    }
-    const activeGroupIds = new Set<string>();
-    for (const t of scoped) {
-      if (
-        t.groupId
-        && (t.state.kind === "queued" || t.state.kind === "active" || t.state.kind === "paused")
-      ) {
-        activeGroupIds.add(t.groupId);
-      }
-    }
-    return activeGroupIds.size > 0;
+    return scoped.some(
+      (t) => t.state.kind === "queued" || t.state.kind === "active" || t.state.kind === "paused",
+    );
   });
 }
 
@@ -132,10 +115,11 @@ export function TransferQueue({ connectionId, showAll, scrollable = true, sizing
       if (t.state.kind === "queued") g.queuedFiles += 1;
       if (t.state.kind === "paused") g.pausedFiles += 1;
       if (t.state.kind === "failed") g.hasFailed = true;
-    } else if (t.state.kind !== "cancelled") {
-      // Solo rows include done / failed too — they linger for the
-      // 5 s `applyDone`-scheduled removal so a fast OS drop doesn't
-      // flash the strip past too briefly to notice.
+    } else if (t.state.kind === "queued" || t.state.kind === "active" || t.state.kind === "paused") {
+      // Only in-flight solo rows render. Terminal states (done,
+      // cancelled, failed) leave the strip immediately — no linger
+      // window while `applyDone`'s 5 s cleanup timer runs, per the
+      // "progress bar disappears the moment it's done" behaviour.
       solos.push({ kind: "solo", transfer: t });
     }
   }
