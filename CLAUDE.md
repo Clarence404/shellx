@@ -36,9 +36,10 @@ The flow is always:
 
 **What the user sees between changes:** the running app via HMR (see `pnpm tauri:dev`). Do not stand up separate demos, screenshots, or throwaway builds unless asked. If the dev process exited, restart it; if it can't restart (port in use, corepack broken, etc.), diagnose and fix — do not skip verification because "the previous instance probably still shows it".
 
-## Docs are English-only
+## Docs language policy
 
-New documentation (`README.md`, `docs/**`, release notes) ships in English. Do not create `.zh-CN.md` (or any other locale suffix) versions unless the user explicitly asks — existing translated files in the tree stay as history but no new ones are added and drift is fine going forward.
+- **`README.md` and `README.zh-CN.md` are a bilingual pair — kept in strict sync.** Any change to one lands together with the equivalent change to the other, in the same commit. Structure, section order, and headings mirror each other; only the prose language differs. Do not update just one and let the other drift.
+- **`docs/**` and release notes ship in English only.** Do not create `.zh-CN.md` (or any other locale suffix) versions of files under `docs/` unless the user explicitly asks — existing translated files in the tree stay as history but no new ones are added and drift is fine going forward.
 
 ## Release notes flow
 

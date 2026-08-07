@@ -2,307 +2,231 @@
 
 [English](./README.md) · **简体中文**
 
-一个小巧、精致、可扩展的终端 + 文件传输客户端。跨平台（Windows / macOS / Linux），开源，基于 Tauri + Rust + React。
+一个小巧、精致的终端 + 文件传输客户端 —— 跨平台（Windows / macOS / Linux），开源，基于 Tauri + Rust + React。
 
-## 版本状态：v0.6.0
-
-v0.6.0 是"目录传输"版本。新 Rust IPC `sftp_upload_dir` /
-`sftp_download_dir` 遍历源目录树，每个文件一个子任务，全部共享一个
-`group_id`；前端把它们聚合成一行可展开的组，进度条整行铺满。任意进行
-中的传输（或整个组）都有真正能用的暂停 / 继续 / 取消按钮 —— `write_all`
-终于包在 `tokio::select!` 里，卡死的 SFTP 写不再把 cancel 信号吞掉。
-`SessionManager` 内部 map 改成 `Arc<Mutex<LiveConnection>>`，并发 SFTP
-操作不再互相踩 map 拿到 `Error::Closed`。新增 `sftp_remove_dir_recursive`
-让刚上传的非空目录能删掉（SFTP `RMDIR` 只接受空目录）。新 `transfer:state`
-事件让 paused 行样式立即翻转，不用等下一个 progress tick；`applyProgress`
-里加了 `queued → active` 自动升级，修好了从 v0.3 就存在的 "永远 queued"
-bug。下面这些仍然生效：
-
-v0.5.8 是叠在 v0.5.7 之上的一轮聚焦打磨。Files 字号有了独立滑块（跟 System
-font 大小完全解耦），并附带一个 4 行实时预览（跟真实 FileRow 布局一致）。
-靠近 pane 底部 / 右边缘的右键菜单现在会自动向上 / 向左翻，不再被 pane 的
-overflow 裁掉。PaneSplitter 硬夹在每边 200 px。System / Files 滑块统一到
-11-18 区间，相同数值 thumb 位置对齐。Appearance 面板重排成两列网格，分区
-更清晰，所有内联控件统一 320 px 宽，右边缘对齐。
-
-下面这些仍然生效：
-
-v0.5.7 让面板间拖拽真正能用了 —— HTML5 drag 在 WebView2 + Tauri `dragDropEnabled: true`
-下不可靠，整套改成 pointer 事件跟踪 + 浮动 ghost + 目标 pane 高亮。中间的 ⇄
-按钮拿掉了。LocalPane 现在接受 OS 拖拽（Explorer / Finder → 新的 `local_copy_into` IPC）。
-文件行右键菜单加了 `Send to remote →`。New folder 用内联输入行替代了浏览器
-原生 `prompt()`。同 host 不再重复开 tab、Terminal `root@ubunt` 残行修复、
-Reconnect 后打开 Files 的 "closed" 重试、传输队列只在活跃时显示 —— 一整套。
-
-下面这些仍然生效：
-
-v0.5.4 拓宽了左侧功能列（图标 + 文字上下排列），tab 条的空白区也变成了窗口拖拽面。
-
-v0.5.3 打磨的 **Settings / Appearance** 面板和自绘标题栏：
-
-- **系统字体大小**滑块（11–16 px）——同时缩放所有 sans UI 元素（标签页、侧栏行、主机列表、右键菜单、按钮、
-  Terminal | Files 切换）。Terminal 字号保持独立。
-- **系统字体族**选择——System default、Segoe UI、PingFang SC、Microsoft YaHei。
-- **主题**：**Warm Minimal** + **Warm Light**（Ocean / Forest 已下线；旧 `settings.json` 里的旧主题会
-  自动迁移回默认）。
-- **密度**：Compact / Comfortable / Spacious——控制列表行内边距和 mono 内容字号。
-- **Terminal**：字体（JetBrains Mono、SF Mono、Fira Code、Cascadia Code、Consolas）、字号（10–20 px）、
-  光标样式（block / underline / bar）。xterm 直接热重配，不用重挂 tab。
-- **标签栏溢出控件**——当 tabs 超出标题栏宽度时，右端出现紧凑的 `‹ › ≡` 组合（chevron 滚动、列表图标打开
-  含逐项关闭的下拉）。tab 条支持滚轮横向滚动。任意 tab 右键：`Close N to the left` / `Close N to the right`
-  / `Close all`。
-
-Settings 落盘到应用 config 目录的 JSON 文件（Rust 侧防抖自动保存），下次启动自动还原。
-
-也保留了 v0.4.3 的**自绘标题栏**：tabs 直接嵌在标题栏里，附带 logo 和原生风格的窗口控件，三端替代了 OS 默认标题栏。
-
-同样包含 v0.4 的全部特性：Rail Files（WinSCP 风格的本地 ↔ 远程双栏文件浏览器）、拖放传输、分隔条重置、抽屉折叠
-（`Ctrl+Shift+B` / `Cmd+B`）；以及 v0.3 的全部特性：SFTP 与 SSH 复用同一 tab、Connection / ShellHandle /
-SftpHandle 三层 trait、拖放上传、右键 CRUD、断开 tab 淡出、Ctrl+Shift+W/T 快捷键映射（Ctrl+W/T 让给
-shell/tmux）、忘记密码 UI、HostRow 键盘可达性。
-
-> **安全提示（v0.5）**：shellx 仍未校验 SSH host key——首次连接一律信任服务器。在不可信网络上不要用。Host-key
-> TOFU + 公钥认证仍在 v0.6+ Backlog 里，见下文。
+当前版本：**v0.7.0** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
 
 ---
 
-## 环境依赖
+## 1. shellx 是什么
 
-按顺序装一次：
+shellx 是一个桌面应用，提供：
 
-| 工具          | 版本            | 安装                                                                                                                            |
-| ------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Node.js**   | 20 LTS 或更新   | [nodejs.org](https://nodejs.org/) · `node --version` 验证                                                                          |
-| **pnpm**      | 9.x 或更新      | `npm i -g pnpm` · `pnpm --version` 验证                                                                                            |
-| **Rust**      | 1.77 或更新     | [rustup.rs](https://rustup.rs/) · Windows 上装 `stable-msvc` 工具链 · `cargo --version && rustc --version` 验证                     |
-| **WebView2**  | 任意版本        | Windows 11 已预装；Windows 10 需要 [Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)（一次性）          |
+- **SSH 终端**（多 tab）—— 连接 Linux / BSD / macOS 服务器，主题、字体、光标样式全可定制
+- **SFTP 文件浏览器** —— WinSCP 风格的双面板（本地 ↔ 远程），支持拖拽上传下载、目录传输、暂停/继续/取消
+- **保存主机 + 系统密钥链** —— 存一次主机信息，从侧边栏或 `+` 菜单一键连接；密码存在 OS 的 keychain 里，不会明文写配置
 
-平台注意：
-
-- **Windows**：需要 Visual Studio Build Tools（C++ 工作负载）配合 Rust 的 `msvc` toolchain 链接原生 crate。rustup 首次运行通常帮你装好。
-- **macOS**：Xcode Command Line Tools（`xcode-select --install`）。
-- **Linux**：`libwebkit2gtk-4.1-dev`、`build-essential`、`curl`、`wget`、`file`、`libxdo-dev`、`libssl-dev`、`libayatana-appindicator3-dev`、`librsvg2-dev`（Debian/Ubuntu 包名）。
+单个 ~7 MB 的安装包，无运行时依赖（Tauri 打包一个小的 Rust 二进制，复用 OS 自带的 WebView 而不是打包 Chromium —— 这就是为什么这么小）。
 
 ---
 
-## 首次搭建
+## 2. 架构
+
+shellx 分成前后端两半，中间隔着一层清晰的 IPC 边界。
+
+```mermaid
+flowchart LR
+  subgraph Frontend["React 前端 · src/"]
+    UI["组件<br/>(TabBar, TerminalView,<br/>Files 面板, Dialogs)"]
+    Store["Zustand 状态仓库<br/>(sessions, hosts, transfers)"]
+    IPC["ipc/ 包装层<br/>(invoke + listen)"]
+  end
+
+  subgraph Backend["Rust 后端 · src-tauri/"]
+    Cmds["ipc/ #[tauri::command]<br/>处理器"]
+    Session["session::SessionManager<br/>(拥有活跃连接，<br/>每会话一个 tokio 任务)"]
+    Proto["protocol/<br/>(基于 russh 的 SSH，<br/>SFTP 子通道)"]
+    Transp["transport/<br/>(目前 TCP，<br/>未来 Serial/WebSocket)"]
+    Local["local/<br/>(本机文件系统，<br/>磁盘枚举)"]
+  end
+
+  UI --> Store
+  Store --> IPC
+  IPC <-->|Tauri IPC<br/>invoke + 事件| Cmds
+  Cmds --> Session
+  Cmds --> Local
+  Session --> Proto
+  Proto --> Transp
+  Transp -->|TCP| Network[("远端服务器")]
+  Local --> FS[("本机文件系统")]
+```
+
+### 前端
+
+`src/` 是 TypeScript 写的 React 应用，Vite 打包。里面**不直接**访问网络 —— 所有远程/本地 IO 都走一层薄的 `ipc/*.ts` 包装，通过 Tauri 的 `invoke()` 调后端。状态放在 Zustand store（`src/state/`）：会话列表、保存的主机、正在进行的传输、外观设置。
+
+### 后端
+
+`src-tauri/src/` 是一个 Tauri 包裹的 Rust binary crate。它暴露一组 `#[tauri::command]` 函数（`src-tauri/src/ipc/`）供前端调用。层次结构：
+
+- **transport/** —— 通过网络传字节。目前只有 TCP；trait 设计让 RS-232 / WebSocket 未来能无缝加入，上层不用改。
+- **protocol/** —— SSH（用 [`russh`](https://github.com/warp-tech/russh)）+ SFTP。认证、PTY、channel、resize、文件传输。
+- **session::SessionManager** —— 用 UUID 索引每个活跃连接。每个会话跑一个专门的 `tokio` 任务，双向搬运字节（通过 `session:data` / `session:closed` 这样的 Tauri 事件给前端）。
+- **local/** —— 本机文件系统：list、mkdir、rename、copy、磁盘枚举（给磁盘选择器用）。
+
+### 前后端通信
+
+- **命令 → 响应**：前端 `invoke("sftp_upload", args)`，Rust 跑对应 handler，返回可 JSON 序列化的结果或错误。
+- **后端主动推流**：Rust `emit` Tauri 事件（`session:data`、`transfer:progress`、`transfer:done`、`connection:closed` 等）；前端 `listen` 更新 store。
+
+新增一个文件操作？在 `src-tauri/src/ipc/` 写一个 command，`src/ipc/` 写一层包装。新增一个传输层？在 `src-tauri/src/transport/` 实现 trait。
+
+---
+
+## 3. 本地跑起来
+
+这一节是给想从源码构建 shellx 的开发者的。**你不用懂 Rust 或 Tauri** —— 工具链处理了绝大部分事。只需要装一次几个东西。
+
+### 3.1 装工具链（只装一次）
+
+**全平台：Node.js + pnpm**（前端要用）：
+
+1. 从 [nodejs.org](https://nodejs.org/) 装 Node.js 20 LTS 或以上。验证：
+
+   ```bash
+   node --version
+   ```
+
+2. 全局装 pnpm：
+
+   ```bash
+   npm install -g pnpm
+   pnpm --version
+   ```
+
+**全平台：Rust**（后端要用）。Rust 自带一个叫 `cargo` 的工具，相当于 Rust 界的 `npm`。两个东西一起装，通过 `rustup`：
+
+- **Windows / macOS / Linux 一键安装**：
+
+  访问 [rustup.rs](https://rustup.rs/) 按指引装。就一条命令：
+
+  ```bash
+  # macOS / Linux
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ```
+
+  ```powershell
+  # Windows —— 从 https://rustup.rs/ 下载并运行 rustup-init.exe
+  ```
+
+  一路默认。装完关掉终端重开，验证：
+
+  ```bash
+  cargo --version    # 类似 cargo 1.83.0
+  rustc --version    # 类似 rustc 1.83.0
+  ```
+
+**分平台的额外依赖**：
+
+| 系统    | 还需要装                                                                                          |
+| ------- | ------------------------------------------------------------------------------------------------- |
+| Windows | **Visual Studio Build Tools**（C++ 工作负载）。首次运行 `rustup` 会主动提示你装 —— 接受即可。**WebView2** Windows 11 已内置；Windows 10 装一次 [Evergreen Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。 |
+| macOS   | **Xcode Command Line Tools** —— `xcode-select --install`。                                          |
+| Linux   | `sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`（Debian/Ubuntu；其他发行版参考 [Tauri prerequisites](https://tauri.app/start/prerequisites/)）。 |
+
+### 3.2 拉代码 + 装前端依赖
 
 ```bash
 git clone <this-repo>
 cd shellx
-pnpm install       # 装前端依赖（React、Vite、xterm.js、Zustand 等）
+pnpm install
 ```
 
-第一次运行 `pnpm tauri:dev`（或 `pnpm tauri:build`）会额外下载并编译全部 Rust 依赖——首次编译需要 5–15 分钟（网速正常时），生成约 2 GB 的 `src-tauri/target/`。后续增量构建以秒计。
+这一步把前端依赖（React、xterm.js、Zustand 等）下载到 `node_modules/`。
 
-**国内网络（或 crates.io 镜像慢）**：仓库自带的 `src-tauri/.cargo/config.toml` 已指向 `rsproxy.cn`，无需额外配置。
+Rust 依赖在第一次编译时自动下载，**不用你手动 `cargo install` 任何东西**。
 
----
-
-## 开发工作流
-
-### 开发模式跑起来（热重载）
+### 3.3 开发模式运行
 
 ```bash
 pnpm tauri:dev
 ```
 
-- Vite 开发服务器在 1420 端口（前端改动自动重载）。
-- 编译 `src-tauri/` 并启动原生窗口（Rust 改动自动重启）。
-- 关窗口即干净退出。
+发生的事：
 
-### 键盘快捷键
+1. Vite 在 1420 端口启动开发服务器（前端文件改动自动 HMR）。
+2. Cargo 编译 Rust 后端。**第一次编译 5–15 分钟**，会下载约 2 GB Rust 依赖到 `src-tauri/target/`。之后都是增量编译，几秒钟。
+3. 弹出 shellx 的原生窗口。改 React 文件 → HMR 热更新；改 Rust 文件 → Tauri 自动重编译并重启窗口。
 
-| 动作                | Windows / Linux                | macOS                          |
-| ------------------- | ------------------------------ | ------------------------------ |
-| 新建 tab            | `Ctrl+Shift+T`                  | `Cmd+T`                        |
-| 关闭 tab            | `Ctrl+Shift+W`                  | `Cmd+W`                        |
-| 上/下一个 tab       | `Ctrl+Tab` / `Ctrl+Shift+Tab`  | `Ctrl+Tab` / `Ctrl+Shift+Tab`  |
-| 命令面板            | `Ctrl+K`                        | `Cmd+K`                        |
-| 切换侧栏 (drawer)   | `Ctrl+Shift+B`                  | `Cmd+B`                        |
+关掉窗口就退出开发服务器。
 
-Windows/Linux 上新建/关闭 tab 强制加 Shift（v0.3），避免和终端里 `Ctrl+T`/`Ctrl+W` 的 shell/tmux 习惯冲突；tab 切换不受影响。
+> **crates.io 慢 / GFW 用户**：仓库自带 `src-tauri/.cargo/config.toml` 指向 `rsproxy.cn`，不用你配置。
 
-### 前端类型检查
-
-```bash
-pnpm tsc --noEmit
-```
-
-秒级（<5 s），提交 UI 改动前跑一下。
-
-### 只编译不启动
-
-```bash
-pnpm build
-```
-
-产出 `dist/`（Tauri 打包时用到的目录）。手动运行的机会不多。
-
-### 只做 Rust 类型检查（不完整构建）
-
-```bash
-cd src-tauri && cargo check --lib && cargo check --bin shellx
-```
-
----
-
-## 发布构建
+### 3.4 打 release 安装包
 
 ```bash
 pnpm tauri:build
 ```
 
-产出各平台安装包到 `src-tauri/target/release/bundle/`：
+产物在 `src-tauri/target/release/bundle/` 下：
 
 - **Windows**：`bundle/msi/shellx_<version>_x64_en-US.msi` 和 `bundle/nsis/shellx_<version>_x64-setup.exe`
 - **macOS**：`bundle/dmg/shellx_<version>_universal.dmg`
 - **Linux**：`bundle/appimage/shellx_<version>_amd64.AppImage`、`bundle/deb/shellx_<version>_amd64.deb`、`bundle/rpm/shellx-<version>-1.x86_64.rpm`
 
-Release 构建开启 LTO，比 dev 慢（Windows 上 5–15 分钟）。
+Release 构建 5–15 分钟（开了 LTO）。
 
----
-
-## 测试
+### 3.5 测试
 
 ```bash
+# 前端测试（Vitest + Testing Library）
+pnpm test --run
+
 # Rust 单元测试
 cd src-tauri && cargo test --lib
 
-# Rust 端到端集成测试（进程内 SSH/SFTP 服务器 fixture）
+# Rust 集成测试（进程内 SSH / SFTP fixture —— 不需要 Docker）
 cd src-tauri && cargo test --features test-fixtures --test ssh_integration
 cd src-tauri && cargo test --features test-fixtures --test sftp_integration
-
-# 前端测试（Vitest + jsdom + Testing Library）
-pnpm test -- --run
 ```
 
-Rust 集成测试无需 Docker 或外部 SSH——测试内部拉起进程内 russh（和 russh-sftp）服务器。fixture 在 `src-tauri/src/protocol/ssh.rs::testing::start_echo_ssh_server`。
-
-### 拿真机跑
-
-任何 SSH server 都能连。想快速起一个：
+TypeScript 类型检查：
 
 ```bash
-docker run --rm -p 2222:22 -e USER_PASSWORD=test linuxserver/openssh-server:latest
+pnpm tsc --noEmit
 ```
-
-然后应用里：**＋ New connection**，`Host: 127.0.0.1`、`Port: 2222`、`Username: linuxserver.io`、`Password: test`（真实凭证看容器日志）。
 
 ---
 
-## 目录结构
+## 快捷键
 
-```
-shellx/
-├── src/                            # React + TypeScript 前端
-│   ├── App.tsx                     # 根——组装 AppShell + ConnectDialog + store
-│   ├── main.tsx                    # Vite 入口（导入设计 token）
-│   ├── styles/                     # Warm Minimal CSS token + reset
-│   ├── components/                 # UI：AppShell、ActivityRail、Drawer、TabBar、
-│   │                               #     TerminalView、ConnectDialog、EmptyState
-│   ├── ipc/                        # 类型化封装 Tauri invoke() / listen()
-│   ├── state/                      # Zustand store（会话列表、活动 id）
-│   └── types/                      # 共享 TS 类型
-│
-├── src-tauri/                      # Rust 后端
-│   ├── src/
-│   │   ├── main.rs                 # Tauri 应用入口（注册命令、持有状态）
-│   │   ├── lib.rs                  # 模块根
-│   │   ├── transport/              # 字节流层（Transport trait、TcpTransport）
-│   │   ├── protocol/               # 应用协议层（SshProtocol via russh）
-│   │   ├── session/                # SessionManager（拥有活跃会话、driver_loop）
-│   │   ├── ipc/                    # #[tauri::command] handler + event 负载
-│   │   └── error.rs                # Result<T> 与 Error 枚举（Serialize 给 JS）
-│   ├── tests/ssh_integration.rs    # 端到端测试（穿透 SessionManager）
-│   ├── Cargo.toml
-│   ├── tauri.conf.json
-│   └── .cargo/config.toml          # rsproxy.cn 镜像配置
-│
-├── docs/superpowers/
-│   ├── specs/                      # 设计规格（v0.1 → v1.0 roadmap）
-│   └── plans/                      # 各里程碑实现计划
-│
-├── docs/release-notes/             # 每个 tag 一份 Markdown，CI 自动填进 GitHub Release
-│
-└── .superpowers/sdd/               # SDD 台账 + 每任务 brief/report
-    (已 .gitignore)                 # 单次运行草稿，删也行
-```
+| 动作                    | Windows / Linux                  | macOS                            |
+| ----------------------- | -------------------------------- | -------------------------------- |
+| 新建 tab                | `Ctrl+Shift+T`                   | `Cmd+T`                          |
+| 关闭 tab                | `Ctrl+Shift+W`                   | `Cmd+W`                          |
+| 上一个 / 下一个 tab     | `Ctrl+Tab` / `Ctrl+Shift+Tab`    | `Ctrl+Tab` / `Ctrl+Shift+Tab`    |
+| 命令面板                | `Ctrl+K`                         | `Cmd+K`                          |
+| 侧边栏抽屉开关          | `Ctrl+Shift+B`                   | `Cmd+B`                          |
 
-### 三层架构
-
-Rust 侧拆成三层，每层都可以独立测试：
-
-- **Transport**（`transport::Transport` trait）——只处理字节。当前只有 `TcpTransport`；未来的 `SerialTransport`（RS-232 / RS-485）、`UsbCdcTransport`、`WsTransport` 都在这层插拔，不动上层。
-- **Protocol**（`protocol::Connection` trait，由 `SshConnection` 实现；一个 connection 打开 `ShellHandle` / `SftpHandle` 子通道）——把字节变成语义操作（认证、通道、PTY/resize、SFTP CRUD + 传输）。trait 边界预留了 FTP/FTPS 的插入点（v0.5），无需触碰 `SessionManager`。
-- **SessionManager**（`session::manager::SessionManager`）——按 UUID 持有活跃会话；每个会话一个 tokio 任务，泵送读写和订阅转发。通过 Tauri IPC 命令 + 事件（`session:data`、`session:closed`）暴露给前端。
-
-新增一个物理通道（例如 RS-485）= 写一个 `Transport` 实现。新增一个应用协议（例如 Modbus、MQTT）= 写一个 session 类型接入 `SessionManager`。新增一个 UI 视图（例如 Modbus 寄存器表）= 写一个 React 组件 + 一条命令派发。见 spec §5 的扩展时间线。
+Windows/Linux 上用 `Ctrl+Shift+T` / `Ctrl+Shift+W`（不是 `Ctrl+T` / `Ctrl+W`），避免和终端里的常用绑定冲突（bash / tmux 通常都用 `Ctrl+T` 和 `Ctrl+W`）。
 
 ---
 
-## 体积（v0.5）
+## 常见问题
 
-Windows 11（MSVC toolchain）上 `pnpm tauri:build` 出的 release 构建：
-
-- Windows MSI：7.2 MB（`shellx_0.5.0_x64_en-US.msi`）
-- Windows NSIS setup：4.5 MB（`shellx_0.5.0_x64-setup.exe`）
-- macOS DMG：这轮没测（暂无 macOS 构建机）
-- Linux AppImage：这轮没测（暂无 Linux 构建机）
-
-两种 Windows 安装包都远低于 15 MB 目标（spec §7）。v0.4 → v0.5 增长约 0.4 MB——比两个新加的 `@fontsource` 包本身的 CSS 略大，因为每个包针对 400 字重的每个 Unicode 子集都带一个 woff2 文件，不只是被 import 的 `400.css` 入口。仍在预算内。
-
----
-
-## 排障
-
-**`error: Missing manifest in toolchain 'stable-x86_64-pc-windows-msvc'`** 或 `cargo` 有但 `rustc` 没有——toolchain 装到一半被打断（Windows Defender 常干这事）：
+**`error: Missing manifest in toolchain 'stable-…'`** —— Rust toolchain 安装中途被打断（Windows Defender 经常干这事）。修：
 
 ```bash
 rustup toolchain uninstall stable
 rustup toolchain install stable --profile minimal --force
-rustup component add cargo rust-std      # 补齐可能被漏掉的组件
-cargo --version && rustc --version        # 都要能输出
+rustup component add cargo rust-std
+cargo --version && rustc --version
 ```
 
-如果下载中出现 `os error 2` 的文件改名错误，是 Defender 和 rustup 在赛跑；先 `export RUSTUP_DIST_SERVER=https://rsproxy.cn` 和 `RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup` 再重试（快镜像缩短窗口）。
+**下载老是失败，报 `os error 2`（文件在传输中被重命名）** —— Defender 在跟 rustup 抢文件。设 `RUSTUP_DIST_SERVER=https://rsproxy.cn` 和 `RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup` 再试。
 
-**`warning: output filename collision at ... shellx.pdb`**——无害。`[lib]` 和 `[[bin]]` 共享 crate 名 `shellx`；Windows 上仅调试信息文件名冲突。构建照样通过，二进制照跑。见 [rust-lang/cargo#6313](https://github.com/rust-lang/cargo/issues/6313)。
+**`warning: output filename collision at ... shellx.pdb`** —— 无害。`[lib]` 和 `[[bin]]` 共享 crate 名。构建正常，二进制能跑。详见 [rust-lang/cargo#6313](https://github.com/rust-lang/cargo/issues/6313)。
 
-**编译通过但启动时 `SetLoggerError` panic**——`be85531` 已修复。如果加了新的 logger 初始化后又复现，请记住 `tauri_plugin_log` 已占据全局 logger 槽位；不要同时叫 `tracing_subscriber::init()`。
-
-**前端测试打印 xterm.js 的 jsdom canvas 报错**——是噪音不是失败。`jsdom` 没完整实现 `<canvas>`；xterm.js 往 stderr 抛栈但测试仍然通过（`52 passed`）。
-
-**Windows Defender 标记构建产物**——未签名二进制。代码签名是 v1.0 议题；先右键 → 属性 → **解除锁定**如果你要分发。
+**Windows Defender 拦截构建出来的 exe** —— 没做代码签名。签名在 v1.0 路线图上，现在的解法：右键 → 属性 → **解除阻止**。
 
 ---
 
-## 贡献 / 下一步
+## 安全声明
 
-大致按照 spec roadmap 顺序：
-
-- **v0.4** ✓ ——Rail Files（本地 ↔ 远程双栏浏览器），新建连接自动作为 remote host，8 个本地 IPC 命令。
-- **v0.5** ✓ ——Settings / Appearance 面板（主题 + 密度 + 终端字体/字号/光标，即时应用，JSON 落盘）、自绘标题栏（v0.4.3）。
-
-### v0.6+ Backlog
-
-- **Settings：Advanced 页** ——快捷键映射、log 级别、遥测开关。
-- **重新审视紫色 accent** ——`#7c5cff` 用在 rail 图标和高亮态时略显刺眼；探索更柔和的 accent 变体（仍保持品牌调性），或把 accent 色相开放到 Settings 里给用户自选。
-- **安全相关规划** ——除已列的 host-key TOFU + 公钥认证外：审计远端返回字符串（尤其路径）的输入清洗、复核 keychain fallback 模式、落一份成文的威胁模型文档。
-- **Protocols 页面设计** ——目前是 `coming soon` 占位；v0.7 之前定型（列已注册的传输/协议实现？每协议激活开关？各会话协议层的实时健康度？）。
-- **Host-key TOFU + known_hosts 持久化** ——SSH host key 首次信任；指纹落 `~/.ssh/known_hosts`。
-- **公钥认证** ——RSA / Ed25519 密钥对 + 系统 keychain 存 passphrase。
-- **安装包签名** ——Windows Authenticode + macOS 公证。
-- **OS 拖出下载** —— 从 Files 面板行拖到 Windows Explorer / macOS Finder 上应该触发下载到那个位置。目前只有接收侧实现（OS→shellx 已通过 Tauri 的 onDragDropEvent 工作）。
-- **隐藏文件过滤** ——本地/远程双栏切换显示 dotfile。
-- **上传冲突对话框** ——覆盖远端已有文件时提示。
-- **v0.7+** ——传统 FTP / FTPS、跨平台签名 CI。
-- **未来** ——RS-232 / RS-485 传输、Modbus RTU/TCP 协议、寄存器表视图（spec §4 说明各层落点）。
-
-`docs/superpowers/` 下的设计规格和实现计划是各里程碑的 source of truth；`.superpowers/sdd/` 下的 SDD 台账是构建过程的复盘。
+shellx 目前**不验证 SSH host key** —— 首次连接完全信任服务器。请勿在不可信网络使用。Host-key TOFU 和公钥认证都在近期路线图上。
 
 ---
 
-## 许可
+## 许可证
 
-MIT——见 [`LICENSE`](LICENSE)。
+MIT —— 见 [`LICENSE`](LICENSE)。
