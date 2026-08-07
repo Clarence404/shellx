@@ -1,5 +1,7 @@
 # shellx
 
+**English** · [简体中文](./README.zh-CN.md)
+
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
 Current release: **v0.7.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
