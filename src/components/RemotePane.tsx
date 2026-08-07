@@ -83,6 +83,28 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
   // purged from useSessions.sessions.
   const fallbackLabel = savedHostForReconnect?.label ?? currentSession?.label ?? null;
 
+  // Auto-adopt: if the Files pane is stuck on DisconnectedPanel for a
+  // host and the user has since opened a fresh terminal to that same
+  // saved host from the tab-bar + menu (or elsewhere), swap rightHost
+  // over to that live session's id so the pane follows the live
+  // connection. Without this, clicking Reconnect from a stale
+  // DisconnectedPanel just funnels through handleConnectSavedHost, which
+  // sees the existing active session and setActive()s the terminal tab
+  // — but the user is on the Files view so nothing visible happens and
+  // the button reads as broken ("点击没反应"). Guard on rightSavedHostId
+  // so quick-connect sessions (no saved-host link) don't get swapped
+  // anywhere. See sessions order → we take the most recent match so a
+  // just-opened terminal wins over an older active one.
+  useEffect(() => {
+    if (!isDisconnected || !rightSavedHostId) return;
+    const live = [...sessions].reverse().find(
+      (s) => s.host_id === rightSavedHostId && s.state === "active",
+    );
+    if (live) {
+      void useRailFiles.getState().setRightHost(live.id);
+    }
+  }, [isDisconnected, rightSavedHostId, sessions]);
+
   // When the pane transitions to disconnected, wipe any stale
   // `connecting[savedHostId]` flag left over from a previous failed
   // connect. The early-return guard in `handleConnectSavedHost`

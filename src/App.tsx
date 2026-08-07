@@ -20,6 +20,7 @@ import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
 import { getHostPassword } from "./ipc/hosts";
 import { onConnectionClosed } from "./ipc/events";
+import { installSessionStream } from "./state/sessionStream";
 import { onTransferStarted, onTransferProgress, onTransferDone, onTransferState } from "./ipc/transfers";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
 import type { HostInfo } from "./types/host";
@@ -76,6 +77,11 @@ export function App() {
   // Load persisted settings once on mount. If none exist, the store's
   // DEFAULT_SETTINGS remain in effect.
   useEffect(() => { void useSettingsStore.getState().load(); }, []);
+
+  // Wire the global session:data router. Buffers per-session bytes until a
+  // TerminalView subscribes, so a freshly opened tab doesn't lose its
+  // welcome banner + prompt to the mount-vs-Rust-pump race.
+  useEffect(() => { installSessionStream(); }, []);
 
   // Sync themeId / density to <html data-*> attributes so tokens.css can
   // pick up the correct :root[data-…] variable block. Empty string on
