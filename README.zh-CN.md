@@ -24,45 +24,7 @@ shellx 是一个桌面应用，提供：
 
 shellx 分成前后端两半，中间隔着一层清晰的 IPC 边界。
 
-```mermaid
-flowchart LR
-  subgraph FE ["🖥️ 前端 · React + TypeScript · src/"]
-    direction TB
-    UI["UI 组件<br/>TabBar · TerminalView · Files 面板"]
-    Store["Zustand stores<br/>sessions · hosts · transfers"]
-    Wrap["ipc/ 类型化包装<br/>invoke() + listen()"]
-    UI --> Store --> Wrap
-  end
-
-  Wrap ==>|"invoke()"| Cmd
-  Cmd ==>|"emit() 事件"| Wrap
-
-  subgraph BE ["⚙️ 后端 · Rust + Tauri · src-tauri/"]
-    direction TB
-    Cmd["#[tauri::command] 处理器<br/>路由入口"]
-    Sm["session::SessionManager<br/>每会话一个 tokio 任务"]
-    Loc["local::<br/>本机文件操作 · 磁盘枚举"]
-    Prot["protocol::<br/>SSH + SFTP · via russh"]
-    Tr["transport::<br/>TCP · 未来 Serial / WS"]
-    Cmd --> Sm
-    Cmd --> Loc
-    Sm --> Prot
-    Prot --> Tr
-  end
-
-  Tr --> Net(["🌐 远端服务器"])
-  Loc --> Fs(["💾 本机文件系统"])
-
-  classDef feBox fill:#EEEDFE,stroke:#7F77DD,color:#26215C
-  classDef beBox fill:#E1F5EE,stroke:#1D9E75,color:#04342C
-  classDef extBox fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
-
-  class UI,Store,Wrap feBox
-  class Cmd,Sm,Loc,Prot,Tr beBox
-  class Net,Fs extBox
-
-  linkStyle 2,3 stroke:#7c5cff,stroke-width:2.5px
-```
+<img src="docs/architecture.zh-CN.svg" alt="shellx 架构图" width="100%">
 
 ### 前端
 

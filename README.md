@@ -24,45 +24,7 @@ It's a single ~7 MB installer with no runtime dependencies (Tauri bundles a smal
 
 shellx has two halves and a boundary between them.
 
-```mermaid
-flowchart LR
-  subgraph FE ["🖥️ Frontend · React + TypeScript · src/"]
-    direction TB
-    UI["UI components<br/>TabBar · TerminalView · Files panes"]
-    Store["Zustand stores<br/>sessions · hosts · transfers"]
-    Wrap["ipc/ typed wrappers<br/>invoke() + listen()"]
-    UI --> Store --> Wrap
-  end
-
-  Wrap ==>|"invoke()"| Cmd
-  Cmd ==>|"emit() events"| Wrap
-
-  subgraph BE ["⚙️ Backend · Rust + Tauri · src-tauri/"]
-    direction TB
-    Cmd["#[tauri::command] handlers<br/>routing entry"]
-    Sm["session::SessionManager<br/>one tokio task per session"]
-    Loc["local::<br/>host filesystem ops · disk enumeration"]
-    Prot["protocol::<br/>SSH + SFTP · via russh"]
-    Tr["transport::<br/>TCP · future: Serial / WS"]
-    Cmd --> Sm
-    Cmd --> Loc
-    Sm --> Prot
-    Prot --> Tr
-  end
-
-  Tr --> Net(["🌐 Remote server"])
-  Loc --> Fs(["💾 Host filesystem"])
-
-  classDef feBox fill:#EEEDFE,stroke:#7F77DD,color:#26215C
-  classDef beBox fill:#E1F5EE,stroke:#1D9E75,color:#04342C
-  classDef extBox fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
-
-  class UI,Store,Wrap feBox
-  class Cmd,Sm,Loc,Prot,Tr beBox
-  class Net,Fs extBox
-
-  linkStyle 2,3 stroke:#7c5cff,stroke-width:2.5px
-```
+<img src="docs/architecture.svg" alt="shellx architecture" width="100%">
 
 ### The frontend
 
