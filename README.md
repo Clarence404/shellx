@@ -26,29 +26,42 @@ shellx has two halves and a boundary between them.
 
 ```mermaid
 flowchart LR
-  subgraph Frontend["React frontend · src/"]
-    UI["Components<br/>(TabBar, TerminalView,<br/>Files panes, Dialogs)"]
-    Store["Zustand stores<br/>(sessions, hosts, transfers)"]
-    IPC["ipc/ wrappers<br/>(invoke + listen)"]
+  subgraph FE ["🖥️ Frontend · React + TypeScript · src/"]
+    direction TB
+    UI["UI components<br/>TabBar · TerminalView · Files panes"]
+    Store["Zustand stores<br/>sessions · hosts · transfers"]
+    Wrap["ipc/ typed wrappers<br/>invoke() + listen()"]
+    UI --> Store --> Wrap
   end
 
-  subgraph Backend["Rust backend · src-tauri/"]
-    Cmds["ipc/ #[tauri::command]<br/>handlers"]
-    Session["session::SessionManager<br/>(owns live connections,<br/>per-session tokio task)"]
-    Proto["protocol/<br/>(SSH via russh,<br/>SFTP handles)"]
-    Transp["transport/<br/>(TCP today,<br/>Serial/WebSocket later)"]
-    Local["local/<br/>(host filesystem ops,<br/>disk enumeration)"]
+  Wrap ==>|"invoke()"| Cmd
+  Cmd ==>|"emit() events"| Wrap
+
+  subgraph BE ["⚙️ Backend · Rust + Tauri · src-tauri/"]
+    direction TB
+    Cmd["#[tauri::command] handlers<br/>routing entry"]
+    Sm["session::SessionManager<br/>one tokio task per session"]
+    Loc["local::<br/>host filesystem ops · disk enumeration"]
+    Prot["protocol::<br/>SSH + SFTP · via russh"]
+    Tr["transport::<br/>TCP · future: Serial / WS"]
+    Cmd --> Sm
+    Cmd --> Loc
+    Sm --> Prot
+    Prot --> Tr
   end
 
-  UI --> Store
-  Store --> IPC
-  IPC <-->|Tauri IPC<br/>invoke + events| Cmds
-  Cmds --> Session
-  Cmds --> Local
-  Session --> Proto
-  Proto --> Transp
-  Transp -->|TCP| Network[("Remote host")]
-  Local --> FS[("Host filesystem")]
+  Tr --> Net(["🌐 Remote server"])
+  Loc --> Fs(["💾 Host filesystem"])
+
+  classDef feBox fill:#EEEDFE,stroke:#7F77DD,color:#26215C
+  classDef beBox fill:#E1F5EE,stroke:#1D9E75,color:#04342C
+  classDef extBox fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
+
+  class UI,Store,Wrap feBox
+  class Cmd,Sm,Loc,Prot,Tr beBox
+  class Net,Fs extBox
+
+  linkStyle 2,3 stroke:#7c5cff,stroke-width:2.5px
 ```
 
 ### The frontend
