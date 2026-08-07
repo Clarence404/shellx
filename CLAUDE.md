@@ -41,6 +41,16 @@ The flow is always:
 - **`README.md` and `README.zh-CN.md` are a bilingual pair — kept in strict sync.** Any change to one lands together with the equivalent change to the other, in the same commit. Structure, section order, and headings mirror each other; only the prose language differs. Do not update just one and let the other drift.
 - **`docs/**` and release notes ship in English only.** Do not create `.zh-CN.md` (or any other locale suffix) versions of files under `docs/` unless the user explicitly asks — existing translated files in the tree stay as history but no new ones are added and drift is fine going forward.
 
+## Release notes stay concise
+
+`docs/release-notes/vX.Y.Z.md` is for shellx **users**, not for the author of the commit. Aim for a scan-and-move-on read, not an engineering journal:
+
+- **Open with a ≤60-word TL;DR paragraph** — what changed in this version, in one sitting.
+- **Then 3-5 grouped bullets**, organized by user-visible feature (not by code module). Each bullet is one to two sentences.
+- **Do not explain what used to be broken** or how it broke. Only state the current behavior. If the "why" is genuinely load-bearing history, it belongs in the fix commit's message, not in release notes.
+- **Do not list Under-the-hood / refactor items** unless they change observable behavior or a public API. Chore-only refactors have no place here.
+- Length ceiling: the whole file should be shorter than the PR's diffstat if you can help it. If you have more to say, cut.
+
 ## Release notes flow
 
 `.github/workflows/release.yml` auto-injects release notes into the GitHub Release body when a `v*` tag is pushed. The workflow looks for one file per tag:

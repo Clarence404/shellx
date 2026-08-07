@@ -10,6 +10,12 @@ vi.mock("./ipc/events", () => ({
     capturedClosedHandler = h;
     return Promise.resolve(() => {});
   }),
+  // v0.7.1: installSessionStream() subscribes on App mount now. App-level
+  // tests never inspect terminal bytes (TerminalView is a stub above), so
+  // the mock just returns an unlistener and swallows the handler.
+  onSessionData: vi.fn(() => Promise.resolve(() => {})),
+  // Kept for any legacy caller that imports the alias directly.
+  onSessionClosed: vi.fn(() => Promise.resolve(() => {})),
 }));
 
 // TerminalView/FileBrowserView/LocalPane are heavy (real xterm.js / real Tauri

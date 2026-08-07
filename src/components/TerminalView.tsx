@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import { onSessionData, onSessionClosed } from "../ipc/events";
+import { onSessionClosed } from "../ipc/events";
+import { subscribeSession } from "../state/sessionStream";
 import { writeSessionInput, resizeSession } from "../ipc/commands";
 import type { SessionId } from "../types/session";
 import { useSettingsStore } from "../state/settings";
@@ -128,26 +129,22 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     });
     ro.observe(hostRef.current);
 
-    // Wire incoming data. `cancelled` prevents a listener that resolves after
-    // cleanup has already run from registering itself (it would otherwise never
-    // be unsubscribed since cleanup already fired unlistenData?.() as a no-op).
-    let unlistenData: (() => void) | undefined;
-    let unlistenClosed: (() => void) | undefined;
-    onSessionData(({ id, data }) => {
-      if (id !== sessionId) return;
-      const chunk = new Uint8Array(data);
+    // Wire incoming data via the global session:data router. Bytes that
+    // arrived before this TerminalView mounted are replayed synchronously
+    // inside `subscribeSession` — no more "fresh tab is blank until you
+    // hit Enter" from the mount-vs-pump race that plagued the direct
+    // `onSessionData` subscribe path.
+    const unlistenData = subscribeSession(sessionId, (chunk) => {
       // If we haven't sized the terminal yet, park bytes until the
       // container has a real width. tryInitialFit() flushes them once
       // the ResizeObserver fires with non-zero dimensions.
       if (!firstFitDone) pendingBytes.push(chunk);
       else term.write(chunk);
-    }).then((u) => {
-      if (cancelled) {
-        u();
-        return;
-      }
-      unlistenData = u;
     });
+
+    // onSessionClosed still fires per-view — it's a one-shot terminal
+    // marker, not a byte stream, so no race here worth centralising.
+    let unlistenClosed: (() => void) | undefined;
     onSessionClosed(({ id }) => {
       if (id !== sessionId) return;
       term.write("\r\n\x1b[2m[connection closed]\x1b[0m\r\n");
@@ -164,7 +161,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       dataDisp.dispose();
       resizeDisp.dispose();
       ro.disconnect();
-      unlistenData?.();
+      unlistenData();
       unlistenClosed?.();
       termRef.current = null;
       fitRef.current = null;
