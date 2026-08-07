@@ -26,29 +26,42 @@ shellx 分成前后端两半，中间隔着一层清晰的 IPC 边界。
 
 ```mermaid
 flowchart LR
-  subgraph Frontend["React 前端 · src/"]
-    UI["组件<br/>(TabBar, TerminalView,<br/>Files 面板, Dialogs)"]
-    Store["Zustand 状态仓库<br/>(sessions, hosts, transfers)"]
-    IPC["ipc/ 包装层<br/>(invoke + listen)"]
+  subgraph FE ["🖥️ 前端 · React + TypeScript · src/"]
+    direction TB
+    UI["UI 组件<br/>TabBar · TerminalView · Files 面板"]
+    Store["Zustand stores<br/>sessions · hosts · transfers"]
+    Wrap["ipc/ 类型化包装<br/>invoke() + listen()"]
+    UI --> Store --> Wrap
   end
 
-  subgraph Backend["Rust 后端 · src-tauri/"]
-    Cmds["ipc/ #[tauri::command]<br/>处理器"]
-    Session["session::SessionManager<br/>(拥有活跃连接，<br/>每会话一个 tokio 任务)"]
-    Proto["protocol/<br/>(基于 russh 的 SSH，<br/>SFTP 子通道)"]
-    Transp["transport/<br/>(目前 TCP，<br/>未来 Serial/WebSocket)"]
-    Local["local/<br/>(本机文件系统，<br/>磁盘枚举)"]
+  Wrap ==>|"invoke()"| Cmd
+  Cmd ==>|"emit() 事件"| Wrap
+
+  subgraph BE ["⚙️ 后端 · Rust + Tauri · src-tauri/"]
+    direction TB
+    Cmd["#[tauri::command] 处理器<br/>路由入口"]
+    Sm["session::SessionManager<br/>每会话一个 tokio 任务"]
+    Loc["local::<br/>本机文件操作 · 磁盘枚举"]
+    Prot["protocol::<br/>SSH + SFTP · via russh"]
+    Tr["transport::<br/>TCP · 未来 Serial / WS"]
+    Cmd --> Sm
+    Cmd --> Loc
+    Sm --> Prot
+    Prot --> Tr
   end
 
-  UI --> Store
-  Store --> IPC
-  IPC <-->|Tauri IPC<br/>invoke + 事件| Cmds
-  Cmds --> Session
-  Cmds --> Local
-  Session --> Proto
-  Proto --> Transp
-  Transp -->|TCP| Network[("远端服务器")]
-  Local --> FS[("本机文件系统")]
+  Tr --> Net(["🌐 远端服务器"])
+  Loc --> Fs(["💾 本机文件系统"])
+
+  classDef feBox fill:#EEEDFE,stroke:#7F77DD,color:#26215C
+  classDef beBox fill:#E1F5EE,stroke:#1D9E75,color:#04342C
+  classDef extBox fill:#F1EFE8,stroke:#5F5E5A,color:#2C2C2A
+
+  class UI,Store,Wrap feBox
+  class Cmd,Sm,Loc,Prot,Tr beBox
+  class Net,Fs extBox
+
+  linkStyle 2,3 stroke:#7c5cff,stroke-width:2.5px
 ```
 
 ### 前端
