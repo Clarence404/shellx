@@ -38,6 +38,11 @@ pub async fn local_realpath(args: LocalPathArgs) -> Result<String> {
 }
 
 #[tauri::command]
+pub async fn local_is_dir(args: LocalPathArgs) -> Result<bool> {
+    local::is_dir(&args.path)
+}
+
+#[tauri::command]
 pub async fn local_default_roots() -> Result<DefaultRoots> {
     Ok(local::default_roots())
 }

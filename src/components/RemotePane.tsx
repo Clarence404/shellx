@@ -8,6 +8,7 @@ import {
   sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDirRecursive,
 } from "../ipc/sftp";
 import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
+import { localIsDir } from "../ipc/local";
 import { HostDropdown } from "./HostDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow, buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
@@ -120,12 +121,27 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
         setOsDragOver(false);
         if (!inside(p.position.x, p.position.y)) return;
         if (p.paths && p.paths.length > 0) {
-          // OS drop — upload each file to remote via sftp.
-          for (const localPath of p.paths) {
-            const filename = localPath.split(/[\\/]/).pop() || "unknown";
-            const remotePath = joinPath(rightPath, filename);
-            void sftpUpload(rightHost, localPath, remotePath);
-          }
+          // OS drop — probe each path's kind and route to the recursive
+          // IPC when it's a directory. Previously `sftp_upload` was
+          // called unconditionally on the local path; `LocalFile::open`
+          // fails silently on a directory, so Explorer folders never
+          // uploaded.
+          (async () => {
+            for (const localPath of p.paths) {
+              const filename = localPath.split(/[\\/]/).pop() || "unknown";
+              const remotePath = joinPath(rightPath, filename);
+              try {
+                const isDir = await localIsDir(localPath);
+                if (isDir) {
+                  await sftpUploadDir(rightHost, localPath, remotePath);
+                } else {
+                  await sftpUpload(rightHost, localPath, remotePath);
+                }
+              } catch {
+                /* one path's failure shouldn't halt the batch */
+              }
+            }
+          })();
         } else {
           // Internal drag from LocalPane. Route by kind so folders
           // hit the recursive Rust IPC (v0.6 T1).

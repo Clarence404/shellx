@@ -7,7 +7,8 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useFilesStore } from "../state/files";
 import { sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir, sftpRealpath } from "../ipc/sftp";
-import { sftpUpload, sftpDownload, sftpDownloadDir } from "../ipc/transfers";
+import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
+import { localIsDir } from "../ipc/local";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow } from "./FileRow";
 import { TransferQueue } from "./TransferQueue";
@@ -95,10 +96,25 @@ export function FileBrowserView({ connectionId }: Props) {
         setOsDragOver(false);
         if (!inside(p.position.x, p.position.y)) return;
         const cwd = state?.cwd ?? ".";
-        for (const localPath of p.paths) {
-          const remotePath = joinPath(cwd, basename(localPath));
-          void sftpUpload(connectionId, localPath, remotePath);
-        }
+        // Probe each path's kind and route to the recursive IPC for
+        // directories. `sftp_upload` on a folder previously failed
+        // silently because `LocalFile::open(dir)` errors and `void`
+        // discarded the rejection.
+        (async () => {
+          for (const localPath of p.paths) {
+            const remotePath = joinPath(cwd, basename(localPath));
+            try {
+              const isDir = await localIsDir(localPath);
+              if (isDir) {
+                await sftpUploadDir(connectionId, localPath, remotePath);
+              } else {
+                await sftpUpload(connectionId, localPath, remotePath);
+              }
+            } catch {
+              /* one path's failure shouldn't halt the batch */
+            }
+          }
+        })();
       }
     }).then((u) => {
       if (cancelled) {
