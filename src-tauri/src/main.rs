@@ -70,6 +70,7 @@ fn main() {
             ipc::local::local_realpath,
             ipc::local::local_is_dir,
             ipc::local::local_default_roots,
+            ipc::local::local_list_disks,
             ipc::local::local_mkdir,
             ipc::local::local_rename,
             ipc::local::local_remove_file,

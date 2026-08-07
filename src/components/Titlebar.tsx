@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Minus, Square, X, Copy as Restore } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { TabBar, type Tab } from "./TabBar";
+import type { HostInfo } from "../types/host";
 
 interface Props {
   tabs: Tab[];
@@ -10,6 +11,7 @@ interface Props {
   onTabClose: (id: string) => void;
   onTabsClose?: (ids: string[]) => void;
   onNewConnection?: () => void;
+  onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
 }
 
 /**
@@ -22,7 +24,7 @@ interface Props {
  * the window by any non-interactive area; TabBar / logo / controls are
  * interactive and NOT drag regions.
  */
-export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection }: Props) {
+export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection, onConnectHost }: Props) {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -79,6 +81,7 @@ export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClo
           onSelect={onTabSelect} onClose={onTabClose}
           onCloseTabs={onTabsClose}
           onNewConnection={onNewConnection}
+          onConnectHost={onConnectHost}
         />
       </div>
       {/* Drag gutter before window controls — guarantees a drag /

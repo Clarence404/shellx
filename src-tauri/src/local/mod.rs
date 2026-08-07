@@ -21,6 +21,17 @@ pub struct DefaultRoots {
     pub downloads: String,
 }
 
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct LocalDisk {
+    /// Path to mount as pane cwd. Windows: `C:/`. POSIX: `/` or `/Volumes/Foo`.
+    pub path: String,
+    /// Short label — drive letter on Windows, basename on POSIX,
+    /// literal `/` for the root volume. No volume-label lookups
+    /// (would need per-drive metadata probing and can hang on
+    /// disconnected network drives).
+    pub label: String,
+}
+
 fn expand(path: &str) -> Result<PathBuf> {
     if let Some(rest) = path.strip_prefix('~') {
         let home = dirs::home_dir()
@@ -101,6 +112,113 @@ pub fn default_roots() -> DefaultRoots {
         home: s(dirs::home_dir()),
         desktop: s(dirs::desktop_dir()),
         downloads: s(dirs::download_dir()),
+    }
+}
+
+/// Enumerate mountable roots the frontend's disk-picker should offer.
+///
+/// - Windows: probe drive letters A:–Z: via GetLogicalDrives (a bitmap
+///   populated by the Windows kernel), then return `X:/` for each set
+///   bit. Skipping missing letters keeps the popover tight; skipping
+///   volume-label lookups avoids the slow / auth-prompt-prone
+///   `GetVolumeInformation` call on disconnected network drives.
+/// - macOS: `/` plus non-hidden entries under `/Volumes`. Apple mounts
+///   external / network / DMG volumes there; the boot volume shows up
+///   twice in `/Volumes` (root + a symlink named after itself) so we
+///   dedupe by resolved path.
+/// - Linux: `/` plus non-hidden subdirs of `/media/<user>` (systemd
+///   auto-mount) and `/mnt` (manual mounts). Both are conventional
+///   rather than guaranteed, so a missing directory is not an error.
+pub fn list_disks() -> Result<Vec<LocalDisk>> {
+    #[cfg(windows)]
+    {
+        Ok(list_disks_windows())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Ok(list_disks_macos())
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Ok(list_disks_linux())
+    }
+}
+
+#[cfg(windows)]
+fn list_disks_windows() -> Vec<LocalDisk> {
+    // GetLogicalDrives returns a u32 bitmap: bit 0 = A:, bit 1 = B:, ...
+    // Prefer this over probing existence per-letter — the kernel already
+    // has the answer and probing (e.g. a std::fs::metadata call) can
+    // block or spin the drive up on a spun-down disk.
+    extern "system" {
+        fn GetLogicalDrives() -> u32;
+    }
+    let mask = unsafe { GetLogicalDrives() };
+    let mut out = Vec::new();
+    for i in 0..26u8 {
+        if mask & (1 << i) != 0 {
+            let letter = (b'A' + i) as char;
+            out.push(LocalDisk {
+                path: format!("{letter}:/"),
+                label: format!("{letter}:"),
+            });
+        }
+    }
+    out
+}
+
+#[cfg(target_os = "macos")]
+fn list_disks_macos() -> Vec<LocalDisk> {
+    let mut out = vec![LocalDisk { path: "/".into(), label: "/".into() }];
+    if let Ok(rd) = std::fs::read_dir("/Volumes") {
+        for entry in rd.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') { continue; }
+            // The boot volume appears in /Volumes as a symlink pointing at /.
+            // Skip anything whose canonicalize resolves to "/" so we don't
+            // list the root twice.
+            let path = entry.path();
+            if let Ok(canonical) = path.canonicalize() {
+                if canonical.as_os_str() == "/" { continue; }
+            }
+            out.push(LocalDisk {
+                path: format!("/Volumes/{name}"),
+                label: name,
+            });
+        }
+    }
+    out
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn list_disks_linux() -> Vec<LocalDisk> {
+    let mut out = vec![LocalDisk { path: "/".into(), label: "/".into() }];
+    // /media/<user>/* — systemd-mount / udisks2 convention. Prefer the
+    // per-user dir when it exists (Ubuntu 20+, Fedora, Arch), fall back
+    // to scanning /media directly (older / minimal distros).
+    let user_media = std::env::var("USER")
+        .ok()
+        .map(|u| PathBuf::from(format!("/media/{u}")))
+        .filter(|p| p.is_dir());
+    let media_scan = user_media.unwrap_or_else(|| PathBuf::from("/media"));
+    scan_mount_dir(&media_scan, &mut out);
+    // /mnt — manual mounts. Convention only; some distros ship it empty.
+    scan_mount_dir(&PathBuf::from("/mnt"), &mut out);
+    out
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn scan_mount_dir(dir: &std::path::Path, out: &mut Vec<LocalDisk>) {
+    let Ok(rd) = std::fs::read_dir(dir) else { return; };
+    for entry in rd.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') { continue; }
+        let full = entry.path();
+        if !full.is_dir() { continue; }
+        out.push(LocalDisk {
+            path: full.to_string_lossy().into_owned(),
+            label: name,
+        });
     }
 }
 
@@ -298,5 +416,38 @@ mod tests {
         let home = dirs::home_dir().unwrap();
         let resolved = realpath(&home.to_string_lossy()).unwrap();
         assert!(!resolved.contains('\\'), "expected no backslashes, got {resolved}");
+    }
+
+    #[test]
+    fn list_disks_contains_at_least_one_root() {
+        // Cross-platform smoke: every supported OS should surface at least
+        // one disk (C:/ on Windows, / on POSIX). Contents beyond that are
+        // environment-dependent (mounted volumes, external drives), so
+        // we only assert non-empty + first entry looks like a root.
+        let disks = list_disks().unwrap();
+        assert!(!disks.is_empty(), "expected at least one disk");
+        let first = &disks[0];
+        assert!(!first.path.is_empty());
+        assert!(!first.label.is_empty());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn list_disks_windows_includes_system_drive() {
+        // Whatever drive Windows booted from must appear. Reads
+        // %SystemDrive% (e.g. "C:") from the env to avoid hardcoding.
+        let sys = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+        let disks = list_disks().unwrap();
+        assert!(
+            disks.iter().any(|d| d.label == sys),
+            "expected {sys} in {disks:?}",
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn list_disks_unix_contains_root() {
+        let disks = list_disks().unwrap();
+        assert!(disks.iter().any(|d| d.path == "/"), "expected / in {disks:?}");
     }
 }
