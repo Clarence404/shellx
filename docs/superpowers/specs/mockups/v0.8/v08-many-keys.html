@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>shellx v0.8 · 密钥选择器 · 多密钥场景</title>
+<style>
+  :root {
+    --bg:#1e1c24; --p1:#232326; --p2:#252529; --p3:#2c2c30;
+    --bd:#2c2c30; --bdh:#3a373f;
+    --t1:#d4d0dc; --t2:#a0a0a5; --t3:#7a7a7f; --tm:#8b869a;
+    --ac:#7c5cff; --acl:#a89bff; --acf:#3a2f5f;
+    --ok:#7c9c80; --warn:#f2c8a2; --err:#e24b4a;
+    --mono:"JetBrains Mono","SF Mono",Consolas,monospace;
+    --ui:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 20px 60px; background:#F0EEE8; font-family:var(--ui); color:#2C2C2A; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:1240px; margin:0 auto; }
+  h1 { color:#26215C; font-size:22px; margin:0 0 6px; }
+  .lede { color:#5F5E5A; font-size:13px; margin-bottom:28px; }
+
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; align-items:start; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; margin-top:24px; }
+
+  .case {
+    background:white; border:1px solid #E5E1D5; border-radius:10px; padding:16px 18px;
+  }
+  .case-hd { font-size:13.5px; font-weight:700; color:#26215C; margin-bottom:3px; }
+  .case-sub { font-size:11.5px; color:#5F5E5A; margin-bottom:14px; }
+  .cap { font-size:11.5px; color:#5F5E5A; line-height:1.6; margin-top:12px; }
+  .cap b { color:#26215C; }
+
+  /* form fragment */
+  .frag { background:var(--p2); border:1px solid var(--bd); border-radius:8px; padding:14px; color:var(--t1); }
+  .fl { font-size:9.5px; font-weight:600; color:var(--t3); letter-spacing:0.4px; text-transform:uppercase; margin:0 0 4px; }
+  .fi { height:28px; padding:0 9px; border-radius:4px; background:var(--p1); border:0.5px solid var(--bdh);
+        font-family:var(--mono); font-size:10.5px; color:var(--t1); display:flex; align-items:center; }
+  .fi .carets { margin-left:auto; color:var(--t3); font-size:9px; }
+  .chips { display:flex; gap:5px; margin-top:5px; flex-wrap:wrap; }
+  .chip { padding:3px 9px; border-radius:10px; font-family:var(--mono); font-size:9.5px;
+          background:var(--p1); border:0.5px solid var(--bdh); color:var(--t2); }
+  .chip.sel { background:var(--acf); border-color:var(--ac); color:var(--acl); font-weight:600; }
+  .chip.dash { border-style:dashed; }
+  .hint { font-size:9px; color:var(--t3); margin-top:5px; line-height:1.5; }
+  .hint .good { color:var(--ok); }
+
+  /* dropdown panel */
+  .dropdown {
+    margin-top:4px; background:var(--p1); border:0.5px solid var(--ac); border-radius:6px;
+    box-shadow:0 10px 28px rgba(0,0,0,0.45); overflow:hidden;
+  }
+  .dd-search {
+    display:flex; align-items:center; gap:6px;
+    padding:7px 10px; border-bottom:0.5px solid var(--bd);
+    font-family:var(--mono); font-size:10px; color:var(--t1);
+  }
+  .dd-search .icon { color:var(--t3); }
+  .dd-search .typed { color:var(--t1); }
+  .dd-search .cursor { display:inline-block; width:5px; height:11px; background:var(--ac); vertical-align:-1px; }
+  .dd-list { max-height:190px; overflow:hidden; padding:3px; }
+  .dd-row {
+    display:flex; align-items:center; gap:8px;
+    padding:6px 8px; border-radius:4px;
+    font-family:var(--mono); font-size:10px; color:var(--t1);
+  }
+  .dd-row.sel { background:var(--acf); }
+  .dd-row .kico { color:var(--acl); font-size:10px; }
+  .dd-row .kname { font-weight:600; }
+  .dd-row.sel .kname { color:var(--acl); }
+  .dd-row .ktype {
+    font-size:8px; padding:1px 6px; border-radius:3px;
+    background:var(--p3); color:var(--t3); font-family:var(--ui); letter-spacing:0.3px;
+  }
+  .dd-row .ktype.ed { background:var(--okf, #1a4a2a); color:#95b298; }
+  .dd-row .kpath { margin-left:auto; font-size:8.5px; color:var(--t3); }
+  .dd-row .check { color:var(--acl); font-size:11px; }
+  .dd-row.dim { opacity:0.45; }
+  .dd-footer {
+    padding:6px 10px; border-top:0.5px solid var(--bd);
+    display:flex; align-items:center; gap:12px;
+    font-size:9px; color:var(--t3);
+  }
+  .dd-footer .browse { color:var(--acl); }
+  .dd-footer kbd { background:var(--p3); border:0.5px solid var(--bdh); border-radius:2px; padding:0 3px; font-family:var(--mono); font-size:8px; }
+
+  .notes { margin-top:28px; padding:18px 22px; background:white; border:1px solid #E5E1D5; border-radius:10px; font-size:13px; line-height:1.8; }
+  .notes h4 { margin:0 0 8px; color:#26215C; font-size:15px; }
+  .notes b { color:#534AB7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>密钥选择器 · 数量自适应</h1>
+  <div class="lede">同一个控件三种形态，按 ~/.ssh 里发现的密钥数量自动切换 —— 少的时候零点击、多的时候可搜索</div>
+
+  <div class="grid3">
+
+    <!-- CASE 1: 0 keys -->
+    <div class="case">
+      <div class="case-hd">0 个密钥</div>
+      <div class="case-sub">~/.ssh 里没有可用密钥（或目录不存在）</div>
+      <div class="frag">
+        <div class="fl">私钥文件</div>
+        <div class="fi" style="color:var(--t3)">点击"浏览"选择密钥文件…</div>
+        <div class="chips">
+          <span class="chip dash">📂 浏览…</span>
+        </div>
+        <div class="hint">~/.ssh/ 中未发现密钥 · 你也可以 <span style="color:var(--acl)">切换到密码认证</span></div>
+      </div>
+      <div class="cap">没有 chips 干扰，直接给"浏览"和一条切密码的逃生通道。<b>认证方式默认也会落在"密码"</b>（检测不到密钥时）</div>
+    </div>
+
+    <!-- CASE 2: 1-4 keys -->
+    <div class="case">
+      <div class="case-hd">1–4 个密钥（最常见）</div>
+      <div class="case-sub">chips 一行放得下，点击即选</div>
+      <div class="frag">
+        <div class="fl">私钥文件</div>
+        <div class="fi">C:\Users\ChenHan\.ssh\id_ed25519</div>
+        <div class="chips">
+          <span class="chip sel">🔑 id_ed25519 · ED25519</span>
+          <span class="chip">🔑 id_rsa · RSA-4096</span>
+          <span class="chip dash">浏览…</span>
+        </div>
+        <div class="hint">在 ~/.ssh/ 发现 <span class="good">2 个密钥</span></div>
+      </div>
+      <div class="cap">你看到的原设计，保持不变。<b>绝大多数用户停在这个形态</b>（1-2 把密钥）</div>
+    </div>
+
+    <!-- CASE 3: 5+ keys -->
+    <div class="case">
+      <div class="case-hd">5+ 个密钥</div>
+      <div class="case-sub">chips 换成下拉选择器（点输入框展开）</div>
+      <div class="frag">
+        <div class="fl">私钥文件</div>
+        <div class="fi">
+          🔑&nbsp; id_ed25519 · ED25519
+          <span class="carets">▲▼</span>
+        </div>
+        <div class="hint">在 ~/.ssh/ 发现 <span class="good">8 个密钥</span> · 点击展开选择</div>
+      </div>
+      <div class="cap">超过 4 个时 chips 会占三四行、找起来还慢 —— 自动切成<b>下拉 + 搜索</b>形态（展开效果见下方大图）</div>
+    </div>
+  </div>
+
+  <!-- expanded dropdown -->
+  <div class="grid2">
+    <div class="case">
+      <div class="case-hd">5+ 密钥 · 下拉展开态</div>
+      <div class="case-sub">带搜索框 · 键盘 ↑↓ 导航 · ED25519 标绿排前</div>
+      <div class="frag" style="padding-bottom:6px">
+        <div class="fl">私钥文件</div>
+        <div class="fi" style="border-color:var(--ac)">
+          🔑&nbsp; id_ed25519 · ED25519
+          <span class="carets">▲▼</span>
+        </div>
+        <div class="dropdown">
+          <div class="dd-search">
+            <span class="icon">🔍</span>
+            <span style="color:var(--t3)">输入过滤…</span>
+          </div>
+          <div class="dd-list">
+            <div class="dd-row sel">
+              <span class="kico">🔑</span><span class="kname">id_ed25519</span>
+              <span class="ktype ed">ED25519</span>
+              <span class="kpath">~/.ssh</span>
+              <span class="check">✓</span>
+            </div>
+            <div class="dd-row">
+              <span class="kico">🔑</span><span class="kname">work_gitlab</span>
+              <span class="ktype ed">ED25519</span>
+              <span class="kpath">~/.ssh</span>
+            </div>
+            <div class="dd-row">
+              <span class="kico">🔑</span><span class="kname">aws_bastion</span>
+              <span class="ktype ed">ED25519</span>
+              <span class="kpath">~/.ssh</span>
+            </div>
+            <div class="dd-row">
+              <span class="kico">🔑</span><span class="kname">id_rsa</span>
+              <span class="ktype">RSA-4096</span>
+              <span class="kpath">~/.ssh</span>
+            </div>
+            <div class="dd-row">
+              <span class="kico">🔑</span><span class="kname">legacy_jump</span>
+              <span class="ktype">RSA-2048</span>
+              <span class="kpath">~/.ssh</span>
+            </div>
+            <div class="dd-row dim">
+              <span class="kico">🔑</span><span class="kname">old_server.pem</span>
+              <span class="ktype">RSA-1024 ⚠</span>
+              <span class="kpath">~/.ssh</span>
+            </div>
+          </div>
+          <div class="dd-footer">
+            <span class="browse">📂 浏览其它位置…</span>
+            <span style="margin-left:auto"><kbd>↑↓</kbd> 选择 · <kbd>⏎</kbd> 确认 · <kbd>Esc</kbd> 关闭</span>
+          </div>
+        </div>
+      </div>
+      <div class="cap">排序规则：<b>ED25519 在前</b>（绿标）→ RSA-4096/2048 → 弱密钥（RSA-1024 标 ⚠ 且置灰弱化，能选但不推荐）。底部固定"浏览其它位置"</div>
+    </div>
+
+    <div class="case">
+      <div class="case-hd">下拉 · 搜索过滤态</div>
+      <div class="case-sub">敲了 "aw" 之后</div>
+      <div class="frag" style="padding-bottom:6px">
+        <div class="fl">私钥文件</div>
+        <div class="fi" style="border-color:var(--ac)">
+          🔑&nbsp; id_ed25519 · ED25519
+          <span class="carets">▲▼</span>
+        </div>
+        <div class="dropdown">
+          <div class="dd-search">
+            <span class="icon">🔍</span>
+            <span class="typed">aw</span><span class="cursor"></span>
+          </div>
+          <div class="dd-list">
+            <div class="dd-row sel">
+              <span class="kico">🔑</span><span class="kname"><u>aw</u>s_bastion</span>
+              <span class="ktype ed">ED25519</span>
+              <span class="kpath">~/.ssh</span>
+            </div>
+          </div>
+          <div class="dd-footer">
+            <span class="browse">📂 浏览其它位置…</span>
+            <span style="margin-left:auto"><kbd>⏎</kbd> 选中 aws_bastion</span>
+          </div>
+        </div>
+      </div>
+      <div class="cap">名字模糊匹配，匹配段下划线。10+ 密钥的重度用户两三个键就选中目标。<b>这个下拉组件跟 ⌘K 命令面板是同一套交互习惯</b>，学一次两处用</div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>规则总结</h4>
+    <b>0 个</b>：无 chips · 只有"浏览" · 认证方式默认落"密码"<br>
+    <b>1–4 个</b>:chips 行内直选（现设计不变）· 默认预选最优（ED25519 &gt; RSA-4096 &gt; 其它）<br>
+    <b>5 个及以上</b>:自动切成下拉选择器 · 搜索过滤 · ED25519 排前 · 弱密钥（RSA-1024 / DSA）标 ⚠ 置灰弱化<br><br>
+    识别逻辑：扫 ~/.ssh 下有配对 <code style="background:#EEEDFE;padding:1px 5px;border-radius:3px;font-size:11px">.pub</code> 的私钥文件 + 常见命名（id_*、*.pem），读文件头判断类型 —— 不解密、不读私钥体。
+  </div>
+
+</div>
+</body>
+</html>

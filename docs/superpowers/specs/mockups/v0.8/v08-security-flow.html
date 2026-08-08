@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>shellx v0.8 · 安全底座全流程 vs 现状</title>
+<style>
+  :root {
+    --bg: #1e1c24;
+    --chrome: #1a1a1c;
+    --panel-1: #232326;
+    --panel-2: #252529;
+    --panel-3: #2c2c30;
+    --border: #2c2c30;
+    --border-hi: #3a373f;
+    --text-1: #d4d0dc;
+    --text-2: #a0a0a5;
+    --text-3: #7a7a7f;
+    --text-muted: #8b869a;
+    --accent: #7c5cff;
+    --accent-light: #a89bff;
+    --accent-fade: #3a2f5f;
+    --success: #7c9c80;
+    --success-fade: #1a4a2a;
+    --warn: #f2c8a2;
+    --warn-fade: #3a2f1f;
+    --error: #e24b4a;
+    --error-fade: #3a1a1a;
+    --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, monospace;
+    --font-ui: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 60px;
+    background: #F5F3EE;
+    font-family: var(--font-ui);
+    color: #2C2C2A;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1240px; margin: 0 auto; }
+  h1 { color: #26215C; font-size: 22px; margin: 0 0 6px; }
+  .lede { color: #5F5E5A; font-size: 13px; margin-bottom: 28px; }
+
+  .phase {
+    margin-top: 32px;
+    padding: 22px 24px;
+    background: white;
+    border: 1px solid #E5E1D5; border-radius: 10px;
+  }
+  .phase-title { font-size: 15px; font-weight: 700; color: #26215C; margin: 0 0 6px; }
+  .phase-sub { font-size: 12px; color: #5F5E5A; margin-bottom: 20px; }
+
+  /* ===== Flow diagram (SVG-ish with divs) ===== */
+  .flows { display: grid; grid-template-columns: 1fr 1.6fr; gap: 24px; align-items: start; }
+  .flow-col {}
+  .flow-col-hd {
+    font-size: 13px; font-weight: 700; text-align: center; margin-bottom: 14px;
+    padding: 6px; border-radius: 6px;
+  }
+  .flow-col-hd.old { background: #F1EFE8; color: #5F5E5A; }
+  .flow-col-hd.new { background: #EEEDFE; color: #534AB7; }
+
+  .fnode {
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 12px; text-align: center;
+    margin: 0 auto 6px; max-width: 320px;
+    position: relative;
+  }
+  .fnode.plain { background: #FAF9F5; border: 1px solid #E5E1D5; color: #2C2C2A; }
+  .fnode.action { background: #EEEDFE; border: 1px solid #B2ACE4; color: #26215C; font-weight: 600; }
+  .fnode.decision { background: #FAEEDA; border: 1px solid #EF9F27; color: #633806; font-weight: 600; }
+  .fnode.danger { background: #FCEBEB; border: 1px solid #E24B4A; color: #791F1F; font-weight: 600; }
+  .fnode.ok { background: #E1F5EE; border: 1px solid #1D9E75; color: #085041; font-weight: 600; }
+  .fnode.gone { background: #FCEBEB; border: 1px dashed #E24B4A; color: #A32D2D; }
+  .fnode .sub { display: block; font-size: 10px; font-weight: 400; margin-top: 3px; opacity: 0.8; }
+
+  .farrow {
+    text-align: center; color: #B4B2A9; font-size: 15px; line-height: 1;
+    margin: 0 0 6px;
+  }
+  .farrow.label { font-size: 10px; color: #888780; margin-top: -2px; }
+
+  .branch3 {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 6px;
+  }
+  .branch3 .fnode { max-width: none; margin: 0; }
+  .branch-label {
+    text-align: center; font-size: 10px; font-weight: 700;
+    padding: 2px 0; margin-bottom: 4px; border-radius: 3px;
+  }
+  .bl-green { color: #085041; background: #E1F5EE; }
+  .bl-amber { color: #633806; background: #FAEEDA; }
+  .bl-red { color: #791F1F; background: #FCEBEB; }
+
+  /* ===== Mini shellx dialogs ===== */
+  .dlg {
+    background: var(--bg); border-radius: 10px;
+    padding: 20px 22px;
+    color: var(--text-1);
+    max-width: 430px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  }
+  .dlg.trust { border: 1.5px solid var(--accent); }
+  .dlg.mitm { border: 2px solid var(--error); }
+  .dlg-icon {
+    width: 46px; height: 46px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 700; margin: 0 auto 12px;
+  }
+  .dlg.trust .dlg-icon { background: var(--accent-fade); border: 1.5px solid var(--accent); color: var(--accent-light); }
+  .dlg.mitm .dlg-icon { background: var(--error-fade); border: 2px solid var(--error); color: var(--error); }
+  .dlg h3 { margin: 0 0 10px; text-align: center; font-size: 14px; }
+  .dlg.trust h3 { color: var(--accent-light); }
+  .dlg.mitm h3 { color: #ff9080; }
+  .dlg .desc { text-align: center; font-size: 11.5px; color: var(--text-2); line-height: 1.6; margin-bottom: 12px; }
+  .fingerprint-box {
+    background: var(--panel-2); border: 0.5px solid var(--border-hi); border-radius: 6px;
+    padding: 10px 14px; margin-bottom: 12px;
+    font-family: var(--font-mono); font-size: 10.5px; line-height: 1.8;
+  }
+  .fingerprint-box .k { color: var(--text-3); display: inline-block; width: 74px; }
+  .fingerprint-box .v { color: var(--text-1); }
+  .fingerprint-box .fp { color: var(--accent-light); word-break: break-all; }
+  .dlg.mitm .fingerprint-box { border-color: #4a2020; }
+  .dlg.mitm .fp.old { color: var(--text-3); text-decoration: line-through; }
+  .dlg.mitm .fp.new { color: #ff9080; }
+  .dlg-note {
+    font-size: 10px; color: var(--text-3); text-align: center; margin-bottom: 14px; line-height: 1.6;
+  }
+  .dlg.mitm .dlg-note { color: var(--warn); }
+  .dlg-actions { display: flex; justify-content: center; gap: 8px; }
+  .btn-primary {
+    padding: 7px 18px; border-radius: 5px;
+    background: var(--accent); color: white; font-size: 11px; font-weight: 600;
+  }
+  .btn-cancel {
+    padding: 7px 18px; border-radius: 5px;
+    background: transparent; border: 0.5px solid var(--border-hi);
+    color: var(--text-2); font-size: 11px;
+  }
+  .btn-danger-ghost {
+    padding: 7px 14px; border-radius: 5px;
+    background: transparent; border: 0.5px solid var(--error);
+    color: #ff9080; font-size: 10.5px;
+  }
+  .btn-safe {
+    padding: 7px 18px; border-radius: 5px;
+    background: var(--error); color: white; font-size: 11px; font-weight: 700;
+  }
+
+  /* form snippets */
+  .form-panel {
+    background: var(--bg); border: 1px solid var(--border-hi); border-radius: 10px;
+    padding: 18px 20px; max-width: 430px;
+    color: var(--text-1);
+  }
+  .form-label {
+    font-size: 9px; font-weight: 600; color: var(--text-3);
+    letter-spacing: 0.4px; text-transform: uppercase;
+    margin: 12px 0 5px;
+  }
+  .form-label:first-child { margin-top: 0; }
+  .form-input {
+    height: 28px; padding: 0 10px; border-radius: 4px;
+    background: var(--panel-2); border: 0.5px solid var(--border-hi);
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-1); display: flex; align-items: center;
+  }
+  .form-row { display: flex; gap: 6px; }
+  .segmented {
+    display: flex; background: var(--panel-2); border-radius: 5px;
+    padding: 3px; border: 0.5px solid var(--border-hi);
+  }
+  .seg {
+    flex: 1; padding: 6px; border-radius: 3px;
+    font-size: 10.5px; text-align: center; color: var(--text-3);
+  }
+  .seg.on { background: var(--accent); color: white; font-weight: 600; }
+  .hint { font-size: 9.5px; color: var(--text-3); margin-top: 4px; line-height: 1.5; }
+  .hint .good { color: var(--success); }
+
+  .steps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px; }
+  .step {
+    background: #FAF9F5; border: 1px solid #E5E1D5; border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .step-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: white;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .step-num.red { background: var(--error); }
+  .step-title { font-size: 13px; font-weight: 600; color: #26215C; }
+  .step-body { font-size: 11.5px; color: #5F5E5A; line-height: 1.65; margin-top: 10px; }
+  .step-body b { color: #26215C; }
+  .step-body code {
+    font-family: var(--font-mono); font-size: 10px;
+    background: #EEEDFE; padding: 1px 5px; border-radius: 3px; color: #26215C;
+  }
+
+  /* compare table */
+  .compare table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .compare th, .compare td { padding: 9px 10px; text-align: left; border-bottom: 0.5px solid #E5E1D5; vertical-align: top; }
+  .compare th { color: #26215C; font-weight: 700; }
+  .compare td:first-child { font-weight: 600; color: #26215C; width: 190px; }
+  .yes { color: #1D9E75; font-weight: 600; }
+  .no { color: #E24B4A; font-weight: 600; }
+  .mid { color: #B37516; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>shellx v0.8 · 连接全流程（现状 vs 之后）</h1>
+  <div class="lede">锁定的决策：known_hosts 共用系统 <code>~/.ssh/known_hosts</code>（只追加）· 首次连接弹指纹确认（方案 B）· 公钥认证 Ed25519/RSA · passphrase 存 keychain</div>
+
+  <!-- ================= 流程图对比 ================= -->
+  <div class="phase">
+    <div class="phase-title">连接流程对比</div>
+    <div class="phase-sub">左边是 v0.7.1 现在的样子，右边是 v0.8 之后。红色虚线框是现状的安全漏洞</div>
+
+    <div class="flows">
+
+      <!-- OLD FLOW -->
+      <div class="flow-col">
+        <div class="flow-col-hd old">现状 · v0.7.1</div>
+
+        <div class="fnode plain">点击主机 · 发起连接</div>
+        <div class="farrow">↓</div>
+        <div class="fnode gone">无条件信任服务器<span class="sub">不看指纹 · 不存记录 · 中间人攻击无感知</span></div>
+        <div class="farrow">↓</div>
+        <div class="fnode action">密码认证<span class="sub">密码从 OS keychain 取（已有）</span></div>
+        <div class="farrow">↓</div>
+        <div class="fnode ok">已连接</div>
+
+        <div style="margin-top:16px; padding:10px 14px; background:#FCEBEB; border:1px dashed #E24B4A; border-radius:8px; font-size:11px; color:#791F1F; line-height:1.6">
+          ⚠ 两个问题：<br>
+          ① 任何人在网络中间冒充服务器都能截获你的密码<br>
+          ② 只支持密码，不支持你的 <code style="background:white;padding:0 4px;border-radius:2px">id_ed25519</code> 密钥
+        </div>
+      </div>
+
+      <!-- NEW FLOW -->
+      <div class="flow-col">
+        <div class="flow-col-hd new">v0.8 之后</div>
+
+        <div class="fnode plain">点击主机 · 发起连接</div>
+        <div class="farrow">↓</div>
+        <div class="fnode action">收到服务器公钥 · 查 ~/.ssh/known_hosts</div>
+        <div class="farrow">↓</div>
+
+        <div class="branch3">
+          <div>
+            <div class="branch-label bl-green">✓ 有记录 · 指纹一致</div>
+            <div class="fnode ok" style="font-size:11px">静默通过<span class="sub">最常见 · 无任何弹窗</span></div>
+          </div>
+          <div>
+            <div class="branch-label bl-amber">? 没见过这台服务器</div>
+            <div class="fnode decision" style="font-size:11px">弹指纹确认<span class="sub">见下方对话框 ①</span></div>
+          </div>
+          <div>
+            <div class="branch-label bl-red">✗ 指纹变了！</div>
+            <div class="fnode danger" style="font-size:11px">大红警告<span class="sub">见下方对话框 ② · 默认取消</span></div>
+          </div>
+        </div>
+
+        <div class="farrow">↓ <span style="font-size:10px">（通过后）</span></div>
+        <div class="fnode action">认证 · 按主机配置</div>
+        <div class="farrow">↓</div>
+
+        <div class="branch3" style="grid-template-columns:1fr 1fr">
+          <div>
+            <div class="branch-label" style="background:#EEEDFE;color:#534AB7">🔑 公钥（推荐）</div>
+            <div class="fnode plain" style="font-size:11px">读密钥文件 → 需要 passphrase 就从 keychain 取<span class="sub">首次输一遍 · 之后全自动</span></div>
+          </div>
+          <div>
+            <div class="branch-label" style="background:#F1EFE8;color:#5F5E5A">🔒 密码（保留）</div>
+            <div class="fnode plain" style="font-size:11px">跟现在一样<span class="sub">从 keychain 取</span></div>
+          </div>
+        </div>
+
+        <div class="farrow">↓</div>
+        <div class="fnode ok">已连接</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 两个对话框 ================= -->
+  <div class="phase">
+    <div class="phase-title">两个新对话框长这样</div>
+    <div class="phase-sub">① 是首次遇到新服务器（正常，一台服务器一辈子见一次）· ② 是指纹变化（罕见，出现就要警惕）</div>
+
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">①</span>
+          <span class="step-title">首次连接 · 指纹确认（方案 B）</span>
+        </div>
+        <div class="dlg trust" style="margin:0 auto">
+          <div class="dlg-icon">🔑</div>
+          <h3>首次连接这台服务器</h3>
+          <div class="desc">shellx 之前没见过 <b style="color:var(--text-1)">test-bastion.company.com</b>，请核对下面的指纹是否与服务器管理员告知的一致。</div>
+          <div class="fingerprint-box">
+            <div><span class="k">主机</span><span class="v">test-bastion.company.com:22</span></div>
+            <div><span class="k">密钥类型</span><span class="v">ED25519</span></div>
+            <div><span class="k">指纹</span><span class="fp">SHA256:HbW3g8vpcJXm3JgqXhI2R6ZKvJqVrHqOxwFrxRwXXXX</span></div>
+          </div>
+          <div class="dlg-note">信任后指纹将写入 ~/.ssh/known_hosts，命令行 ssh 也会认。</div>
+          <div class="dlg-actions">
+            <button class="btn-cancel">取消</button>
+            <button class="btn-primary">信任并保存</button>
+          </div>
+        </div>
+        <div class="step-body">
+          点 <b>信任并保存</b> → 指纹追加进 <code>~/.ssh/known_hosts</code> → 继续认证。之后连这台服务器<b>永远不再弹</b>（走左边绿色分支静默通过）。你在命令行接受过的服务器，shellx 也直接静默通过——两边互通
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num red">②</span>
+          <span class="step-title">指纹变化 · 中间人警告</span>
+        </div>
+        <div class="dlg mitm" style="margin:0 auto">
+          <div class="dlg-icon">⚠</div>
+          <h3>服务器指纹变了！</h3>
+          <div class="desc"><b style="color:var(--text-1)">prod-bastion.company.com</b> 返回的指纹与 known_hosts 中保存的不一致。<b style="color:#ff9080">这可能是中间人攻击。</b></div>
+          <div class="fingerprint-box">
+            <div><span class="k">已保存</span><span class="fp old">SHA256:HbW3g8vpcJXm3JgqXhI2R6ZK…</span></div>
+            <div><span class="k">现在收到</span><span class="fp new">SHA256:Zk9mQwErTyUiOpAsDfGhJkL2…</span></div>
+          </div>
+          <div class="dlg-note">如果服务器最近没有重装或更换密钥，请立即取消并联系管理员。</div>
+          <div class="dlg-actions">
+            <button class="btn-danger-ghost">我确认服务器换了密钥</button>
+            <button class="btn-safe">取消连接（推荐）</button>
+          </div>
+        </div>
+        <div class="step-body">
+          <b>默认按钮是"取消连接"</b>（右侧、红色、粗体）。要继续必须点左边的弱化按钮，点了之后还会追加新指纹到 known_hosts。这个对话框设计原则：<b>让"离开"比"继续"更容易</b>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 公钥配置 ================= -->
+  <div class="phase">
+    <div class="phase-title">公钥认证怎么配（一次性）</div>
+    <div class="phase-sub">编辑主机表单里加一个"认证方式"段。你那台 test-bastion 的配法：</div>
+
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">③</span>
+          <span class="step-title">主机表单 · 认证方式段</span>
+        </div>
+        <div class="form-panel" style="margin:0 auto">
+          <div class="form-label">认证方式</div>
+          <div class="segmented">
+            <div class="seg on">🔑 密钥文件</div>
+            <div class="seg">🔒 密码</div>
+          </div>
+          <div class="form-label">私钥文件</div>
+          <div class="form-row">
+            <div class="form-input" style="flex:1">C:\Users\ChenHan\.ssh\id_ed25519</div>
+            <button class="btn-cancel" style="padding:5px 12px">浏览…</button>
+          </div>
+          <div class="hint">自动发现：shellx 扫描 ~/.ssh/ 找到了 <span class="good">id_ed25519</span> · id_rsa，点击直接选用</div>
+          <div class="form-label">Passphrase（如果密钥有）</div>
+          <div class="form-input" style="color:var(--text-3)">••••••••••</div>
+          <div class="hint">存入 Windows 凭据管理器（OS keychain），只需输入这一次。没有 passphrase 就留空</div>
+        </div>
+        <div class="step-body">
+          切到"密钥文件"模式 → 从自动发现列表点 <code>id_ed25519</code>（或手动浏览）→ 输一次 passphrase（存 keychain）→ 保存。<b>之后每次连接全自动</b>，什么都不用输
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">④</span>
+          <span class="step-title">日常连接 · 零输入</span>
+        </div>
+        <div class="step-body" style="margin-top:0">
+          配好之后，日常点击 test-bastion 的完整体验：
+          <div style="background:white;border:1px solid #E5E1D5;border-radius:8px;padding:14px 18px;margin:12px 0;font-size:12px;line-height:2">
+            <b>1.</b> 点击主机（或 + 菜单 quick connect）<br>
+            <b>2.</b> <span style="color:#1D9E75">指纹静默校验通过</span>（known_hosts 有记录）<br>
+            <b>3.</b> <span style="color:#1D9E75">密钥自动解锁</span>（passphrase 从 keychain 取）<br>
+            <b>4.</b> 终端出现 <code>chen.han@test-bastion:~$</code>
+          </div>
+          从点击到连上 <b>1-2 秒，全程零弹窗零输入</b>。弹窗只出现在两种情况：新服务器（一台一次）· 指纹变化（罕见+应该警惕）
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 对比表 ================= -->
+  <div class="phase compare">
+    <div class="phase-title">总结 · 和现在的区别</div>
+    <table>
+      <tr>
+        <th>维度</th>
+        <th>现状 v0.7.1</th>
+        <th>v0.8 之后</th>
+      </tr>
+      <tr>
+        <td>服务器身份验证</td>
+        <td class="no">无 · 无条件信任任何服务器</td>
+        <td class="yes">TOFU · 指纹存 ~/.ssh/known_hosts · 变化即大红警告</td>
+      </tr>
+      <tr>
+        <td>中间人攻击</td>
+        <td class="no">完全无感知，密码直接被截</td>
+        <td class="yes">第二次起连接即可发现（指纹不匹配）</td>
+      </tr>
+      <tr>
+        <td>认证方式</td>
+        <td class="mid">仅密码</td>
+        <td class="yes">公钥（Ed25519/RSA + passphrase 走 keychain）+ 密码</td>
+      </tr>
+      <tr>
+        <td>与命令行 ssh 的关系</td>
+        <td>互不相干</td>
+        <td class="yes">共用 known_hosts（只追加）· 一处信任两边通用</td>
+      </tr>
+      <tr>
+        <td>你那条 ssh -i 命令</td>
+        <td class="no">shellx 替代不了（没有 -i）</td>
+        <td class="yes">-i 部分完全替代（-L 部分等 v0.9）</td>
+      </tr>
+      <tr>
+        <td>日常连接体验</td>
+        <td>点击 → 连上（但不安全）</td>
+        <td>点击 → 连上（同样零输入，且安全）· 仅新服务器多一次确认</td>
+      </tr>
+      <tr>
+        <td>README 免责声明</td>
+        <td class="no">"别在不可信网络用"</td>
+        <td class="yes">删掉这句话</td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>shellx v0.8 · 密钥连接 UI · 三种设计风格</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 60px;
+    background: #F0EEE8;
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #2C2C2A;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1380px; margin: 0 auto; }
+  h1 { color: #26215C; font-size: 22px; margin: 0 0 6px; }
+  .lede { color: #5F5E5A; font-size: 13px; margin-bottom: 30px; }
+
+  .styles { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; align-items: start; }
+
+  .style-col-hd {
+    padding: 12px 16px; border-radius: 10px 10px 0 0;
+    font-size: 15px; font-weight: 700;
+  }
+  .style-col-hd .tagline { display: block; font-size: 11px; font-weight: 400; margin-top: 3px; opacity: 0.85; }
+  .hd-a { background: #26215C; color: #EEEDFE; }
+  .hd-b { background: #085041; color: #E1F5EE; }
+  .hd-c { background: #111; color: #33ff66; font-family: "JetBrains Mono", Consolas, monospace; }
+
+  .style-body {
+    border: 1px solid #E5E1D5; border-top: none;
+    border-radius: 0 0 10px 10px;
+    padding: 18px; background: white;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .shot-label {
+    font-size: 11px; font-weight: 700; color: #888780;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  /* ================================================
+     STYLE A — 现有 shellx 暗色紧凑（warm-minimal dark）
+     ================================================ */
+  .A { --bg:#1e1c24; --p1:#232326; --p2:#252529; --bd:#2c2c30; --bdh:#3a373f;
+       --t1:#d4d0dc; --t2:#a0a0a5; --t3:#7a7a7f;
+       --ac:#7c5cff; --acl:#a89bff; --acf:#3a2f5f; --ok:#7c9c80; --err:#e24b4a;
+       font-family: -apple-system, "Segoe UI", sans-serif; }
+  .A .form {
+    background: var(--p2); border: 1px solid var(--bd); border-radius: 8px;
+    padding: 16px; color: var(--t1); font-size: 11px;
+  }
+  .A .fl { font-size: 9.5px; font-weight: 600; color: var(--t3); letter-spacing: 0.4px; text-transform: uppercase; margin: 11px 0 4px; }
+  .A .fl:first-child { margin-top: 0; }
+  .A .fi { height: 28px; padding: 0 9px; border-radius: 4px; background: var(--p1); border: 0.5px solid var(--bdh);
+           font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--t1); display: flex; align-items: center; }
+  .A .seg { display: flex; background: var(--p1); border-radius: 5px; padding: 3px; border: 0.5px solid var(--bdh); }
+  .A .seg > div { flex: 1; padding: 5px; border-radius: 3px; font-size: 10px; text-align: center; color: var(--t3); }
+  .A .seg > div.on { background: var(--ac); color: white; font-weight: 600; }
+  .A .chips { display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
+  .A .chip { padding: 3px 9px; border-radius: 10px; font-family: "JetBrains Mono", monospace; font-size: 9.5px;
+             background: var(--p1); border: 0.5px solid var(--bdh); color: var(--t2); }
+  .A .chip.sel { background: var(--acf); border-color: var(--ac); color: var(--acl); font-weight: 600; }
+  .A .hint { font-size: 9px; color: var(--t3); margin-top: 4px; }
+  .A .acts { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; padding-top: 12px; border-top: 0.5px solid var(--bd); }
+  .A .bp { padding: 6px 14px; border-radius: 4px; background: var(--ac); color: white; font-size: 10.5px; font-weight: 600; }
+  .A .bc { padding: 6px 14px; border-radius: 4px; background: transparent; border: 0.5px solid var(--bdh); color: var(--t2); font-size: 10.5px; }
+
+  .A .dlg { background: var(--bg); border: 1.5px solid var(--ac); border-radius: 8px; padding: 18px; color: var(--t1); }
+  .A .dlg-ic { width: 40px; height: 40px; border-radius: 50%; background: var(--acf); border: 1.5px solid var(--ac);
+               display: flex; align-items: center; justify-content: center; color: var(--acl); font-size: 17px; margin: 0 auto 10px; }
+  .A .dlg h5 { margin: 0 0 8px; text-align: center; font-size: 12.5px; color: var(--acl); }
+  .A .dlg .dd { text-align: center; font-size: 10.5px; color: var(--t2); line-height: 1.6; margin-bottom: 10px; }
+  .A .fpbox { background: var(--p2); border: 0.5px solid var(--bdh); border-radius: 5px; padding: 8px 11px;
+              font-family: "JetBrains Mono", monospace; font-size: 9.5px; line-height: 1.8; margin-bottom: 12px; }
+  .A .fpbox .k { color: var(--t3); display: inline-block; width: 62px; }
+  .A .fpbox .fp { color: var(--acl); word-break: break-all; }
+
+  /* ================================================
+     STYLE B — 宽松卡片风（light-friendly spacious）
+     ================================================ */
+  .B { --bg:#26242e; --p1:#2e2c38; --p2:#343240; --bd:#3d3b4a; --bdh:#4a4859;
+       --t1:#e8e5f0; --t2:#b3aec5; --t3:#8a8599;
+       --ac:#8b6cff; --acl:#b5a3ff; --acf:#453a6b; --ok:#8fc9a0; --err:#ec6a68;
+       font-family: -apple-system, "Segoe UI", sans-serif; }
+  .B .form {
+    background: var(--bg); border-radius: 16px; padding: 24px; color: var(--t1); font-size: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  }
+  .B .fl { font-size: 12px; font-weight: 600; color: var(--t2); margin: 16px 0 7px; }
+  .B .fl:first-child { margin-top: 0; }
+  .B .fi { height: 42px; padding: 0 14px; border-radius: 10px; background: var(--p1); border: 1px solid transparent;
+           font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--t1); display: flex; align-items: center; }
+  .B .fi.focus { border-color: var(--ac); box-shadow: 0 0 0 3px rgba(139,108,255,0.25); }
+  .B .seg { display: flex; gap: 8px; }
+  .B .seg > div { flex: 1; padding: 12px 8px; border-radius: 10px; font-size: 12px; text-align: center;
+                  color: var(--t3); background: var(--p1); border: 1px solid transparent; }
+  .B .seg > div.on { background: var(--acf); border-color: var(--ac); color: var(--acl); font-weight: 600; }
+  .B .seg .seg-sub { display: block; font-size: 9.5px; margin-top: 3px; opacity: 0.75; font-weight: 400; }
+  .B .keycard { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px;
+                background: var(--p1); border: 1px solid transparent; margin-top: 8px; }
+  .B .keycard.sel { border-color: var(--ac); background: var(--acf); }
+  .B .keycard .kico { width: 34px; height: 34px; border-radius: 8px; background: var(--p2);
+                      display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .B .keycard.sel .kico { background: rgba(139,108,255,0.3); }
+  .B .keycard .kname { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--t1); font-weight: 600; }
+  .B .keycard .ktype { font-size: 10px; color: var(--t3); margin-top: 2px; }
+  .B .keycard.sel .ktype { color: var(--acl); }
+  .B .keycard .kcheck { margin-left: auto; color: var(--acl); font-size: 15px; }
+  .B .hint { font-size: 11px; color: var(--t3); margin-top: 6px; line-height: 1.5; }
+  .B .acts { display: flex; gap: 10px; margin-top: 22px; }
+  .B .bp { flex: 1; padding: 13px; border-radius: 10px; background: var(--ac); color: white; font-size: 13px; font-weight: 600; text-align: center; }
+  .B .bc { padding: 13px 20px; border-radius: 10px; background: var(--p1); color: var(--t2); font-size: 13px; text-align: center; }
+
+  .B .dlg { background: var(--bg); border-radius: 16px; padding: 26px 22px; color: var(--t1);
+            box-shadow: 0 16px 48px rgba(0,0,0,0.3); }
+  .B .dlg-ic { width: 60px; height: 60px; border-radius: 16px; background: var(--acf);
+               display: flex; align-items: center; justify-content: center; color: var(--acl); font-size: 26px; margin: 0 auto 14px; }
+  .B .dlg h5 { margin: 0 0 10px; text-align: center; font-size: 15px; color: var(--t1); }
+  .B .dlg .dd { text-align: center; font-size: 12px; color: var(--t2); line-height: 1.65; margin-bottom: 14px; }
+  .B .fpbox { background: var(--p1); border-radius: 12px; padding: 14px 16px;
+              font-family: "JetBrains Mono", monospace; font-size: 10.5px; line-height: 2; margin-bottom: 16px; }
+  .B .fpbox .k { color: var(--t3); display: inline-block; width: 70px; font-family: -apple-system, sans-serif; }
+  .B .fpbox .fp { color: var(--acl); word-break: break-all; }
+
+  /* ================================================
+     STYLE C — 终端极客风（terminal-native mono）
+     ================================================ */
+  .C { --bg:#0d1117; --p1:#161b22; --p2:#1c2128; --bd:#30363d; --bdh:#3d444d;
+       --t1:#e6edf3; --t2:#9198a1; --t3:#656c76;
+       --ac:#33ff66; --acd:#1a7f33; --acf:#0d2818; --err:#ff5544; --warn:#ffcc33;
+       font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace; }
+  .C .form {
+    background: var(--bg); border: 1px solid var(--bd); border-radius: 4px;
+    padding: 16px; color: var(--t1); font-size: 11px;
+  }
+  .C .form-title { color: var(--ac); font-size: 11px; margin-bottom: 14px; }
+  .C .form-title::before { content: '┌─ '; color: var(--bd); }
+  .C .form-title::after { content: ' ─────────────'; color: var(--bd); }
+  .C .fl { font-size: 10px; color: var(--t3); margin: 10px 0 3px; }
+  .C .fl::before { content: '│ '; color: var(--bd); }
+  .C .fi { height: 26px; padding: 0 8px; border-radius: 2px; background: var(--p1); border: 1px solid var(--bd);
+           font-size: 10.5px; color: var(--t1); display: flex; align-items: center; margin-left: 12px; }
+  .C .fi.active { border-color: var(--ac); }
+  .C .seg { display: flex; gap: 0; margin-left: 12px; border: 1px solid var(--bd); border-radius: 2px; overflow: hidden; }
+  .C .seg > div { flex: 1; padding: 6px; font-size: 10px; text-align: center; color: var(--t3); background: var(--p1); }
+  .C .seg > div.on { background: var(--acf); color: var(--ac); font-weight: 700; }
+  .C .seg > div.on::before { content: '▸ '; }
+  .C .keylist { margin-left: 12px; margin-top: 5px; }
+  .C .keyrow { padding: 4px 8px; font-size: 10px; color: var(--t2); display: flex; gap: 8px; }
+  .C .keyrow.sel { background: var(--acf); color: var(--ac); }
+  .C .keyrow.sel::before { content: '❯'; }
+  .C .keyrow:not(.sel)::before { content: ' '; }
+  .C .hint { font-size: 9px; color: var(--t3); margin: 4px 0 0 12px; }
+  .C .hint::before { content: '# '; }
+  .C .acts { margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--bd); display: flex; gap: 8px; justify-content: flex-end; }
+  .C .bp { padding: 5px 14px; border-radius: 2px; background: var(--acd); color: #dfffe8; font-size: 10px; font-weight: 700; }
+  .C .bp::before { content: '⏎ '; }
+  .C .bc { padding: 5px 14px; border-radius: 2px; background: transparent; border: 1px solid var(--bd); color: var(--t3); font-size: 10px; }
+  .C .bc::before { content: 'esc '; opacity: 0.6; }
+
+  .C .dlg { background: var(--bg); border: 1px solid var(--ac); border-radius: 4px; padding: 16px; color: var(--t1); font-size: 10.5px; }
+  .C .dlg-head { color: var(--ac); margin-bottom: 10px; font-weight: 700; }
+  .C .dlg-head::before { content: '⚿ '; }
+  .C .dlg .dd { color: var(--t2); line-height: 1.7; margin-bottom: 10px; font-size: 10px; }
+  .C .fpbox { background: var(--p1); border-left: 3px solid var(--ac); padding: 8px 12px;
+              font-size: 9.5px; line-height: 1.9; margin-bottom: 12px; }
+  .C .fpbox .k { color: var(--t3); display: inline-block; width: 90px; }
+  .C .fpbox .fp { color: var(--ac); word-break: break-all; }
+  .C .dlg .acts { border-top: 1px dashed var(--bd); }
+  .C .kbd-hint { font-size: 9px; color: var(--t3); text-align: center; margin-top: 8px; }
+  .C .kbd-hint kbd { background: var(--p2); border: 1px solid var(--bd); border-radius: 2px; padding: 0 4px; }
+
+  /* verdict */
+  .verdict {
+    margin-top: 30px; padding: 18px 22px;
+    background: white; border: 1px solid #E5E1D5; border-radius: 10px;
+    font-size: 13px; line-height: 1.8;
+  }
+  .verdict h4 { margin: 0 0 8px; color: #26215C; font-size: 15px; }
+  .verdict b { color: #534AB7; }
+  .verdict table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+  .verdict th, .verdict td { padding: 7px 10px; text-align: left; border-bottom: 0.5px solid #E5E1D5; }
+  .verdict th { color: #26215C; }
+  .verdict td:first-child { font-weight: 600; width: 150px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>密钥连接 UI · 三种设计风格</h1>
+  <div class="lede">同样两个界面（主机表单的认证段 + 首次连接指纹确认）用三种风格各画一遍。选定风格后，v0.8 全套界面（表单 / 指纹确认 / 指纹警告 / passphrase 补输 / 连接中状态）都按这个风格展开</div>
+
+  <div class="styles">
+
+    <!-- ==================== STYLE A ==================== -->
+    <div>
+      <div class="style-col-hd hd-a">
+        风格 A · 延续现状
+        <span class="tagline">warm-minimal 暗紫 · 紧凑 · 和 shellx 现有界面无缝</span>
+      </div>
+      <div class="style-body A">
+        <div>
+          <div class="shot-label">主机表单 · 认证段</div>
+          <div class="form">
+            <div class="fl">认证方式</div>
+            <div class="seg">
+              <div class="on">🔑 密钥文件</div>
+              <div>🔒 密码</div>
+            </div>
+            <div class="fl">私钥文件</div>
+            <div class="fi">C:\Users\ChenHan\.ssh\id_ed25519</div>
+            <div class="chips">
+              <span class="chip sel">🔑 id_ed25519</span>
+              <span class="chip">🔑 id_rsa</span>
+              <span class="chip" style="border-style:dashed">浏览…</span>
+            </div>
+            <div class="hint">在 ~/.ssh/ 发现 2 个密钥</div>
+            <div class="fl">Passphrase</div>
+            <div class="fi">••••••••••</div>
+            <div class="hint">存入系统密钥链，只需输入这一次</div>
+            <div class="acts">
+              <div class="bc">Cancel</div>
+              <div class="bp">Save &amp; Connect</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="shot-label">首次连接 · 指纹确认</div>
+          <div class="dlg">
+            <div class="dlg-ic">🔑</div>
+            <h5>首次连接这台服务器</h5>
+            <div class="dd">请核对指纹是否与管理员告知的一致</div>
+            <div class="fpbox">
+              <div><span class="k">主机</span>test-bastion.company.com:22</div>
+              <div><span class="k">类型</span>ED25519</div>
+              <div><span class="k">指纹</span><span class="fp">SHA256:HbW3g8vpcJXm3JgqXhI2R6ZK…</span></div>
+            </div>
+            <div class="acts" style="justify-content:center;border-top:none;padding-top:0;margin-top:0">
+              <div class="bc">取消</div>
+              <div class="bp">信任并保存</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STYLE B ==================== -->
+    <div>
+      <div class="style-col-hd hd-b">
+        风格 B · 宽松卡片
+        <span class="tagline">大圆角 · 大间距 · 密钥做成可点选卡片 · 更"产品化"</span>
+      </div>
+      <div class="style-body B">
+        <div>
+          <div class="shot-label">主机表单 · 认证段</div>
+          <div class="form">
+            <div class="fl">认证方式</div>
+            <div class="seg">
+              <div class="on">🔑 密钥<span class="seg-sub">推荐 · 更安全</span></div>
+              <div>🔒 密码<span class="seg-sub">传统方式</span></div>
+            </div>
+            <div class="fl">选择密钥</div>
+            <div class="keycard sel">
+              <div class="kico">🔑</div>
+              <div>
+                <div class="kname">id_ed25519</div>
+                <div class="ktype">ED25519 · 推荐 · ~/.ssh/</div>
+              </div>
+              <div class="kcheck">✓</div>
+            </div>
+            <div class="keycard">
+              <div class="kico">🔑</div>
+              <div>
+                <div class="kname">id_rsa</div>
+                <div class="ktype">RSA 4096 · ~/.ssh/</div>
+              </div>
+            </div>
+            <div class="hint">找不到你的密钥？<u>浏览文件…</u></div>
+            <div class="fl">Passphrase</div>
+            <div class="fi focus">••••••••••</div>
+            <div class="hint">存入系统密钥链，之后连接全自动</div>
+            <div class="acts">
+              <div class="bc">取消</div>
+              <div class="bp">保存并连接</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="shot-label">首次连接 · 指纹确认</div>
+          <div class="dlg">
+            <div class="dlg-ic">🔑</div>
+            <h5>首次连接这台服务器</h5>
+            <div class="dd">shellx 之前没见过 test-bastion，<br>请核对指纹与管理员告知的一致</div>
+            <div class="fpbox">
+              <div><span class="k">主机</span>test-bastion.company.com:22</div>
+              <div><span class="k">类型</span>ED25519</div>
+              <div><span class="k">指纹</span><br><span class="fp">SHA256:HbW3g8vpcJXm3JgqXhI2R6ZKvJqVrHqO…</span></div>
+            </div>
+            <div class="acts">
+              <div class="bc">取消</div>
+              <div class="bp">信任并保存</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== STYLE C ==================== -->
+    <div>
+      <div class="style-col-hd hd-c">
+        style C · terminal-native
+        <span class="tagline">全等宽字体 · TUI 框线 · 键盘导航优先 · 极客审美</span>
+      </div>
+      <div class="style-body C">
+        <div>
+          <div class="shot-label">主机表单 · 认证段</div>
+          <div class="form">
+            <div class="form-title">auth</div>
+            <div class="fl">method</div>
+            <div class="seg">
+              <div class="on">publickey</div>
+              <div>password</div>
+            </div>
+            <div class="fl">identity_file</div>
+            <div class="keylist">
+              <div class="keyrow sel"> id_ed25519 <span style="color:var(--t3)">(ED25519)</span></div>
+              <div class="keyrow"> id_rsa <span style="color:var(--t3)">(RSA-4096)</span></div>
+              <div class="keyrow" style="color:var(--t3)"> browse…</div>
+            </div>
+            <div class="hint">found 2 keys in ~/.ssh · ↑↓ select · ⏎ confirm</div>
+            <div class="fl">passphrase</div>
+            <div class="fi active">**********</div>
+            <div class="hint">stored in OS keychain · asked only once</div>
+            <div class="acts">
+              <div class="bc">cancel</div>
+              <div class="bp">save &amp; connect</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="shot-label">首次连接 · 指纹确认</div>
+          <div class="dlg">
+            <div class="dlg-head">host key verification</div>
+            <div class="dd">The authenticity of host 'test-bastion.company.com' can't be established.</div>
+            <div class="fpbox">
+              <div><span class="k">host</span>test-bastion.company.com:22</div>
+              <div><span class="k">key type</span>ED25519</div>
+              <div><span class="k">fingerprint</span><span class="fp">SHA256:HbW3g8vpcJXm3JgqXhI2R6ZK…</span></div>
+            </div>
+            <div class="acts">
+              <div class="bc">no</div>
+              <div class="bp">yes, trust</div>
+            </div>
+            <div class="kbd-hint">press <kbd>y</kbd> to trust · <kbd>n</kbd> / <kbd>esc</kbd> to cancel</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="verdict">
+    <h4>三种风格的取舍</h4>
+    <table>
+      <tr><th></th><th>A · 延续现状</th><th>B · 宽松卡片</th><th>C · 终端极客</th></tr>
+      <tr><td>与现有界面一致性</td><td><b>完全一致</b>，零违和</td><td>要把全 app 一起改，工作量+</td><td>要把全 app 一起改，工作量++</td></tr>
+      <tr><td>目标用户观感</td><td>专业工具感</td><td>现代产品感，对新手最友好</td><td>极客最爱，小白劝退</td></tr>
+      <tr><td>信息密度</td><td>高（一屏放更多）</td><td>低（滚动多）</td><td>高</td></tr>
+      <tr><td>实现工作量</td><td><b>最小</b>（复用现有 token）</td><td>中（新增间距/圆角体系）</td><td>中（新配色+键盘导航）</td></tr>
+      <tr><td>公开发布调性</td><td>稳</td><td>下载页截图更好看</td><td>差异化最强，受众最窄</td></tr>
+    </table>
+    <div style="margin-top:12px">
+      <b>我的推荐：A</b>。理由：shellx 已经有成型的 warm-minimal 暗紫风格，v0.7.1 的所有界面都是这个体系 —— 新功能跟着走是最自然的选择，实现也最快。B 的"密钥卡片"那个交互（大卡片点选）单独好看，但整个 app 一起改间距体系是个大工程，不值得为 v0.8 做。C 有个性但把潜在用户圈小了。<br><br>
+      <b>可以偷的细节</b>：就算选 A，B 里的"密钥卡片式选择器"和 C 里的"键盘快捷键提示（y/n）"都可以吸收进来 —— 风格骨架用 A，好交互点单独摘。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

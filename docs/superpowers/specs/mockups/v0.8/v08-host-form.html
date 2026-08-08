@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>shellx v0.8 · 新增主机表单设计</title>
+<style>
+  :root {
+    --bg: #1e1c24;
+    --chrome: #1a1a1c;
+    --panel-1: #232326;
+    --panel-2: #252529;
+    --panel-3: #2c2c30;
+    --border: #2c2c30;
+    --border-hi: #3a373f;
+    --text-1: #d4d0dc;
+    --text-2: #a0a0a5;
+    --text-3: #7a7a7f;
+    --accent: #7c5cff;
+    --accent-light: #a89bff;
+    --accent-fade: #3a2f5f;
+    --success: #7c9c80;
+    --success-fade: #1a4a2a;
+    --warn: #f2c8a2;
+    --error: #e24b4a;
+    --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    --font-ui: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 60px;
+    background: #F5F3EE;
+    font-family: var(--font-ui);
+    color: #2C2C2A;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1240px; margin: 0 auto; }
+  h1 { color: #26215C; font-size: 22px; margin: 0 0 6px; }
+  .lede { color: #5F5E5A; font-size: 13px; margin-bottom: 28px; }
+
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 22px; align-items: start; }
+  .col-hd { font-size: 14px; font-weight: 700; color: #26215C; margin-bottom: 4px; }
+  .col-sub { font-size: 11.5px; color: #5F5E5A; margin-bottom: 12px; min-height: 34px; }
+
+  /* ============ the form itself ============ */
+  .form {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    color: var(--text-1);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+  }
+  .form h3 {
+    margin: 0 0 14px; font-size: 13px; font-weight: 600; color: var(--text-1);
+  }
+  .flabel {
+    font-size: 9.5px; font-weight: 600; color: var(--text-3);
+    letter-spacing: 0.4px; text-transform: uppercase;
+    margin: 12px 0 5px;
+  }
+  .flabel:first-of-type { margin-top: 0; }
+  .finput {
+    height: 30px; padding: 0 10px; border-radius: 4px;
+    background: var(--panel-1); border: 0.5px solid var(--border-hi);
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-1); display: flex; align-items: center;
+  }
+  .finput.ph { color: var(--text-3); }
+  .frow { display: flex; gap: 6px; }
+
+  .divider {
+    border: none; border-top: 0.5px solid var(--border);
+    margin: 16px -18px 14px;
+  }
+  .section-title {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 10px; font-weight: 700; color: var(--accent-light);
+    letter-spacing: 0.5px; text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .segmented {
+    display: flex; background: var(--panel-1); border-radius: 5px;
+    padding: 3px; border: 0.5px solid var(--border-hi);
+  }
+  .seg {
+    flex: 1; padding: 6px; border-radius: 3px;
+    font-size: 10.5px; text-align: center; color: var(--text-3);
+    cursor: default;
+  }
+  .seg.on { background: var(--accent); color: white; font-weight: 600; }
+
+  /* key auto-discovery chips */
+  .key-chips { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 12px;
+    font-family: var(--font-mono); font-size: 10px;
+    background: var(--panel-1); border: 0.5px solid var(--border-hi);
+    color: var(--text-2);
+  }
+  .chip.selected {
+    background: var(--accent-fade); border-color: var(--accent);
+    color: var(--accent-light); font-weight: 600;
+  }
+  .chip .kicon { font-size: 9px; }
+
+  .hint { font-size: 9.5px; color: var(--text-3); margin-top: 5px; line-height: 1.5; }
+  .hint .good { color: var(--success); }
+
+  .fcheck {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 11px; color: var(--text-1); margin-top: 12px;
+  }
+  .fcheck .box {
+    width: 13px; height: 13px; border-radius: 3px;
+    background: var(--accent); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 9px; font-weight: 700;
+  }
+  .fcheck .box.off { background: var(--panel-1); border: 0.5px solid var(--border-hi); }
+
+  .factions {
+    display: flex; justify-content: flex-end; gap: 8px;
+    margin-top: 18px; padding-top: 14px;
+    border-top: 0.5px solid var(--border);
+  }
+  .btn-primary {
+    padding: 7px 16px; border-radius: 4px;
+    background: var(--accent); color: white; font-size: 11px; font-weight: 600;
+  }
+  .btn-cancel {
+    padding: 7px 16px; border-radius: 4px;
+    background: transparent; border: 0.5px solid var(--border-hi);
+    color: var(--text-2); font-size: 11px;
+  }
+
+  /* dimmed / collapsed rows */
+  .dim { opacity: 0.45; }
+
+  /* annotation callouts */
+  .callout {
+    position: relative;
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: #EEEDFE; border: 1px solid #B2ACE4; border-radius: 6px;
+    font-size: 11px; color: #26215C; line-height: 1.55;
+  }
+  .callout.new::before {
+    content: 'v0.8 新增';
+    position: absolute; top: -8px; left: 10px;
+    background: #7c5cff; color: white;
+    font-size: 8.5px; font-weight: 700; letter-spacing: 0.4px;
+    padding: 1px 7px; border-radius: 3px;
+  }
+  .callout.later::before {
+    content: 'v0.9 再加';
+    position: absolute; top: -8px; left: 10px;
+    background: #888780; color: white;
+    font-size: 8.5px; font-weight: 700; letter-spacing: 0.4px;
+    padding: 1px 7px; border-radius: 3px;
+  }
+
+  .notes {
+    margin-top: 32px; padding: 20px 24px; background: white;
+    border: 1px solid #E5E1D5; border-radius: 10px;
+  }
+  .notes h4 { margin: 0 0 12px; color: #26215C; font-size: 15px; }
+  .notes ul { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.9; color: #2C2C2A; }
+  .notes li b { color: #534AB7; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>新增主机表单 · v0.8 设计</h1>
+  <div class="lede">三列：现在的样子 → v0.8 密钥模式（你的日常）→ v0.8 密码模式（跟现在一样）。核心思路：<b>不加 tab、不做向导，就在现有单列表单里插一个"认证"分段</b>，字段随选择联动显隐</div>
+
+  <div class="row3">
+
+    <!-- ============ COLUMN 1: current form ============ -->
+    <div>
+      <div class="col-hd">现状 · v0.7.1</div>
+      <div class="col-sub">5 个字段一列到底，只有密码</div>
+
+      <div class="form">
+        <h3>New SSH connection</h3>
+
+        <div class="flabel">Label</div>
+        <div class="finput ph">auto-fills as user@host</div>
+
+        <div class="flabel">Host</div>
+        <div class="finput">test-bastion.company.com</div>
+
+        <div class="flabel">Port</div>
+        <div class="finput">22</div>
+
+        <div class="flabel">Username</div>
+        <div class="finput">chen.han</div>
+
+        <div class="flabel">Password</div>
+        <div class="finput">••••••••</div>
+
+        <div class="fcheck"><span class="box">✓</span>Save this host</div>
+        <div class="fcheck"><span class="box">✓</span>Remember password (keychain)</div>
+
+        <div class="factions">
+          <div class="btn-cancel">Cancel</div>
+          <div class="btn-primary">Save &amp; Connect</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ COLUMN 2: v0.8 key mode ============ -->
+    <div>
+      <div class="col-hd">v0.8 · 认证方式 = 密钥文件</div>
+      <div class="col-sub">你的日常场景。基本信息不变，密码字段被"认证"分段替换</div>
+
+      <div class="form" style="border-color: var(--accent-fade)">
+        <h3>New SSH connection</h3>
+
+        <div class="flabel">Label</div>
+        <div class="finput">test-bastion</div>
+
+        <div class="flabel">Host · Port · Username</div>
+        <div class="frow">
+          <div class="finput" style="flex:1.8">test-bastion.company.com</div>
+          <div class="finput" style="flex:0 0 48px; justify-content:center">22</div>
+          <div class="finput" style="flex:1">chen.han</div>
+        </div>
+
+        <hr class="divider">
+        <div class="section-title">🔐 认证</div>
+
+        <div class="segmented">
+          <div class="seg on">🔑 密钥文件</div>
+          <div class="seg">🔒 密码</div>
+        </div>
+
+        <div class="flabel">私钥文件</div>
+        <div class="frow">
+          <div class="finput" style="flex:1">C:\Users\ChenHan\.ssh\id_ed25519</div>
+          <div class="btn-cancel" style="padding:5px 10px">浏览…</div>
+        </div>
+        <div class="key-chips">
+          <span class="chip selected"><span class="kicon">🔑</span>id_ed25519</span>
+          <span class="chip"><span class="kicon">🔑</span>id_rsa</span>
+          <span class="chip" style="border-style:dashed">↻ 重新扫描 ~/.ssh</span>
+        </div>
+        <div class="hint">在 ~/.ssh/ 发现 <span class="good">2 个密钥</span>，点击直接选用；也可浏览任意路径</div>
+
+        <div class="flabel">Passphrase <span style="text-transform:none;letter-spacing:0">（密钥没有就留空）</span></div>
+        <div class="finput">••••••••••</div>
+        <div class="hint">存入 Windows 凭据管理器，只需输入这一次</div>
+
+        <div class="fcheck"><span class="box">✓</span>Save this host</div>
+
+        <div class="factions">
+          <div class="btn-cancel">Cancel</div>
+          <div class="btn-primary">Save &amp; Connect</div>
+        </div>
+      </div>
+
+      <div class="callout new">
+        改动集中在"认证"分段：segmented 切换 · 密钥文件选择（自动发现 chips + 浏览）· passphrase。<b>基本信息三个字段合并成一行</b>，表单总高度跟现在差不多
+      </div>
+    </div>
+
+    <!-- ============ COLUMN 3: v0.8 password mode ============ -->
+    <div>
+      <div class="col-hd">v0.8 · 认证方式 = 密码</div>
+      <div class="col-sub">切到密码就是现在的体验，零学习成本</div>
+
+      <div class="form">
+        <h3>New SSH connection</h3>
+
+        <div class="flabel">Label</div>
+        <div class="finput ph">auto-fills as user@host</div>
+
+        <div class="flabel">Host · Port · Username</div>
+        <div class="frow">
+          <div class="finput ph" style="flex:1.8">hostname or IP</div>
+          <div class="finput" style="flex:0 0 48px; justify-content:center">22</div>
+          <div class="finput ph" style="flex:1">user</div>
+        </div>
+
+        <hr class="divider">
+        <div class="section-title">🔐 认证</div>
+
+        <div class="segmented">
+          <div class="seg">🔑 密钥文件</div>
+          <div class="seg on">🔒 密码</div>
+        </div>
+
+        <div class="flabel">Password</div>
+        <div class="finput">••••••••</div>
+
+        <div class="fcheck"><span class="box">✓</span>Remember password (keychain)</div>
+
+        <div style="margin-top:12px" class="dim">
+          <div class="flabel" style="margin-top:0">私钥文件（密钥模式才显示）</div>
+          <div class="finput ph" style="border-style:dashed">—</div>
+        </div>
+
+        <div class="fcheck"><span class="box">✓</span>Save this host</div>
+
+        <div class="factions">
+          <div class="btn-cancel">Cancel</div>
+          <div class="btn-primary">Save &amp; Connect</div>
+        </div>
+      </div>
+
+      <div class="callout later">
+        v0.9 时这个表单再往下长两段：<b>连接模式</b>（Term+Tun / 仅 Tunnels / 仅 Term）、<b>环境标签</b>（TEST/STAGING/PROD）、<b>端口转发规则</b>列表。到时候表单改成左右两栏或分组折叠——v0.8 先不动
+      </div>
+    </div>
+
+  </div>
+
+  <div class="notes">
+    <h4>设计决策说明</h4>
+    <ul>
+      <li><b>不做 tab、不做向导</b> —— 字段总数 v0.8 也就 7 个，单列扫下来 10 秒。tab 是 v0.9 加了转发规则之后再考虑的事</li>
+      <li><b>Host · Port · Username 合并一行</b> —— 三个字段逻辑上是一体的（`user@host:port`），合并后表单高度和现在打平，放下了新增的认证分段</li>
+      <li><b>认证方式默认"密钥文件"还是"密码"？</b> —— 我建议：<b>检测到 ~/.ssh 里有密钥就默认"密钥文件"并预选最优的（ed25519 &gt; rsa），否则默认"密码"</b>。对你这样的用户零点击，对没密钥的小白也不添乱</li>
+      <li><b>密钥自动发现只在打开表单时扫一次 ~/.ssh</b>（只列文件名，不读私钥内容），有"重新扫描"按钮手动刷新。不做后台常驻扫描</li>
+      <li><b>Edit 模式同样布局</b> —— passphrase 占位符显示"留空保持不变"，多一个"忘掉已存的 passphrase"复选（对齐现有密码的处理方式）</li>
+      <li><b>Quick connect（不勾 Save this host）同样可用密钥</b> —— 只是 passphrase 不落 keychain，仅本次会话使用</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

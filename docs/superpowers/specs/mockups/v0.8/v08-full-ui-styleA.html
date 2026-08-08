@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>shellx v0.8 · 密钥连接 · 风格 A 全流程 UI</title>
+<style>
+  :root {
+    --bg: #1e1c24;
+    --chrome: #1a1a1c;
+    --p1: #232326;
+    --p2: #252529;
+    --p3: #2c2c30;
+    --bd: #2c2c30;
+    --bdh: #3a373f;
+    --t1: #d4d0dc;
+    --t2: #a0a0a5;
+    --t3: #7a7a7f;
+    --tm: #8b869a;
+    --ac: #7c5cff;
+    --acl: #a89bff;
+    --acf: #3a2f5f;
+    --ok: #7c9c80;
+    --okf: #1a4a2a;
+    --warn: #f2c8a2;
+    --warnf: #3a2f1f;
+    --err: #e24b4a;
+    --errf: #3a1a1a;
+    --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, monospace;
+    --ui: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 80px;
+    background: #F0EEE8;
+    font-family: var(--ui);
+    color: #2C2C2A;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  h1 { color: #26215C; font-size: 22px; margin: 0 0 6px; }
+  .lede { color: #5F5E5A; font-size: 13px; margin-bottom: 28px; }
+
+  .phase {
+    margin-top: 34px; padding: 22px 24px;
+    background: white; border: 1px solid #E5E1D5; border-radius: 10px;
+  }
+  .phase-title { font-size: 16px; font-weight: 700; color: #26215C; margin: 0 0 4px; }
+  .phase-sub { font-size: 12px; color: #5F5E5A; margin-bottom: 20px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; align-items: start; }
+
+  .step {
+    background: #FAF9F5; border: 1px solid #E5E1D5; border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .step-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--ac); color: white;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .num.red { background: var(--err); }
+  .num.amber { background: #c98a2a; }
+  .step-title { font-size: 13px; font-weight: 600; color: #26215C; }
+  .cap { font-size: 11.5px; color: #5F5E5A; line-height: 1.65; margin-top: 10px; }
+  .cap b { color: #26215C; }
+  .cap code { font-family: var(--mono); font-size: 10px; background: #EEEDFE; padding: 1px 5px; border-radius: 3px; color: #26215C; }
+
+  /* ===== shellx A-style primitives ===== */
+  .form {
+    background: var(--p2); border: 1px solid var(--bd); border-radius: 8px;
+    padding: 16px; color: var(--t1); font-size: 11px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.15);
+  }
+  .form h5 { margin: 0 0 12px; font-size: 12.5px; font-weight: 600; color: var(--t1); }
+  .fl { font-size: 9.5px; font-weight: 600; color: var(--t3); letter-spacing: 0.4px; text-transform: uppercase; margin: 11px 0 4px; }
+  .fl:first-of-type { margin-top: 0; }
+  .fi {
+    height: 28px; padding: 0 9px; border-radius: 4px;
+    background: var(--p1); border: 0.5px solid var(--bdh);
+    font-family: var(--mono); font-size: 10.5px; color: var(--t1);
+    display: flex; align-items: center;
+  }
+  .fi.ph { color: var(--t3); }
+  .fi.err { border-color: var(--err); }
+  .frow { display: flex; gap: 6px; }
+  .seg { display: flex; background: var(--p1); border-radius: 5px; padding: 3px; border: 0.5px solid var(--bdh); }
+  .seg > div { flex: 1; padding: 5px; border-radius: 3px; font-size: 10px; text-align: center; color: var(--t3); }
+  .seg > div.on { background: var(--ac); color: white; font-weight: 600; }
+  .chips { display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
+  .chip {
+    padding: 3px 9px; border-radius: 10px;
+    font-family: var(--mono); font-size: 9.5px;
+    background: var(--p1); border: 0.5px solid var(--bdh); color: var(--t2);
+  }
+  .chip.sel { background: var(--acf); border-color: var(--ac); color: var(--acl); font-weight: 600; }
+  .chip.dash { border-style: dashed; }
+  .hint { font-size: 9px; color: var(--t3); margin-top: 4px; line-height: 1.5; }
+  .hint .good { color: var(--ok); }
+  .hint.warn { color: var(--warn); }
+  .check { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--t1); margin-top: 10px; }
+  .check .bx {
+    width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+    background: var(--ac); color: white; font-size: 8px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .check .bx.off { background: var(--p1); border: 0.5px solid var(--bdh); }
+  .acts { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; padding-top: 12px; border-top: 0.5px solid var(--bd); }
+  .bp { padding: 6px 14px; border-radius: 4px; background: var(--ac); color: white; font-size: 10.5px; font-weight: 600; }
+  .bp.red { background: var(--err); font-weight: 700; }
+  .bc { padding: 6px 14px; border-radius: 4px; background: transparent; border: 0.5px solid var(--bdh); color: var(--t2); font-size: 10.5px; }
+  .bc.redghost { border-color: var(--err); color: #ff9080; }
+
+  /* dialogs */
+  .dlg { background: var(--bg); border-radius: 8px; padding: 18px; color: var(--t1);
+         box-shadow: 0 12px 32px rgba(0,0,0,0.3); }
+  .dlg.trust { border: 1.5px solid var(--ac); }
+  .dlg.mitm { border: 2px solid var(--err); }
+  .dlg.plain { border: 1px solid var(--bdh); }
+  .dic { width: 40px; height: 40px; border-radius: 50%;
+         display: flex; align-items: center; justify-content: center;
+         font-size: 17px; margin: 0 auto 10px; }
+  .dlg.trust .dic { background: var(--acf); border: 1.5px solid var(--ac); color: var(--acl); }
+  .dlg.mitm .dic { background: var(--errf); border: 2px solid var(--err); color: var(--err); font-weight: 700; }
+  .dlg.plain .dic { background: var(--acf); border: 1px solid var(--ac); color: var(--acl); }
+  .dlg h5 { margin: 0 0 8px; text-align: center; font-size: 12.5px; }
+  .dlg.trust h5 { color: var(--acl); }
+  .dlg.mitm h5 { color: #ff9080; }
+  .dlg.plain h5 { color: var(--t1); }
+  .dd { text-align: center; font-size: 10.5px; color: var(--t2); line-height: 1.6; margin-bottom: 10px; }
+  .dd b { color: var(--t1); }
+  .fpbox {
+    background: var(--p2); border: 0.5px solid var(--bdh); border-radius: 5px;
+    padding: 8px 11px; margin-bottom: 12px;
+    font-family: var(--mono); font-size: 9.5px; line-height: 1.8;
+  }
+  .fpbox .k { color: var(--t3); display: inline-block; width: 62px; }
+  .fpbox .fp { color: var(--acl); word-break: break-all; }
+  .fpbox .fp.old { color: var(--t3); text-decoration: line-through; }
+  .fpbox .fp.new { color: #ff9080; }
+  .dnote { font-size: 9px; color: var(--t3); text-align: center; margin-bottom: 12px; line-height: 1.6; }
+  .dnote.warn { color: var(--warn); }
+  .dacts { display: flex; justify-content: center; gap: 8px; }
+  .kbd-hint { font-size: 9px; color: var(--t3); text-align: center; margin-top: 8px; }
+  .kbd-hint kbd { background: var(--p3); border: 0.5px solid var(--bdh); border-radius: 2px; padding: 0 4px; font-family: var(--mono); }
+
+  /* window frame minis */
+  .win { background: var(--chrome); border: 1px solid var(--bd); border-radius: 6px; overflow: hidden; }
+  .tbar { height: 24px; background: var(--p1); display: flex; align-items: center; padding: 0 8px; gap: 6px;
+          border-bottom: 0.5px solid var(--bd); }
+  .logo { color: var(--ac); font-family: var(--mono); font-weight: 700; font-size: 10px; }
+  .tab { height: 17px; padding: 0 8px; border-radius: 3px 3px 0 0; display: inline-flex; align-items: center; gap: 4px;
+         font-family: var(--mono); font-size: 9px; color: var(--t3); }
+  .tab.active { background: var(--p2); color: var(--t1); }
+  .tab .d { width: 4px; height: 4px; border-radius: 50%; background: var(--ok); }
+  .tab .d.pulse { background: var(--acl); }
+  .term { background: var(--bg); padding: 10px 12px; font-family: var(--mono); font-size: 10px; color: var(--t1);
+          min-height: 76px; line-height: 1.6; }
+  .term .dim { color: var(--tm); }
+  .cursor { display: inline-block; width: 6px; height: 11px; background: var(--ac); vertical-align: -1px; animation: blink 1s infinite; }
+  @keyframes blink { 0%,50% { opacity:1; } 51%,100% { opacity:0; } }
+
+  /* connecting panel mini */
+  .connpanel {
+    background: var(--bg); padding: 22px; text-align: center; color: var(--t1);
+    border-radius: 0 0 6px 6px;
+  }
+  .plugs { color: var(--ac); font-size: 17px; letter-spacing: 4px; margin-bottom: 10px; }
+  .plugs .dots { color: var(--acl); animation: blink 1.4s infinite; }
+  .connpanel .t { font-size: 11px; margin-bottom: 3px; }
+  .connpanel .s { font-size: 9.5px; color: var(--t3); }
+
+  /* flow strip (zero-touch) */
+  .flowstrip { display: flex; align-items: stretch; gap: 0; }
+  .fs-node {
+    flex: 1; padding: 12px 10px; text-align: center;
+    background: var(--p2); border: 1px solid var(--bd);
+    color: var(--t1); font-size: 10.5px; line-height: 1.5;
+  }
+  .fs-node:first-child { border-radius: 8px 0 0 8px; }
+  .fs-node:last-child { border-radius: 0 8px 8px 0; }
+  .fs-node .fs-ic { font-size: 15px; margin-bottom: 4px; }
+  .fs-node .fs-sub { font-size: 8.5px; color: var(--ok); margin-top: 3px; }
+  .fs-node .fs-sub.dim { color: var(--t3); }
+  .fs-sep {
+    display: flex; align-items: center; padding: 0 2px;
+    background: var(--p2); border-top: 1px solid var(--bd); border-bottom: 1px solid var(--bd);
+    color: var(--acl); font-size: 12px;
+  }
+
+  .arrow-down { text-align: center; color: #B4B2A9; font-size: 18px; margin: 10px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>密钥连接 · 风格 A · 全流程 UI</h1>
+  <div class="lede">v0.8 的每一个界面，按用户旅程排列：<b>阶段一</b> 首次配置（5 个界面）→ <b>阶段二</b> 日常连接（零弹窗）→ <b>阶段三</b> 异常分支（4 个界面）→ <b>阶段四</b> 编辑维护（2 个界面）</div>
+
+  <!-- ============================================================
+       阶段一 · 首次配置 + 首次连接
+       ============================================================ -->
+  <div class="phase">
+    <div class="phase-title">阶段一 · 首次配置 + 首次连接</div>
+    <div class="phase-sub">从零开始到连上，共 5 步（其中弹窗只有指纹确认 1 个）</div>
+
+    <div class="grid2">
+
+      <!-- 1. entry -->
+      <div class="step">
+        <div class="step-hd"><span class="num">1</span><span class="step-title">入口 · + 菜单</span></div>
+        <div class="win">
+          <div class="tbar">
+            <span class="logo">&gt;_</span>
+            <span style="color:var(--acl);font-size:12px;font-weight:700">+</span>
+          </div>
+          <div style="background:var(--bg);padding:8px 10px 14px;position:relative">
+            <div style="background:var(--p2);border:0.5px solid var(--bdh);border-radius:6px;padding:4px;width:200px;box-shadow:0 8px 24px rgba(0,0,0,0.4)">
+              <div style="padding:6px 10px;font-size:10px;color:var(--t3);display:flex;gap:8px;align-items:center">🖥 New local terminal <span style="margin-left:auto;font-size:7.5px;background:var(--bd);padding:1px 5px;border-radius:3px;letter-spacing:0.4px">SOON</span></div>
+              <div style="height:0.5px;background:var(--bd);margin:3px 2px"></div>
+              <div style="padding:5px 10px 2px;font-size:8px;color:var(--t3);letter-spacing:0.5px;text-transform:uppercase">Quick connect</div>
+              <div style="padding:6px 10px;font-size:10px;color:var(--t1);display:flex;gap:8px;align-items:center"><span style="width:5px;height:5px;border-radius:50%;background:var(--ok)"></span>test-bastion</div>
+              <div style="height:0.5px;background:var(--bd);margin:3px 2px"></div>
+              <div style="padding:6px 10px;font-size:10px;color:var(--acl);background:var(--acf);border-radius:4px;display:flex;gap:8px;align-items:center">🔌 New SSH connection…</div>
+            </div>
+          </div>
+        </div>
+        <div class="cap">点 titlebar 的 <b>+</b> → 菜单最下面 <b>New SSH connection…</b>（这个菜单 v0.7.0 已经上线，入口不变）</div>
+      </div>
+
+      <!-- 2. form -->
+      <div class="step">
+        <div class="step-hd"><span class="num">2</span><span class="step-title">新建主机表单 · 密钥模式</span></div>
+        <div class="form">
+          <h5>New SSH connection</h5>
+          <div class="fl">Label</div>
+          <div class="fi">test-bastion</div>
+          <div class="fl">Host · Port · Username</div>
+          <div class="frow">
+            <div class="fi" style="flex:1.8">test-bastion.company.com</div>
+            <div class="fi" style="flex:0 0 44px;justify-content:center">22</div>
+            <div class="fi" style="flex:1">chen.han</div>
+          </div>
+          <div style="height:0.5px;background:var(--bd);margin:13px -16px 11px"></div>
+          <div style="font-size:9.5px;font-weight:700;color:var(--acl);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:8px">🔐 认证</div>
+          <div class="seg">
+            <div class="on">🔑 密钥文件</div>
+            <div>🔒 密码</div>
+          </div>
+          <div class="fl">私钥文件</div>
+          <div class="fi">C:\Users\ChenHan\.ssh\id_ed25519</div>
+          <div class="chips">
+            <span class="chip sel">🔑 id_ed25519 · ED25519</span>
+            <span class="chip">🔑 id_rsa · RSA-4096</span>
+            <span class="chip dash">浏览…</span>
+          </div>
+          <div class="hint">在 ~/.ssh/ 发现 <span class="good">2 个密钥</span>（打开表单时扫描一次，只读文件名）</div>
+          <div class="fl">Passphrase（密钥没有就留空）</div>
+          <div class="fi">••••••••••</div>
+          <div class="hint">存入系统密钥链，只需输入这一次</div>
+          <div class="check"><span class="bx">✓</span>Save this host</div>
+          <div class="acts">
+            <div class="bc">Cancel</div>
+            <div class="bp">Save &amp; Connect</div>
+          </div>
+        </div>
+        <div class="cap">检测到 ~/.ssh 有密钥 → <b>默认就是密钥模式 + 预选 ed25519</b>。你只需要填 host/user + passphrase，别的全是预填好的</div>
+      </div>
+
+      <!-- 3. connecting -->
+      <div class="step">
+        <div class="step-hd"><span class="num">3</span><span class="step-title">连接中（现有动画不变）</span></div>
+        <div class="win">
+          <div class="tbar">
+            <span class="logo">&gt;_</span>
+            <div class="tab active"><span class="d pulse"></span>test-bastion · connecting</div>
+          </div>
+          <div class="connpanel">
+            <div class="plugs">🔌<span class="dots"> · · · </span>🔌</div>
+            <div class="t">Connecting to test-bastion…</div>
+            <div class="s">Establishing the SSH session.</div>
+          </div>
+        </div>
+        <div class="cap">v0.7.0 加的插头脉冲动画原样保留。这一步大约 0.5-1 秒，之后弹出指纹确认（下一步）</div>
+      </div>
+
+      <!-- 4. TOFU dialog -->
+      <div class="step">
+        <div class="step-hd"><span class="num">4</span><span class="step-title">首次连接 · 指纹确认（仅第一次）</span></div>
+        <div class="dlg trust">
+          <div class="dic">🔑</div>
+          <h5>首次连接这台服务器</h5>
+          <div class="dd">shellx 之前没见过 <b>test-bastion.company.com</b>，请核对指纹是否与管理员告知的一致。</div>
+          <div class="fpbox">
+            <div><span class="k">主机</span>test-bastion.company.com:22</div>
+            <div><span class="k">类型</span>ED25519</div>
+            <div><span class="k">指纹</span><span class="fp">SHA256:HbW3g8vpcJXm3JgqXhI2R6ZKvJqVrHqOxwFrxRw</span></div>
+          </div>
+          <div class="dnote">信任后写入 ~/.ssh/known_hosts · 命令行 ssh 同样生效</div>
+          <div class="dacts">
+            <div class="bc">取消</div>
+            <div class="bp">信任并保存</div>
+          </div>
+          <div class="kbd-hint"><kbd>Enter</kbd> 信任 · <kbd>Esc</kbd> 取消</div>
+        </div>
+        <div class="cap">指纹旁边未来可以加"复制"小按钮方便发给管理员核对。<b>键盘快捷键</b>（从风格 C 摘来的细节）：Enter 信任、Esc 取消</div>
+      </div>
+    </div>
+
+    <div class="arrow-down">↓</div>
+
+    <!-- 5. connected -->
+    <div class="step" style="max-width:640px;margin:0 auto">
+      <div class="step-hd"><span class="num">5</span><span class="step-title">已连接 · 终端就绪</span></div>
+      <div class="win">
+        <div class="tbar">
+          <span class="logo">&gt;_</span>
+          <div class="tab active"><span class="d"></span>test-bastion</div>
+        </div>
+        <div class="term">
+          <div class="dim">Welcome to Ubuntu 22.04.3 LTS (GNU/Linux 5.15.0-88-generic x86_64)</div>
+          <div class="dim">Last login: Fri Aug  8 09:12:33 2026 from 10.24.8.101</div>
+          <div>chen.han@test-bastion:~$ <span class="cursor"></span></div>
+        </div>
+      </div>
+      <div class="cap">公钥认证成功 · 无密码输入。首次全流程总共：<b>填一次表单 + 点一次"信任并保存"</b>，之后再也不会有这两步</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       阶段二 · 日常连接（零弹窗）
+       ============================================================ -->
+  <div class="phase">
+    <div class="phase-title">阶段二 · 日常连接 · 零弹窗零输入</div>
+    <div class="phase-sub">第二次起，点击主机后的内部流程（用户什么都不用做，1-2 秒直达终端）</div>
+
+    <div class="flowstrip">
+      <div class="fs-node">
+        <div class="fs-ic">🖱</div>
+        点击 test-bastion
+        <div class="fs-sub dim">侧边栏或 + 菜单</div>
+      </div>
+      <div class="fs-sep">→</div>
+      <div class="fs-node">
+        <div class="fs-ic">🔍</div>
+        指纹校验
+        <div class="fs-sub">known_hosts 命中 · 静默通过</div>
+      </div>
+      <div class="fs-sep">→</div>
+      <div class="fs-node">
+        <div class="fs-ic">🔑</div>
+        密钥解锁
+        <div class="fs-sub">passphrase 从密钥链取 · 静默</div>
+      </div>
+      <div class="fs-sep">→</div>
+      <div class="fs-node">
+        <div class="fs-ic">✅</div>
+        公钥认证通过
+        <div class="fs-sub">服务器校验签名</div>
+      </div>
+      <div class="fs-sep">→</div>
+      <div class="fs-node">
+        <div class="fs-ic">💻</div>
+        终端就绪
+        <div class="fs-sub dim">chen.han@test-bastion:~$</div>
+      </div>
+    </div>
+    <div class="cap" style="text-align:center;margin-top:12px">中间三步全部静默 —— <b>这就是"日常体验跟现在完全一样，但安全了"的含义</b></div>
+  </div>
+
+  <!-- ============================================================
+       阶段三 · 异常分支
+       ============================================================ -->
+  <div class="phase">
+    <div class="phase-title">阶段三 · 异常分支 · 4 种情况</div>
+    <div class="phase-sub">正常情况永远遇不到；遇到时每种都有明确的出口</div>
+
+    <div class="grid2">
+
+      <!-- E1 mitm -->
+      <div class="step">
+        <div class="step-hd"><span class="num red">E1</span><span class="step-title">指纹变了 · 中间人警告</span></div>
+        <div class="dlg mitm">
+          <div class="dic">⚠</div>
+          <h5>服务器指纹变了！</h5>
+          <div class="dd"><b>prod-bastion.company.com</b> 返回的指纹与保存的不一致。<b style="color:#ff9080">可能是中间人攻击。</b></div>
+          <div class="fpbox" style="border-color:#4a2020">
+            <div><span class="k">已保存</span><span class="fp old">SHA256:HbW3g8vpcJXm3JgqXhI2R6ZK…</span></div>
+            <div><span class="k">现收到</span><span class="fp new">SHA256:Zk9mQwErTyUiOpAsDfGhJkL2…</span></div>
+          </div>
+          <div class="dnote warn">如果服务器最近没有重装或换密钥，请立即取消并联系管理员</div>
+          <div class="dacts">
+            <div class="bc redghost">我确认服务器换了密钥</div>
+            <div class="bp red">取消连接（推荐）</div>
+          </div>
+        </div>
+        <div class="cap"><b>默认焦点在"取消连接"</b>，Enter 就是取消。继续必须显式点弱化的左按钮，点了会把新指纹追加进 known_hosts</div>
+      </div>
+
+      <!-- E2 passphrase prompt -->
+      <div class="step">
+        <div class="step-hd"><span class="num amber">E2</span><span class="step-title">Passphrase 补输</span></div>
+        <div class="dlg plain">
+          <div class="dic">🔑</div>
+          <h5>需要密钥口令</h5>
+          <div class="dd">解锁 <b>id_ed25519</b> 需要 passphrase<br><span style="font-size:9.5px;color:var(--t3)">（密钥链中没有找到，或已失效）</span></div>
+          <div class="fl" style="margin-top:4px">Passphrase</div>
+          <div class="fi" style="margin-bottom:4px">••••••••••</div>
+          <div class="check" style="margin-bottom:12px"><span class="bx">✓</span>记住（存入系统密钥链）</div>
+          <div class="dacts">
+            <div class="bc">取消</div>
+            <div class="bp">解锁并连接</div>
+          </div>
+        </div>
+        <div class="cap">三种情况会弹：保存主机时没填 passphrase · 密钥链条目被删 · Linux 无密钥链环境。<b>勾"记住"下次就不弹了</b></div>
+      </div>
+
+      <!-- E3 auth failed -->
+      <div class="step">
+        <div class="step-hd"><span class="num red">E3</span><span class="step-title">服务器拒绝了密钥</span></div>
+        <div class="dlg plain" style="border-color:var(--err)">
+          <div class="dic" style="background:var(--errf);border-color:var(--err);color:#ff9080">✕</div>
+          <h5 style="color:#ff9080">认证失败</h5>
+          <div class="dd">服务器拒绝了密钥 <b>id_ed25519</b></div>
+          <div class="fpbox">
+            <div style="color:var(--t2);font-family:var(--ui);font-size:9.5px;line-height:1.7">
+              可能的原因：<br>
+              · 公钥没有加到服务器的 authorized_keys<br>
+              · 选错了密钥文件<br>
+              · 服务器只允许密码登录
+            </div>
+          </div>
+          <div class="dacts">
+            <div class="bc">改用密码</div>
+            <div class="bc">换个密钥</div>
+            <div class="bp">重试</div>
+          </div>
+        </div>
+        <div class="cap">失败不是死胡同 —— 给三个出口：<b>改用密码</b>（直接切认证方式重连）· <b>换个密钥</b>（回表单）· <b>重试</b></div>
+      </div>
+
+      <!-- E4 wrong passphrase -->
+      <div class="step">
+        <div class="step-hd"><span class="num amber">E4</span><span class="step-title">Passphrase 错了</span></div>
+        <div class="dlg plain">
+          <div class="dic">🔑</div>
+          <h5>需要密钥口令</h5>
+          <div class="dd">解锁 <b>id_ed25519</b> 需要 passphrase</div>
+          <div class="fl" style="margin-top:4px">Passphrase</div>
+          <div class="fi err" style="margin-bottom:4px">••••••</div>
+          <div class="hint warn" style="margin-bottom:8px">⚠ passphrase 不正确，请重新输入（2/3）</div>
+          <div class="check" style="margin-bottom:12px"><span class="bx off"></span>记住（存入系统密钥链）</div>
+          <div class="dacts">
+            <div class="bc">取消</div>
+            <div class="bp">解锁并连接</div>
+          </div>
+        </div>
+        <div class="cap">输错在同一个对话框内重试（输入框红边 + 黄字提示 + 次数），三次失败回到 E3 风格的失败对话框。<b>错误的 passphrase 永远不会写进密钥链</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       阶段四 · 编辑与维护
+       ============================================================ -->
+  <div class="phase">
+    <div class="phase-title">阶段四 · 编辑与维护</div>
+    <div class="phase-sub">改密钥、忘掉 passphrase、查看指纹记录</div>
+
+    <div class="grid2">
+
+      <!-- M1 edit host -->
+      <div class="step">
+        <div class="step-hd"><span class="num">M1</span><span class="step-title">编辑主机 · 认证段的差异</span></div>
+        <div class="form">
+          <h5>Edit host · test-bastion</h5>
+          <div class="fl">认证方式</div>
+          <div class="seg">
+            <div class="on">🔑 密钥文件</div>
+            <div>🔒 密码</div>
+          </div>
+          <div class="fl">私钥文件</div>
+          <div class="fi">C:\Users\ChenHan\.ssh\id_ed25519</div>
+          <div class="chips">
+            <span class="chip sel">🔑 id_ed25519</span>
+            <span class="chip">🔑 id_rsa</span>
+            <span class="chip dash">浏览…</span>
+          </div>
+          <div class="fl">Passphrase</div>
+          <div class="fi ph">留空保持不变</div>
+          <div class="check"><span class="bx off"></span>忘掉已保存的 passphrase（下次连接时重新输入）</div>
+          <div class="acts">
+            <div class="bc">Cancel</div>
+            <div class="bp">Save</div>
+          </div>
+        </div>
+        <div class="cap">对齐现有密码编辑的语义：<b>留空 = 不动</b> · 输入新值 = 覆盖 · 勾"忘掉" = 删除密钥链条目。Save 不触发重连</div>
+      </div>
+
+      <!-- M2 known hosts view -->
+      <div class="step">
+        <div class="step-hd"><span class="num">M2</span><span class="step-title">Settings · 已信任的服务器</span></div>
+        <div class="form" style="padding:14px">
+          <h5 style="display:flex;align-items:center">已信任的服务器<span style="margin-left:auto;font-size:9px;color:var(--t3);font-weight:400">~/.ssh/known_hosts · 只读展示</span></h5>
+          <div style="background:var(--p1);border:0.5px solid var(--bdh);border-radius:5px;padding:2px">
+            <div style="padding:7px 10px;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid var(--bd)">
+              <span style="font-family:var(--mono);font-size:10px;color:var(--t1);flex:1">test-bastion.company.com</span>
+              <span style="font-size:8.5px;color:var(--t3)">ED25519</span>
+              <span style="font-family:var(--mono);font-size:8.5px;color:var(--tm)">SHA256:HbW3…xRw</span>
+              <span style="font-size:9px;color:var(--t3)">复制</span>
+            </div>
+            <div style="padding:7px 10px;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid var(--bd)">
+              <span style="font-family:var(--mono);font-size:10px;color:var(--t1);flex:1">prod-bastion.company.com</span>
+              <span style="font-size:8.5px;color:var(--t3)">ED25519</span>
+              <span style="font-family:var(--mono);font-size:8.5px;color:var(--tm)">SHA256:Kp2f…9mQ</span>
+              <span style="font-size:9px;color:var(--t3)">复制</span>
+            </div>
+            <div style="padding:7px 10px;display:flex;align-items:center;gap:8px">
+              <span style="font-family:var(--mono);font-size:10px;color:var(--t1);flex:1">192.168.126.128</span>
+              <span style="font-size:8.5px;color:var(--t3)">RSA</span>
+              <span style="font-family:var(--mono);font-size:8.5px;color:var(--tm)">SHA256:Uw8n…3Fd</span>
+              <span style="font-size:9px;color:var(--t3)">复制</span>
+            </div>
+          </div>
+          <div class="hint" style="margin-top:8px">shellx 只追加、不修改此文件 · 删除条目请用编辑器直接编辑 known_hosts</div>
+        </div>
+        <div class="cap">Settings 里加一个只读列表页方便核查。<b>刻意不做删除按钮</b> —— 删指纹是危险操作且极少需要，留给用户手动编辑文件（v0.8 保守起步，有需求再说）</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       清单
+       ============================================================ -->
+  <div class="phase">
+    <div class="phase-title">UI 清单 · v0.8 全部界面一览</div>
+    <div class="phase-sub" style="margin-bottom:12px">共 11 个界面 / 状态，其中 5 个是新做，3 个是改造，3 个复用现有</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <tr style="color:#26215C;font-weight:700"><td style="padding:7px 10px;border-bottom:1px solid #E5E1D5">#</td><td style="padding:7px 10px;border-bottom:1px solid #E5E1D5">界面</td><td style="padding:7px 10px;border-bottom:1px solid #E5E1D5">性质</td></tr>
+      <tr><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">1</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">+ 菜单入口</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5;color:#1D9E75">复用（v0.7.0 已有）</td></tr>
+      <tr><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">2</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">主机表单 · 认证段（密钥/密码切换 + 自动发现 + passphrase）</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5;color:#B37516">改造 HostForm</td></tr>
+      <tr><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">3</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">连接中动画</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5;color:#1D9E75">复用（ConnectingPanel）</td></tr>
+      <tr><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">4</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">指纹确认对话框（TOFU）</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5;color:#7c3aed">新做</td></tr>
+      <tr><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">5</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">终端就绪</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5;color:#1D9E75">复用（TerminalView）</td></tr>
+      <tr><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">E1</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">指纹变化警告（MITM）</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5;color:#7c3aed">新做</td></tr>
+      <tr><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">E2</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">Passphrase 补输对话框</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5;color:#7c3aed">新做</td></tr>
+      <tr><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">E3</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">认证失败对话框（三出口）</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5;color:#7c3aed">新做（基于 ErrorDialog 扩展）</td></tr>
+      <tr><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">E4</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">Passphrase 重试态</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5;color:#B37516">E2 的状态变体</td></tr>
+      <tr><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">M1</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5">编辑主机（留空不变 / 忘掉 passphrase）</td><td style="padding:6px 10px;border-bottom:0.5px solid #E5E1D5;color:#B37516">改造 HostForm edit 模式</td></tr>
+      <tr><td style="padding:6px 10px">M2</td><td style="padding:6px 10px">Settings · 已信任服务器列表（只读）</td><td style="padding:6px 10px;color:#7c3aed">新做</td></tr>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>
