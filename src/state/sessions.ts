@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ActivityKind, ConnectionId, ConnectionInfo } from "../types/connection";
 
-export type RailView = "hosts" | "files" | "protocols" | "settings";
+export type RailView = "hosts" | "files" | "serial" | "settings";
 
 interface SessionsState {
   sessions: ConnectionInfo[];
@@ -12,7 +12,7 @@ interface SessionsState {
    */
   connecting: Record<string, true>;
 
-  /** Which rail icon is active (Hosts / Files / Protocols / Settings). */
+  /** Which rail icon is active (Hosts / Files / Serial / Settings). */
   railView: RailView;
   /** Switching to a DIFFERENT view force-opens the drawer; setting the same
    * view is a no-op so it never fights the click-active-toggle path in

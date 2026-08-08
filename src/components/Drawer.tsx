@@ -25,7 +25,7 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
 
   // Views that own their own internal chrome (RailFilesView has its own
   // rail+drawer replacement, SettingsView has SettingsSidebar) don't need the
-  // outer Drawer. Protocols is a bare "coming soon" placeholder — also skip.
+  // outer Drawer. Serial is a bare "coming soon" placeholder — also skip.
   if (view !== "hosts" || drawerCollapsed) return null;
   // Fresh-install empty state: with no saved hosts, the drawer would only
   // show a "HOSTS" caps label and the "+ New connection" button — the

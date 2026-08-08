@@ -341,7 +341,7 @@ export function App() {
       >
         {/* Tab body stays mounted whenever activeId exists — hide via
             display:none when the user is on a rail-level view (Files /
-            Settings / Protocols) so xterm state (scrollback, buffer,
+            Settings / Serial) so xterm state (scrollback, buffer,
             connection) survives round-trips, and live-reconfigure of
             terminal settings takes effect on the mounted xterm even
             while the Settings pane is being viewed. */}
@@ -407,12 +407,12 @@ export function App() {
           <RailFilesView onConnectSavedHost={(host) => void handleConnectSavedHost(host)} />
         )}
         {railView === "settings" && <SettingsView />}
-        {railView === "protocols" && (
+        {railView === "serial" && (
           <div style={{
             height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
             color: "var(--text-3)", fontSize: 13, fontStyle: "italic",
           }}>
-            Protocols · coming soon
+            Serial · coming soon
           </div>
         )}
       </AppShell>
