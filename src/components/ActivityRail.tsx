@@ -7,7 +7,7 @@ export type { RailView };
 const ITEMS: { id: RailView; label: string; Icon: LucideIcon }[] = [
   { id: "hosts", label: "Hosts", Icon: Monitor },
   { id: "files", label: "Files", Icon: Files },
-  { id: "protocols", label: "Protocols", Icon: Cable },
+  { id: "serial", label: "Serial", Icon: Cable },
   { id: "settings", label: "Settings", Icon: Settings },
 ];
 
@@ -64,7 +64,7 @@ function RailButton({ item, active, onClick }: {
       <span style={{
         // Follows the System font size slider — 2 px smaller than the
         // main chrome so the rail can pack four labels in 64 px width.
-        // Long labels ("Protocols") get an ellipsis at high sizes rather
+        // Long labels get an ellipsis at high sizes rather
         // than pushing the icon out of vertical centre.
         fontSize: "calc(var(--font-ui-size) - 2px)",
         lineHeight: 1.1, letterSpacing: 0.2,
