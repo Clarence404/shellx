@@ -33,9 +33,15 @@ pub fn check(host: &str, port: u16, key: &PublicKey, path: &Path) -> Verdict {
     match russh::keys::check_known_hosts_path(host, port, key, path) {
         Ok(true) => Verdict::Match,
         Ok(false) => Verdict::Unknown,
-        // KeyChanged carries the line number; re-read it to fingerprint the stored key.
-        Err(russh::keys::Error::KeyChanged { line }) => Verdict::Mismatch {
-            stored_fingerprint: stored_fingerprint_at(path, line)
+        // KeyChanged fires when a stored entry for this host has the same
+        // algorithm as `key` but a different value. Re-derive the offending
+        // stored key via known_host_keys_path (host-matching, incl. hashed
+        // entries, handled internally by russh) rather than indexing into
+        // physical file lines: russh's `line` counter only increments on
+        // non-comment lines, so it does not line up with
+        // `content.lines().nth(..)` when comments precede the entry.
+        Err(russh::keys::Error::KeyChanged { .. }) => Verdict::Mismatch {
+            stored_fingerprint: stored_fingerprint_for(host, port, key, path)
                 .unwrap_or_else(|| "unknown".into()),
         },
         // Unreadable / malformed file → treat as Unknown per spec §4 (never
@@ -66,12 +72,23 @@ pub fn learn(host: &str, port: u16, key: &PublicKey, path: &Path) -> Result<()> 
     Ok(())
 }
 
-fn stored_fingerprint_at(path: &Path, line: usize) -> Option<String> {
-    let content = std::fs::read_to_string(path).ok()?;
-    let l = content.lines().nth(line.saturating_sub(1))?;
-    let b64 = l.split_whitespace().nth(2)?;
-    let key = russh::keys::parse_public_key_base64(b64).ok()?;
-    Some(format!("{}", key.fingerprint(russh::keys::HashAlg::Sha256)))
+/// Find the stored key for `host` that caused a KeyChanged mismatch and
+/// fingerprint it. `known_host_keys_path` already applies the same
+/// host-matching (including hashed `|1|...` entries) that
+/// `check_known_hosts_path` used internally, so this always looks at the
+/// correct host's entry regardless of how many comment lines or other
+/// hosts' entries precede it in the file. Mismatch is only ever raised for
+/// a stored entry whose algorithm matches the presented key's, so that's
+/// the entry to report.
+fn stored_fingerprint_for(host: &str, port: u16, key: &PublicKey, path: &Path) -> Option<String> {
+    let entries = russh::keys::known_hosts::known_host_keys_path(host, port, path).ok()?;
+    let (_, recorded) = entries
+        .into_iter()
+        .find(|(_, recorded)| recorded.algorithm() == key.algorithm())?;
+    Some(format!(
+        "{}",
+        recorded.fingerprint(russh::keys::HashAlg::Sha256)
+    ))
 }
 
 /// Read-only listing for the Settings "Trusted servers" view (D14).
@@ -147,6 +164,53 @@ mod tests {
         match check("example.com", 22, &parse_key(), &path) {
             Verdict::Mismatch { stored_fingerprint } => {
                 assert!(stored_fingerprint.starts_with("SHA256:"));
+            }
+            v => panic!("expected Mismatch, got {v:?}"),
+        }
+    }
+
+    #[test]
+    fn mismatch_reports_correct_hosts_key_when_comment_and_other_host_precede_it() {
+        let td = TempDir::new().unwrap();
+        let path = td.path().join("known_hosts");
+        // Regression for: stored_fingerprint used to index into physical file
+        // lines using russh's `KeyChanged { line }`, but that counter only
+        // increments on non-comment lines. With a leading comment and a
+        // different host's entry ahead of example.com's, the old code read
+        // the wrong physical line and could report the wrong key.
+        fs::write(
+            &path,
+            "# leading comment\n\
+             other-host.example ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMBwc3z0GH+GXnMfbuyLXMYKHZ7di1QNTae3iOb6N5LU test3\n\
+             example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM4aAHoSnRD6tZ4P/riPe5m1N0KvCOGhFqDdZh64rZG1 test2\n",
+        )
+        .unwrap();
+
+        let example_com_old_key = russh::keys::parse_public_key_base64(
+            "AAAAC3NzaC1lZDI1NTE5AAAAIM4aAHoSnRD6tZ4P/riPe5m1N0KvCOGhFqDdZh64rZG1",
+        )
+        .unwrap();
+        let expected = format!(
+            "{}",
+            example_com_old_key.fingerprint(russh::keys::HashAlg::Sha256)
+        );
+
+        let other_host_key = russh::keys::parse_public_key_base64(
+            "AAAAC3NzaC1lZDI1NTE5AAAAIMBwc3z0GH+GXnMfbuyLXMYKHZ7di1QNTae3iOb6N5LU",
+        )
+        .unwrap();
+        let wrong = format!("{}", other_host_key.fingerprint(russh::keys::HashAlg::Sha256));
+
+        match check("example.com", 22, &parse_key(), &path) {
+            Verdict::Mismatch { stored_fingerprint } => {
+                assert_eq!(
+                    stored_fingerprint, expected,
+                    "must report example.com's stored key, not a shifted physical line"
+                );
+                assert_ne!(
+                    stored_fingerprint, wrong,
+                    "must not report other-host.example's key"
+                );
             }
             v => panic!("expected Mismatch, got {v:?}"),
         }
