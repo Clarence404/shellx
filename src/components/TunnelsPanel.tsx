@@ -24,6 +24,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   const [addLocalPort, setAddLocalPort] = useState("");
   const [addRemote, setAddRemote] = useState("");
   const [addErr, setAddErr] = useState<string | null>(null);
+  const [toggleErr, setToggleErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (hostId) {
@@ -36,16 +37,20 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   }
 
   async function handleToggle(rule: TunnelRule) {
-    const s = statusFor(rule.id);
-    const isActive = s?.status === "active";
-    if (isActive) {
-      await closeTunnel(sessionId, rule.id);
-      await updateTunnel({ id: rule.id, enabled: false });
-      setRules((r) => r.map((x) => x.id === rule.id ? { ...x, enabled: false } : x));
-    } else {
-      await openTunnel({ session_id: sessionId, rule_id: rule.id, local_port: rule.local_port, remote_host: rule.remote_host, remote_port: rule.remote_port });
-      await updateTunnel({ id: rule.id, enabled: true });
-      setRules((r) => r.map((x) => x.id === rule.id ? { ...x, enabled: true } : x));
+    try {
+      const s = statusFor(rule.id);
+      const isActive = s?.status === "active";
+      if (isActive) {
+        await closeTunnel(sessionId, rule.id);
+        await updateTunnel({ id: rule.id, enabled: false });
+        setRules((r) => r.map((x) => x.id === rule.id ? { ...x, enabled: false } : x));
+      } else {
+        await openTunnel({ session_id: sessionId, rule_id: rule.id, local_port: rule.local_port, remote_host: rule.remote_host, remote_port: rule.remote_port });
+        await updateTunnel({ id: rule.id, enabled: true });
+        setRules((r) => r.map((x) => x.id === rule.id ? { ...x, enabled: true } : x));
+      }
+    } catch (e) {
+      setToggleErr(String(e));
     }
   }
 
@@ -77,16 +82,23 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
-        <span style={{ fontSize: 11, color: "var(--text-2)" }}>
-          {totalCount} rules · {activeCount} active
-        </span>
-        <button
-          onClick={() => setAddOpen((v) => !v)}
-          style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}
-        >
-          + Add
-        </button>
+      <div style={{ borderBottom: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px" }}>
+          <span style={{ fontSize: 11, color: "var(--text-2)" }}>
+            {totalCount} rules · {activeCount} active
+          </span>
+          <button
+            onClick={() => setAddOpen((v) => !v)}
+            style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}
+          >
+            + Add
+          </button>
+        </div>
+        {toggleErr && (
+          <div style={{ fontSize: 10, color: "var(--error)", padding: "2px 12px 6px" }}>
+            {toggleErr}
+          </div>
+        )}
       </div>
 
       {/* Rule list */}
