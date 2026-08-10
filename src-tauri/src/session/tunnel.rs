@@ -9,7 +9,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpSocket};
 use tokio::sync::oneshot;
 use uuid::Uuid;
 
@@ -50,7 +50,14 @@ pub async fn spawn_tunnel(
     app: AppHandle,
 ) -> Result<TunnelHandle, String> {
     let addr: SocketAddr = format!("127.0.0.1:{local_port}").parse().unwrap();
-    let listener = match TcpListener::bind(addr).await {
+    let listener = match (|| -> std::io::Result<TcpListener> {
+        let sock = TcpSocket::new_v4()?;
+        // SO_REUSEADDR lets us rebind immediately after the previous session
+        // closes (avoids TIME_WAIT "address already in use" on reconnect).
+        sock.set_reuseaddr(true)?;
+        sock.bind(addr)?;
+        sock.listen(128)
+    })() {
         Ok(l) => l,
         Err(e) => {
             let msg = format!("bind 127.0.0.1:{local_port}: {e}");

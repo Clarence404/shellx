@@ -21,7 +21,8 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   const [addRemoteHost, setAddRemoteHost] = useState("");
   const [addRemotePort, setAddRemotePort] = useState("");
   const [addErr, setAddErr] = useState<string | null>(null);
-  const [toggleErr, setToggleErr] = useState<string | null>(null);
+  const [toggleErrId, setToggleErrId] = useState<string | null>(null);
+  const [toggleErrMsg, setToggleErrMsg] = useState<string | null>(null);
 
   // Re-fetch rules whenever hostId changes or rules are modified (rulesVersion bump)
   useEffect(() => {
@@ -35,6 +36,8 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   }
 
   async function handleToggle(rule: TunnelRule) {
+    setToggleErrId(null);
+    setToggleErrMsg(null);
     try {
       const s = statusFor(rule.id);
       const isActive = s?.status === "active";
@@ -48,7 +51,8 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
         setRules((r) => r.map((x) => x.id === rule.id ? { ...x, enabled: true } : x));
       }
     } catch (e) {
-      setToggleErr(String(e));
+      setToggleErrId(rule.id);
+      setToggleErrMsg(String(e));
     }
   }
 
@@ -99,9 +103,6 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
             </button>
           )}
         </div>
-        {toggleErr && (
-          <div style={{ fontSize: 10, color: "var(--error)", padding: "2px 12px 6px" }}>{toggleErr}</div>
-        )}
       </div>
 
       {/* Rule list */}
@@ -109,30 +110,39 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
         {rules.map((rule) => {
           const s = statusFor(rule.id);
           const active = s?.status === "active";
-          const dotColor = s?.status === "error" ? "var(--error)" : active ? "var(--success)" : "var(--text-3)";
+          const hasError = s?.status === "error" || toggleErrId === rule.id;
+          const errMsg = toggleErrId === rule.id ? toggleErrMsg : (s?.error ?? null);
+          const dotColor = hasError ? "var(--error)" : active ? "var(--success)" : "var(--text-3)";
           return (
-            <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>{rule.label || `Port ${rule.local_port}`}</div>
-                <div style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
-                  localhost:{rule.local_port} → {rule.remote_host}:{rule.remote_port}
+            <div key={rule.id} style={{ borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px" }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>{rule.label || `Port ${rule.local_port}`}</div>
+                  <div style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+                    localhost:{rule.local_port} → {rule.remote_host}:{rule.remote_port}
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigator.clipboard.writeText(String(rule.local_port))}
+                  style={{ fontSize: 10, color: "var(--text-2)", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, padding: "2px 6px", cursor: "pointer" }}
+                >
+                  Copy port
+                </button>
+                <div
+                  onClick={() => handleToggle(rule)}
+                  role="switch"
+                  aria-checked={active}
+                  style={{ width: 28, height: 16, borderRadius: 8, background: active ? "var(--accent)" : "var(--text-3)", position: "relative", cursor: "pointer", flexShrink: 0, transition: "background .15s" }}
+                >
+                  <span style={{ position: "absolute", top: 2, ...(active ? { right: 2 } : { left: 2 }), width: 12, height: 12, borderRadius: "50%", background: "var(--text-on-accent)", transition: "left .15s, right .15s" }} />
                 </div>
               </div>
-              <button
-                onClick={() => navigator.clipboard.writeText(String(rule.local_port))}
-                style={{ fontSize: 10, color: "var(--text-2)", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, padding: "2px 6px", cursor: "pointer" }}
-              >
-                Copy port
-              </button>
-              <div
-                onClick={() => handleToggle(rule)}
-                role="switch"
-                aria-checked={active}
-                style={{ width: 28, height: 16, borderRadius: 8, background: active ? "var(--accent)" : "var(--text-3)", position: "relative", cursor: "pointer", flexShrink: 0, transition: "background .15s" }}
-              >
-                <span style={{ position: "absolute", top: 2, ...(active ? { right: 2 } : { left: 2 }), width: 12, height: 12, borderRadius: "50%", background: "var(--text-on-accent)", transition: "left .15s, right .15s" }} />
-              </div>
+              {hasError && errMsg && (
+                <div style={{ fontSize: 10, color: "var(--error)", padding: "0 12px 6px 27px", wordBreak: "break-all" }}>
+                  {errMsg}
+                </div>
+              )}
             </div>
           );
         })}
