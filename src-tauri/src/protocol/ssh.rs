@@ -36,6 +36,17 @@ pub struct SftpHandle {
     inner: SftpSession,
 }
 
+/// A cheaply-cloneable reference to the underlying russh connection handle.
+/// Tunnel tasks clone this to open `channel_open_direct_tcpip` channels
+/// without holding the `SshConnection` mutex.
+pub type RusshHandle = Arc<Handle<ClientHandler>>;
+
+impl SshConnection {
+    pub fn handle_clone(&self) -> RusshHandle {
+        Arc::clone(&self.handle)
+    }
+}
+
 /// Maximum time the initial SSH connect (TCP handshake + KEX) is allowed to take before
 /// giving up. Windows' OS-level TCP timeout is 21–30s on an unresponsive host; we bound
 /// it here so the user sees "Connecting failed" quickly on a typo'd address instead of
@@ -299,7 +310,7 @@ impl SftpHandle {
     }
 }
 
-struct ClientHandler {
+pub(crate) struct ClientHandler {
     host: String,
     port: u16,
     policy: Arc<dyn HostKeyPolicy>,
