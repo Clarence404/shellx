@@ -1,12 +1,8 @@
 import { useEffect, useState } from "react";
 import { useSessions } from "../state/sessions";
-import {
-  listTunnelsForHost, openTunnel, closeTunnel, updateTunnel, addSessionTunnel,
-} from "../ipc/tunnels";
+import { listTunnelsForHost, openTunnel, closeTunnel, updateTunnel, addTunnel } from "../ipc/tunnels";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
 
-// Stable empty array to avoid creating a new reference on every render,
-// which would cause an infinite re-render loop in zustand's selector.
 const EMPTY_STATUSES: TunnelStatus[] = [];
 
 interface Props {
@@ -17,20 +13,22 @@ interface Props {
 
 export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMode }: Props) {
   const tunnelStatuses = useSessions((s) => s.tunnelStatuses[sessionId] ?? EMPTY_STATUSES);
-  const setTunnelStatus = useSessions((s) => s.setTunnelStatus);
+  const rulesVersion = useSessions((s) => hostId ? (s.rulesVersion[hostId] ?? 0) : 0);
   const [rules, setRules] = useState<TunnelRule[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [addLabel, setAddLabel] = useState("");
   const [addLocalPort, setAddLocalPort] = useState("");
-  const [addRemote, setAddRemote] = useState("");
+  const [addRemoteHost, setAddRemoteHost] = useState("");
+  const [addRemotePort, setAddRemotePort] = useState("");
   const [addErr, setAddErr] = useState<string | null>(null);
   const [toggleErr, setToggleErr] = useState<string | null>(null);
 
+  // Re-fetch rules whenever hostId changes or rules are modified (rulesVersion bump)
   useEffect(() => {
     if (hostId) {
       listTunnelsForHost(hostId).then(setRules).catch(() => {});
     }
-  }, [hostId]);
+  }, [hostId, rulesVersion]);
 
   function statusFor(ruleId: string) {
     return tunnelStatuses.find((s) => s.rule_id === ruleId);
@@ -54,30 +52,35 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
     }
   }
 
-  // Session-only tunnels (not in rules list)
-  const sessionOnlyStatuses = tunnelStatuses.filter((s) => s.session_only);
-
-  async function handleAddSession() {
+  async function handleAdd() {
     setAddErr(null);
     const local = parseInt(addLocalPort, 10);
-    const [rhost, rportStr] = addRemote.split(":");
-    const rport = parseInt(rportStr, 10);
-    if (!addLabel || isNaN(local) || !rhost || isNaN(rport)) {
-      setAddErr("Fill all fields: Label, Local port, Remote host:port");
+    const rport = parseInt(addRemotePort, 10);
+    const rhost = addRemoteHost.trim();
+    if (!rhost || isNaN(local) || isNaN(rport)) {
+      setAddErr("Fill all fields");
       return;
     }
+    if (!hostId) { setAddErr("No host"); return; }
     try {
-      const info = await addSessionTunnel({ session_id: sessionId, label: addLabel, local_port: local, remote_host: rhost, remote_port: rport });
-      setTunnelStatus(sessionId, { rule_id: info.rule_id, session_id: sessionId, status: "active", session_only: true, label: info.label, local_port: info.local_port, remote_host: info.remote_host, remote_port: info.remote_port });
+      const rule = await addTunnel({ host_id: hostId, label: addLabel.trim(), local_port: local, remote_host: rhost, remote_port: rport });
+      // Open the tunnel immediately in the current session
+      await openTunnel({ session_id: sessionId, rule_id: rule.id, local_port: rule.local_port, remote_host: rule.remote_host, remote_port: rule.remote_port });
+      setRules((r) => [...r, rule]);
       setAddOpen(false);
-      setAddLabel(""); setAddLocalPort(""); setAddRemote("");
+      setAddLabel(""); setAddLocalPort(""); setAddRemoteHost(""); setAddRemotePort("");
     } catch (e) {
       setAddErr(String(e));
     }
   }
 
+  function handleCancelAdd() {
+    setAddOpen(false);
+    setAddErr(null);
+    setAddLabel(""); setAddLocalPort(""); setAddRemoteHost(""); setAddRemotePort("");
+  }
+
   const activeCount = tunnelStatuses.filter((s) => s.status === "active").length;
-  const totalCount = rules.length + sessionOnlyStatuses.length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -85,19 +88,19 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       <div style={{ borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px" }}>
           <span style={{ fontSize: 11, color: "var(--text-2)" }}>
-            {totalCount} rules · {activeCount} active
+            {rules.length} rules · {activeCount} active
           </span>
-          <button
-            onClick={() => setAddOpen((v) => !v)}
-            style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}
-          >
-            + Add
-          </button>
+          {!addOpen && (
+            <button
+              onClick={() => setAddOpen(true)}
+              style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}
+            >
+              + Add
+            </button>
+          )}
         </div>
         {toggleErr && (
-          <div style={{ fontSize: 10, color: "var(--error)", padding: "2px 12px 6px" }}>
-            {toggleErr}
-          </div>
+          <div style={{ fontSize: 10, color: "var(--error)", padding: "2px 12px 6px" }}>{toggleErr}</div>
         )}
       </div>
 
@@ -122,7 +125,6 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
               >
                 Copy port
               </button>
-              {/* Toggle switch */}
               <div
                 onClick={() => handleToggle(rule)}
                 role="switch"
@@ -135,49 +137,26 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
           );
         })}
 
-        {/* Session-only tunnels */}
-        {sessionOnlyStatuses.map((s) => {
-          const active = s.status === "active";
-          const dotColor = s.status === "error" ? "var(--error)" : active ? "var(--success)" : "var(--text-3)";
-          return (
-            <div key={s.rule_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>{s.label}</span>
-                  <span style={{ fontSize: 10, background: "var(--accent-fade)", color: "var(--accent)", padding: "1px 5px", borderRadius: 8, fontWeight: 500 }}>SESSION</span>
-                </div>
-                <div style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
-                  localhost:{s.local_port} → {s.remote_host}:{s.remote_port}
-                </div>
-              </div>
-              <button
-                onClick={() => s.local_port && navigator.clipboard.writeText(String(s.local_port))}
-                style={{ fontSize: 10, color: "var(--text-2)", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, padding: "2px 6px", cursor: "pointer" }}
-              >
-                Copy port
-              </button>
-              <div
-                onClick={async () => { await closeTunnel(sessionId, s.rule_id); }}
-                role="switch"
-                aria-checked={active}
-                style={{ width: 28, height: 16, borderRadius: 8, background: active ? "var(--accent)" : "var(--text-3)", position: "relative", cursor: "pointer", flexShrink: 0 }}
-              >
-                <span style={{ position: "absolute", top: 2, ...(active ? { right: 2 } : { left: 2 }), width: 12, height: 12, borderRadius: "50%", background: "var(--text-on-accent)" }} />
-              </div>
-            </div>
-          );
-        })}
-
-        {/* Inline Add row */}
+        {/* Two-row inline add form */}
         {addOpen && (
-          <div style={{ display: "flex", gap: 4, padding: "8px 12px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
-            {addErr && <div style={{ width: "100%", fontSize: 10, color: "var(--error)", marginBottom: 4 }}>{addErr}</div>}
-            <input value={addLabel} onChange={(e) => setAddLabel(e.target.value)} placeholder="Label" style={{ flex: "0 0 80px", fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
-            <input value={addLocalPort} onChange={(e) => setAddLocalPort(e.target.value)} placeholder="Local port" style={{ flex: "0 0 72px", fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
-            <input value={addRemote} onChange={(e) => setAddRemote(e.target.value)} placeholder="host:port" style={{ flex: 1, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
-            <button onClick={handleAddSession} style={{ padding: "3px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
-            <button onClick={() => { setAddOpen(false); setAddErr(null); }} style={{ padding: "3px 6px", fontSize: 11, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
+          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 4 }}>
+            {addErr && <div style={{ fontSize: 10, color: "var(--error)" }}>{addErr}</div>}
+            <div style={{ display: "flex", gap: 4 }}>
+              <input value={addLabel} onChange={(e) => setAddLabel(e.target.value)} placeholder="Label"
+                style={{ flex: 1, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)" }} />
+              <input value={addLocalPort} onChange={(e) => setAddLocalPort(e.target.value)} placeholder="Local port"
+                style={{ width: 76, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+            </div>
+            <div style={{ display: "flex", gap: 4 }}>
+              <input value={addRemoteHost} onChange={(e) => setAddRemoteHost(e.target.value)} placeholder="Remote host"
+                style={{ flex: 1, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+              <input value={addRemotePort} onChange={(e) => setAddRemotePort(e.target.value)} placeholder="Port"
+                style={{ width: 52, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+              <button onClick={handleAdd}
+                style={{ padding: "3px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
+              <button onClick={handleCancelAdd}
+                style={{ padding: "3px 6px", fontSize: 11, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
+            </div>
           </div>
         )}
       </div>

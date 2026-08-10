@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useHostsStore } from "../state/hosts";
+import { useSessions } from "../state/sessions";
 import { openConnection } from "../ipc/commands";
 import { keysDiscover } from "../ipc/keys";
 import { listTunnelsForHost, addTunnel, deleteTunnel } from "../ipc/tunnels";
@@ -27,6 +28,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   const keychainAvailable = useHostsStore((s) => s.keychainAvailable);
   const addHost = useHostsStore((s) => s.addHost);
   const updateHostById = useHostsStore((s) => s.updateHostById);
+  const bumpRulesVersion = useSessions((s) => s.bumpRulesVersion);
 
   const [label, setLabel] = useState(initial?.label ?? "");
   const [host, setHost] = useState(initial?.host ?? "");
@@ -156,6 +158,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
         remote_port: rport,
       });
       setTunnelRules((r) => [...r, rule]);
+      bumpRulesVersion(initial.id);
     }
     setAddRuleOpen(false);
     setNewLabel(""); setNewLocalPort(""); setNewRemoteHost(""); setNewRemotePort("");
@@ -172,6 +175,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     } else {
       await deleteTunnel(id);
       setTunnelRules((r) => r.filter((x) => x.id !== id));
+      if (initial?.id) bumpRulesVersion(initial.id);
     }
   }
 

@@ -37,6 +37,11 @@ interface SessionsState {
   setTunnelStatus: (sessionId: string, status: TunnelStatus) => void;
   removeTunnelStatus: (sessionId: string, ruleId: string) => void;
   clearTunnelStatuses: (sessionId: string) => void;
+
+  /** Incremented whenever tunnel rules for a host change (add/delete).
+   *  TunnelsPanel subscribes to this to know when to re-fetch. */
+  rulesVersion: Record<string, number>;
+  bumpRulesVersion: (hostId: string) => void;
 }
 
 export const useSessions = create<SessionsState>((set, get) => ({
@@ -45,6 +50,7 @@ export const useSessions = create<SessionsState>((set, get) => ({
   activeActivity: {},
   connecting: {},
   tunnelStatuses: {},
+  rulesVersion: {},
 
   railView: "hosts",
   setRailView: (v) => set((st) => (
@@ -125,4 +131,9 @@ export const useSessions = create<SessionsState>((set, get) => ({
       const { [sessionId]: _, ...rest } = s.tunnelStatuses;
       return { tunnelStatuses: rest };
     }),
+
+  bumpRulesVersion: (hostId) =>
+    set((s) => ({
+      rulesVersion: { ...s.rulesVersion, [hostId]: (s.rulesVersion[hostId] ?? 0) + 1 },
+    })),
 }));

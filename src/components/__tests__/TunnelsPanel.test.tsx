@@ -4,7 +4,7 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 vi.mock("../../ipc/tunnels", () => ({
   listTunnelsForHost: vi.fn().mockResolvedValue([]),
   openTunnel: vi.fn(), closeTunnel: vi.fn(),
-  updateTunnel: vi.fn(), addSessionTunnel: vi.fn(),
+  updateTunnel: vi.fn(), addTunnel: vi.fn(),
 }));
 
 import { TunnelsPanel } from "../TunnelsPanel";
