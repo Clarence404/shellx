@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>shellx v0.8 · Tunnels 放在哪</title>
+<style>
+  :root {
+    --bg: #1e1c24;
+    --chrome: #1a1a1c;
+    --panel-1: #232326;
+    --panel-2: #252529;
+    --border: #2c2c30;
+    --border-hi: #3a373f;
+    --text-1: #d4d0dc;
+    --text-2: #a0a0a5;
+    --text-3: #7a7a7f;
+    --text-muted: #8b869a;
+    --accent: #7c5cff;
+    --accent-light: #a89bff;
+    --accent-fade: #3a2f5f;
+    --success: #7c9c80;
+    --success-fade: #1a4a2a;
+    --warn: #f2c8a2;
+    --error: #e24b4a;
+    --error-fade: #3a1a1a;
+    --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, monospace;
+    --font-ui: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 16px;
+    background: #F5F3EE;
+    font-family: var(--font-ui);
+    color: #2C2C2A;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+
+  h2 { color: #26215C; margin: 0 0 8px; font-size: 20px; }
+  .lede { color: #5F5E5A; font-size: 13px; margin-bottom: 28px; }
+
+  .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; align-items: start; }
+
+  .option {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .option-hd {
+    font-size: 14px; font-weight: 700; color: #26215C;
+  }
+  .option-sub { font-size: 11.5px; color: #5F5E5A; }
+
+  /* Mini shellx window */
+  .win {
+    background: var(--chrome);
+    border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+    margin-top: 6px;
+  }
+  .body { display: flex; }
+  .rail {
+    width: 48px; background: var(--chrome);
+    border-right: 0.5px solid var(--border);
+    padding: 10px 0; display: flex; flex-direction: column; gap: 4px; align-items: center;
+    flex-shrink: 0;
+  }
+  .rail-item {
+    width: 32px; padding: 5px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    border-radius: 5px;
+    color: var(--text-2); font-size: 8.5px;
+    position: relative;
+  }
+  .rail-item .icon { font-size: 15px; line-height: 1; }
+  .rail-item.active { background: var(--accent); color: white; }
+  .rail-item .badge {
+    position: absolute; top: -2px; right: -2px;
+    background: var(--success); color: white;
+    font-size: 8px; font-weight: 700;
+    border-radius: 8px; padding: 1px 4px;
+    min-width: 14px; text-align: center;
+    border: 1px solid var(--chrome);
+  }
+  .main { flex: 1; min-width: 0; background: var(--bg); }
+
+  /* Titlebar tabs (mini) */
+  .titlebar {
+    height: 28px; background: var(--panel-1);
+    display: flex; align-items: center; padding: 0 10px; gap: 6px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .logo { color: var(--accent); font-family: var(--font-mono); font-weight: 700; font-size: 11px; }
+  .tab {
+    height: 18px; padding: 0 8px 0 6px; border-radius: 3px 3px 0 0;
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 9.5px;
+    color: var(--text-3); background: transparent;
+  }
+  .tab.active { background: var(--panel-2); color: var(--text-1); }
+  .tab .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--success); }
+
+  /* Activity tabs (Terminal | Tunnels | Files) */
+  .acttoolbar {
+    height: 30px; background: var(--panel-1);
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; padding: 0 10px; gap: 4px;
+  }
+  .act-btn {
+    height: 20px; padding: 0 10px; border-radius: 3px;
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--text-2);
+  }
+  .act-btn.active { background: var(--border-hi); color: var(--text-1); font-weight: 600; }
+  .act-btn .count-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); margin-left: 2px; }
+  .act-btn.badge {
+    position: relative;
+  }
+
+  /* Connection strip */
+  .conn-strip {
+    height: 24px; padding: 0 10px;
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg); border-bottom: 0.5px solid var(--border);
+    font-family: var(--font-mono); font-size: 9.5px; color: var(--text-1);
+  }
+  .conn-strip .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); }
+  .env-tag {
+    font-family: var(--font-ui);
+    font-size: 8px; font-weight: 700; letter-spacing: 0.5px;
+    padding: 1px 6px; border-radius: 3px;
+    background: var(--success-fade); border: 0.5px solid var(--success); color: #95b298;
+  }
+  .env-tag.prod { background: var(--error-fade); border-color: var(--error); color: #ff9080; }
+
+  /* Content area */
+  .content {
+    padding: 10px; min-height: 220px;
+  }
+  .section-head {
+    font-size: 9.5px; font-weight: 700; color: var(--accent-light); letter-spacing: 0.4px;
+    margin-bottom: 6px;
+  }
+  .content.grouped .section-head {
+    display: flex; align-items: center; margin: 12px 0 6px;
+  }
+  .content.grouped .section-head:first-child { margin-top: 0; }
+  .host-tag {
+    font-size: 8px; padding: 1px 5px; border-radius: 3px;
+    background: var(--success-fade); color: #95b298; margin-left: 6px;
+    font-weight: 700; letter-spacing: 0.4px;
+  }
+  .host-tag.prod { background: var(--error-fade); color: #ff9080; }
+
+  .tun {
+    padding: 6px 10px;
+    border-radius: 5px;
+    background: var(--panel-2);
+    border: 0.5px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 5px;
+  }
+  .tun .tun-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+    flex-shrink: 0;
+  }
+  .tun .tun-dot.warn { background: var(--warn); }
+  .tun .tun-body { flex: 1; min-width: 0; }
+  .tun .tun-title { font-size: 10px; font-weight: 600; color: var(--text-1); margin-bottom: 1px; }
+  .tun .tun-detail { font-size: 8.5px; color: var(--text-muted); font-family: var(--font-mono); }
+  .tun .tun-btn {
+    padding: 3px 8px; border-radius: 3px;
+    font-size: 8.5px; color: var(--text-1);
+    background: var(--border); border: 0.5px solid var(--border-hi);
+    flex-shrink: 0;
+  }
+
+  /* Terminal preview */
+  .term-preview {
+    padding: 10px; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .term-preview .prompt { color: var(--text-1); }
+
+  /* Path panels */
+  .flow-arrow {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--text-3);
+    margin-top: 8px;
+  }
+  .flow-arrow strong { color: var(--accent); font-weight: 700; }
+
+  /* Compare table */
+  .compare {
+    margin-top: 32px; padding: 20px 24px; background: white;
+    border: 1px solid #E5E1D5; border-radius: 10px;
+  }
+  .compare h4 { margin: 0 0 12px; color: #26215C; font-size: 15px; }
+  .compare table {
+    width: 100%; border-collapse: collapse;
+    font-size: 12.5px;
+  }
+  .compare th, .compare td {
+    padding: 8px 10px; text-align: left; border-bottom: 0.5px solid #E5E1D5;
+  }
+  .compare th { color: #26215C; font-weight: 700; }
+  .compare td:first-child { font-weight: 600; color: #26215C; width: 200px; }
+  .compare td .yes { color: #1D9E75; }
+  .compare td .no { color: #E24B4A; }
+  .compare td .mid { color: #B37516; }
+
+  .verdict {
+    margin-top: 20px; padding: 14px 18px;
+    background: linear-gradient(180deg, #EEEDFE 0%, #F6F4FE 100%);
+    border: 1px solid #B2ACE4; border-radius: 8px;
+    font-size: 13px; color: #26215C; line-height: 1.7;
+  }
+  .verdict strong { color: #534AB7; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h2>Tunnels 放哪里？三个方案对比</h2>
+  <div class="lede">同一份数据（每主机的转发规则）三种不同的呈现方式 —— 都是 shellx 里 test-bastion + prod-bastion 都已连接、各有 3 条 tunnel 的场景</div>
+
+  <div class="three">
+
+    <!-- ==================== OPTION A ==================== -->
+    <div class="option">
+      <div class="option-hd">A · 全在 Hosts 里（当前 mockup）</div>
+      <div class="option-sub">Tunnels 是每个 host 会话的一个 activity tab</div>
+
+      <div class="win">
+        <div class="titlebar">
+          <span class="logo">&gt;_</span>
+          <div class="tab active"><span class="dot"></span>test-bastion</div>
+          <div class="tab"><span class="dot" style="background:#5F5E5A"></span>prod-bastion</div>
+        </div>
+        <div class="body">
+          <div class="rail">
+            <div class="rail-item active"><div class="icon">🖥</div><div>Hosts</div></div>
+            <div class="rail-item"><div class="icon">📁</div><div>Files</div></div>
+            <div class="rail-item"><div class="icon">🔌</div><div>Serial</div></div>
+            <div class="rail-item"><div class="icon">⚙</div><div>Set…</div></div>
+          </div>
+          <div class="main">
+            <div class="acttoolbar">
+              <div class="act-btn">💬 Terminal</div>
+              <div class="act-btn active">📡 Tunnels · 3<span class="count-dot"></span></div>
+              <div class="act-btn">📂 Files</div>
+            </div>
+            <div class="conn-strip">
+              <span class="dot"></span><span>chen.han@test-bastion</span>
+              <span class="env-tag">TEST</span>
+            </div>
+            <div class="content">
+              <div class="section-head">端口转发 · 3 条 · 全部活跃</div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">PG (test)</div><div class="tun-detail">15432 → test-pg:5432</div></div><button class="tun-btn">复制</button></div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">Redis (test)</div><div class="tun-detail">16379 → test-redis:6379</div></div><button class="tun-btn">复制</button></div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">RabbitMQ</div><div class="tun-detail">15672 → test-mq:15672</div></div><button class="tun-btn">复制</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-arrow">
+        <strong>看 prod 的 tunnel？</strong>切到 prod-bastion tab → activity 里切到 Tunnels
+      </div>
+    </div>
+
+    <!-- ==================== OPTION B ==================== -->
+    <div class="option">
+      <div class="option-hd">B · 新开 Tunnels rail 菜单</div>
+      <div class="option-sub">rail 里加一格，全局面板汇总所有 host 的 tunnel</div>
+
+      <div class="win">
+        <div class="titlebar">
+          <span class="logo">&gt;_</span>
+          <div class="tab"><span class="dot"></span>test-bastion</div>
+          <div class="tab"><span class="dot"></span>prod-bastion</div>
+        </div>
+        <div class="body">
+          <div class="rail">
+            <div class="rail-item"><div class="icon">🖥</div><div>Hosts</div></div>
+            <div class="rail-item"><div class="icon">📁</div><div>Files</div></div>
+            <div class="rail-item active"><div class="icon">📡</div><div>Tunnels</div><span class="badge">6</span></div>
+            <div class="rail-item"><div class="icon">🔌</div><div>Serial</div></div>
+            <div class="rail-item"><div class="icon">⚙</div><div>Set…</div></div>
+          </div>
+          <div class="main">
+            <div class="conn-strip">
+              <span>所有活跃 tunnel · 6 条（2 hosts）</span>
+              <span style="margin-left:auto;color:var(--text-3);font-family:var(--font-ui)">全部启动 / 全部停止</span>
+            </div>
+            <div class="content grouped">
+              <div class="section-head">test-bastion<span class="host-tag">TEST</span></div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">PG (test)</div><div class="tun-detail">15432 → test-pg:5432</div></div><button class="tun-btn">复制</button></div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">Redis (test)</div><div class="tun-detail">16379 → test-redis:6379</div></div><button class="tun-btn">复制</button></div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">RabbitMQ</div><div class="tun-detail">15672 → test-mq:15672</div></div><button class="tun-btn">复制</button></div>
+
+              <div class="section-head">prod-bastion<span class="host-tag prod">PROD</span></div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">PG (prod)</div><div class="tun-detail">25432 → prod-pg:5432</div></div><button class="tun-btn">复制</button></div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">Redis (prod)</div><div class="tun-detail">26379 → prod-redis:6379</div></div><button class="tun-btn">复制</button></div>
+              <div class="tun"><span class="tun-dot warn"></span><div class="tun-body"><div class="tun-title">RabbitMQ (prod)</div><div class="tun-detail">重连中…</div></div><button class="tun-btn">重试</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-arrow">
+        <strong>看 tunnel？</strong>rail 点 Tunnels → 一屏看完两个 host 的 6 条 tunnel
+      </div>
+    </div>
+
+    <!-- ==================== OPTION C ==================== -->
+    <div class="option">
+      <div class="option-hd">C · 混合（Hosts + Tunnels 双入口）</div>
+      <div class="option-sub">rail 有 Tunnels 全局视图 · 每个 host 里也有 Tunnels tab（只显示自己的）</div>
+
+      <div class="win">
+        <div class="titlebar">
+          <span class="logo">&gt;_</span>
+          <div class="tab active"><span class="dot"></span>test-bastion</div>
+          <div class="tab"><span class="dot"></span>prod-bastion</div>
+        </div>
+        <div class="body">
+          <div class="rail">
+            <div class="rail-item active"><div class="icon">🖥</div><div>Hosts</div></div>
+            <div class="rail-item"><div class="icon">📁</div><div>Files</div></div>
+            <div class="rail-item"><div class="icon">📡</div><div>Tunnels</div><span class="badge">6</span></div>
+            <div class="rail-item"><div class="icon">🔌</div><div>Serial</div></div>
+            <div class="rail-item"><div class="icon">⚙</div><div>Set…</div></div>
+          </div>
+          <div class="main">
+            <div class="acttoolbar">
+              <div class="act-btn">💬 Terminal</div>
+              <div class="act-btn active">📡 Tunnels · 3<span class="count-dot"></span></div>
+              <div class="act-btn">📂 Files</div>
+            </div>
+            <div class="conn-strip">
+              <span class="dot"></span><span>chen.han@test-bastion</span>
+              <span class="env-tag">TEST</span>
+            </div>
+            <div class="content">
+              <div class="section-head">端口转发 · 3 条 · 全部活跃 <span style="margin-left:auto;color:var(--text-3);font-family:var(--font-ui);font-weight:400;font-size:9px">查看全部 →</span></div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">PG (test)</div><div class="tun-detail">15432 → test-pg:5432</div></div><button class="tun-btn">复制</button></div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">Redis (test)</div><div class="tun-detail">16379 → test-redis:6379</div></div><button class="tun-btn">复制</button></div>
+              <div class="tun"><span class="tun-dot"></span><div class="tun-body"><div class="tun-title">RabbitMQ</div><div class="tun-detail">15672 → test-mq:15672</div></div><button class="tun-btn">复制</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-arrow">
+        <strong>专注单 host？</strong>host 里的 Tunnels tab &nbsp;·&nbsp; <strong>看全部？</strong>rail 里的 Tunnels 页
+      </div>
+    </div>
+
+  </div>
+
+  <div class="compare">
+    <h4>三个方案对比</h4>
+    <table>
+      <tr>
+        <th></th>
+        <th>A · 全在 Hosts</th>
+        <th>B · 新开 Tunnels</th>
+        <th>C · 混合</th>
+      </tr>
+      <tr>
+        <td>专注单主机时</td>
+        <td class="yes">✅ 上下文集中</td>
+        <td class="mid">⚠ 要来回切 rail</td>
+        <td class="yes">✅ host 里有 Tunnels tab</td>
+      </tr>
+      <tr>
+        <td>全局看多 host 的 tunnel</td>
+        <td class="no">❌ 只能一个一个 tab 切</td>
+        <td class="yes">✅ 一屏看完</td>
+        <td class="yes">✅ 一屏看完</td>
+      </tr>
+      <tr>
+        <td>rail 空间占用</td>
+        <td class="yes">不占</td>
+        <td class="mid">+1 项（占 rail 一格）</td>
+        <td class="mid">+1 项（占 rail 一格）</td>
+      </tr>
+      <tr>
+        <td>去哪里配规则</td>
+        <td class="yes">Hosts 编辑，一处</td>
+        <td class="mid">可以从 Tunnels 页发起，但仍关联到某个 host</td>
+        <td class="mid">两处入口，需要说明 </td>
+      </tr>
+      <tr>
+        <td>断连时的行为</td>
+        <td>tab 里的 Tunnels tab 变灰</td>
+        <td>rail 里对应组变灰</td>
+        <td>两处都变灰，一致</td>
+      </tr>
+      <tr>
+        <td>实现复杂度（相对）</td>
+        <td>低</td>
+        <td>中</td>
+        <td>中高（两个视图渲染同一份数据源）</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="verdict">
+    <strong>我的推荐：C · 混合</strong>。理由：你日常主要用法是"打开 test 或 prod 的 tab 干活"，这时候 host 里的 Tunnels tab 让你上下文集中；但你也真的会想"两个环境的所有 tunnel 现在都健康吗"，rail 里的 Tunnels 页就是这个用途。<br>
+    <br>
+    实现代价：两个视图渲染同一份 store 数据源，其实不难 —— rail 版是全局聚合，activity tab 版是当前 host 的过滤，逻辑就是一个 filter。<br>
+    <br>
+    <strong>如果只能选一个</strong>：选 B（全局面板）。因为你的核心痛点是"多环境同时监控"，B 直接解决；A 反而没解决这个痛点。
+  </div>
+
+</div>
+</body>
+</html>

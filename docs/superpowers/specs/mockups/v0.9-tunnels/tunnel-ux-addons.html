@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>shellx v0.8 · Tunnel 附加设计</title>
+<style>
+  :root {
+    --bg: #1e1c24;
+    --chrome: #1a1a1c;
+    --panel-1: #232326;
+    --panel-2: #252529;
+    --border: #2c2c30;
+    --border-hi: #3a373f;
+    --text-1: #d4d0dc;
+    --text-2: #a0a0a5;
+    --text-3: #7a7a7f;
+    --text-muted: #8b869a;
+    --accent: #7c5cff;
+    --accent-light: #a89bff;
+    --accent-fade: #3a2f5f;
+    --success: #7c9c80;
+    --success-fade: #1a4a2a;
+    --warn: #f2c8a2;
+    --error: #e24b4a;
+    --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, monospace;
+    --font-ui: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 20px;
+    background: #F5F3EE;
+    font-family: var(--font-ui);
+    color: #2C2C2A;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  .panel-heading {
+    font-size: 16px; font-weight: 700; color: #26215C; margin: 40px 0 4px;
+  }
+  .panel-sub {
+    font-size: 12px; color: #5F5E5A; margin-bottom: 14px;
+  }
+  .panel-heading:first-of-type { margin-top: 0; }
+
+  /* Reusable shellx frame */
+  .win {
+    background: var(--chrome);
+    border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+    position: relative;
+  }
+  .win-strip {
+    height: 30px; padding: 0 14px;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg); border-bottom: 0.5px solid var(--border);
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-1);
+  }
+  .win-strip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+  .env-tag {
+    font-family: var(--font-ui);
+    font-size: 9px; font-weight: 700; letter-spacing: 0.6px;
+    padding: 2px 8px; border-radius: 4px;
+    background: var(--success-fade); border: 0.7px solid var(--success); color: #95b298;
+  }
+
+  .tunnels { padding: 14px 16px; background: var(--bg); }
+  .tunnels-header {
+    display: flex; align-items: center; margin-bottom: 10px;
+    font-size: 11px; font-weight: 700; color: var(--accent-light); letter-spacing: 0.5px;
+  }
+  .tunnels-header .add-btn {
+    margin-left: auto; font-weight: 600; color: var(--accent-light); font-size: 11px;
+    padding: 4px 10px; border-radius: 4px;
+    background: var(--accent-fade); border: 0.5px solid var(--accent);
+    cursor: pointer;
+  }
+
+  .tun {
+    padding: 10px 14px;
+    border-radius: 6px;
+    background: var(--panel-2);
+    border: 0.5px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 8px;
+  }
+  .tun.disabled {
+    opacity: 0.5;
+    background: transparent;
+    border-style: dashed;
+  }
+  .tun .tun-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--success);
+    flex-shrink: 0;
+  }
+  .tun.disabled .tun-dot { background: var(--text-3); }
+  .tun .tun-body { flex: 1; min-width: 0; }
+  .tun .tun-title {
+    font-size: 12.5px; font-weight: 600; color: var(--text-1); margin-bottom: 3px;
+  }
+  .tun .tun-detail {
+    font-size: 10.5px; color: var(--text-muted); font-family: var(--font-mono);
+  }
+  .tun .tun-toggle {
+    width: 32px; height: 18px; border-radius: 9px;
+    background: var(--accent);
+    position: relative;
+    flex-shrink: 0;
+  }
+  .tun .tun-toggle::after {
+    content: '';
+    position: absolute; top: 2px; right: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: white;
+  }
+  .tun.disabled .tun-toggle {
+    background: var(--border-hi);
+  }
+  .tun.disabled .tun-toggle::after {
+    left: 2px; right: auto;
+  }
+  .tun-btn {
+    padding: 5px 12px; border-radius: 4px;
+    font-size: 10.5px; color: var(--text-1);
+    background: var(--border); border: 0.5px solid var(--border-hi);
+  }
+  .tun-actions {
+    display: flex; gap: 6px; flex-shrink: 0;
+  }
+  .tun .tag-off {
+    font-size: 9px; color: var(--text-3); text-transform: uppercase;
+    letter-spacing: 0.6px; font-weight: 600;
+  }
+
+  /* Add-tunnel popover */
+  .popover {
+    position: absolute; top: 56px; right: 16px;
+    width: 380px;
+    background: var(--panel-1);
+    border: 0.5px solid var(--border-hi); border-radius: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    padding: 16px;
+    z-index: 10;
+  }
+  .popover::before {
+    content: '';
+    position: absolute; top: -6px; right: 40px;
+    width: 12px; height: 12px; background: var(--panel-1);
+    border-top: 0.5px solid var(--border-hi);
+    border-left: 0.5px solid var(--border-hi);
+    transform: rotate(45deg);
+  }
+  .popover h4 {
+    margin: 0 0 12px; color: var(--text-1); font-size: 13px; font-weight: 600;
+  }
+  .field-label {
+    font-size: 9.5px; font-weight: 600; color: var(--text-3);
+    letter-spacing: 0.4px; text-transform: uppercase;
+    margin-bottom: 5px; margin-top: 12px;
+  }
+  .field-label:first-of-type { margin-top: 0; }
+  .input {
+    height: 30px; padding: 0 10px; border-radius: 4px;
+    background: var(--panel-2); border: 0.5px solid var(--border-hi);
+    font-family: var(--font-mono); font-size: 11.5px;
+    color: var(--text-1); display: flex; align-items: center; width: 100%;
+  }
+  .input-row { display: flex; gap: 6px; }
+  .input.narrow { width: 68px; justify-content: center; }
+  .input.mid { width: 90px; justify-content: center; }
+  .arrow-sep { align-self: center; color: var(--text-3); font-size: 12px; }
+
+  /* Segmented control for save-mode */
+  .segmented {
+    display: flex; background: var(--panel-2); border-radius: 5px;
+    padding: 3px; margin-top: 4px;
+    border: 0.5px solid var(--border-hi);
+  }
+  .segmented .seg {
+    flex: 1; padding: 6px 8px; border-radius: 3px;
+    font-size: 10.5px; text-align: center; color: var(--text-3);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .segmented .seg.active {
+    background: var(--accent);
+    color: white; font-weight: 600;
+  }
+  .segmented .seg .sub {
+    font-size: 9px; opacity: 0.85; font-weight: 400;
+  }
+  .segmented .seg.active .sub { color: rgba(255,255,255,0.85); }
+
+  .popover-actions {
+    display: flex; justify-content: flex-end; gap: 8px;
+    margin-top: 16px; padding-top: 14px;
+    border-top: 0.5px solid var(--border);
+  }
+  .btn-primary {
+    padding: 7px 16px; border-radius: 4px;
+    background: var(--accent); color: white; font-size: 11px; font-weight: 600;
+  }
+  .btn-cancel {
+    padding: 7px 16px; border-radius: 4px;
+    background: transparent; border: 0.5px solid var(--border-hi);
+    color: var(--text-2); font-size: 11px;
+  }
+
+  /* Chip inside session-only tag */
+  .session-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9px; font-weight: 600;
+    padding: 1px 6px; border-radius: 3px;
+    background: var(--accent-fade); border: 0.4px solid var(--accent);
+    color: var(--accent-light); letter-spacing: 0.4px;
+    margin-left: 8px;
+  }
+
+  /* Notes */
+  .notes {
+    margin-top: 32px; padding: 20px 24px; background: white;
+    border: 1px solid #E5E1D5; border-radius: 10px;
+  }
+  .notes h4 { margin: 0 0 12px; color: #26215C; font-size: 14px; }
+  .notes ul { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.8; color: #2C2C2A; }
+  .notes ul li strong { color: #7F77DD; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ================== PANEL A: add tunnel popover ================== -->
+  <div class="panel-heading">A · 加规则时"保存到主机 / 仅本次会话"选择器</div>
+  <div class="panel-sub">连接后点右上"+ 添加"弹这个 popover。核心是最下面那个 segmented control</div>
+
+  <div class="win">
+    <div class="win-strip">
+      <span class="dot"></span>
+      <span>chen.han@test-bastion.company.com</span>
+      <span class="env-tag">TEST</span>
+    </div>
+    <div class="tunnels">
+      <div class="tunnels-header">
+        <span>端口转发 · 3 条 · 全部活跃</span>
+        <span class="add-btn">+ 添加</span>
+      </div>
+
+      <div class="tun">
+        <span class="tun-dot"></span>
+        <div class="tun-body">
+          <div class="tun-title">PG (test)</div>
+          <div class="tun-detail">localhost:15432  →  test-pg.internal:5432</div>
+        </div>
+        <div class="tun-actions">
+          <button class="tun-btn">复制端口</button>
+        </div>
+      </div>
+      <div class="tun">
+        <span class="tun-dot"></span>
+        <div class="tun-body">
+          <div class="tun-title">Redis (test)</div>
+          <div class="tun-detail">localhost:16379  →  test-redis.internal:6379</div>
+        </div>
+        <div class="tun-actions">
+          <button class="tun-btn">复制端口</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Popover -->
+    <div class="popover">
+      <h4>添加端口转发</h4>
+
+      <div class="field-label">标签</div>
+      <div class="input">Grafana 临时看板</div>
+
+      <div class="field-label">本地端口 → 远端 host : 端口</div>
+      <div class="input-row">
+        <div class="input mid">13000</div>
+        <span class="arrow-sep">→</span>
+        <div class="input" style="flex:1">test-grafana.internal</div>
+        <div class="input narrow">3000</div>
+      </div>
+
+      <div class="field-label">保存方式</div>
+      <div class="segmented">
+        <div class="seg">
+          <span>保存到主机</span>
+          <span class="sub">下次连 test-bastion 自动生效</span>
+        </div>
+        <div class="seg active">
+          <span>仅本次会话</span>
+          <span class="sub">断开后就没了</span>
+        </div>
+      </div>
+
+      <div class="popover-actions">
+        <button class="btn-cancel">取消</button>
+        <button class="btn-primary">添加并启用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================== PANEL B: rule with disable toggle ================== -->
+  <div class="panel-heading">B · 每条 tunnel 前一个 toggle · 禁用的规则灰掉 + 虚线边</div>
+  <div class="panel-sub">配置里保留但不建立 tunnel · 一键 toggle 就重新起 · "仅本次会话"的规则会带一个 SESSION 徽章</div>
+
+  <div class="win">
+    <div class="win-strip">
+      <span class="dot"></span>
+      <span>chen.han@test-bastion.company.com</span>
+      <span class="env-tag">TEST</span>
+    </div>
+    <div class="tunnels">
+      <div class="tunnels-header">
+        <span>端口转发 · 4 条 · 3 活跃 · 1 已禁用</span>
+        <span class="add-btn">+ 添加</span>
+      </div>
+
+      <div class="tun">
+        <span class="tun-toggle"></span>
+        <span class="tun-dot"></span>
+        <div class="tun-body">
+          <div class="tun-title">PG (test)</div>
+          <div class="tun-detail">localhost:15432  →  test-pg.internal:5432</div>
+        </div>
+        <div class="tun-actions">
+          <button class="tun-btn">复制端口</button>
+        </div>
+      </div>
+
+      <div class="tun">
+        <span class="tun-toggle"></span>
+        <span class="tun-dot"></span>
+        <div class="tun-body">
+          <div class="tun-title">Redis (test)</div>
+          <div class="tun-detail">localhost:16379  →  test-redis.internal:6379</div>
+        </div>
+        <div class="tun-actions">
+          <button class="tun-btn">复制端口</button>
+        </div>
+      </div>
+
+      <div class="tun disabled">
+        <span class="tun-toggle"></span>
+        <span class="tun-dot"></span>
+        <div class="tun-body">
+          <div class="tun-title">RabbitMQ 管理页 <span class="tag-off">已禁用</span></div>
+          <div class="tun-detail">localhost:15672  →  test-mq.internal:15672 · HTTP</div>
+        </div>
+      </div>
+
+      <div class="tun">
+        <span class="tun-toggle"></span>
+        <span class="tun-dot"></span>
+        <div class="tun-body">
+          <div class="tun-title">Grafana 临时看板<span class="session-chip">SESSION</span></div>
+          <div class="tun-detail">localhost:13000  →  test-grafana.internal:3000 · 仅本次会话</div>
+        </div>
+        <div class="tun-actions">
+          <button class="tun-btn">复制端口</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>关键设计</h4>
+    <ul>
+      <li><strong>Segmented 二选一"保存到主机 / 仅本次会话"</strong>：默认哪个可以再讨论。图里我让"仅本次会话"是默认亮的（因为临时加规则大概率是临时用），但如果你的直觉相反、更常是"以后也用"，我改成默认"保存到主机"</li>
+      <li><strong>每行左侧 toggle</strong>：禁用后规则保留在配置里但不建立 tunnel。灰掉 + 虚线边一眼能分辨</li>
+      <li><strong>SESSION 徽章</strong>：本次会话临时加的规则会带这个紫色小标记，跟"保存到主机"的规则视觉区分</li>
+      <li><strong>断连时的行为</strong>：SESSION 的规则会一起消失；持久化的规则（含被禁用的）保留在 hosts.db 里，下次连接依然可用</li>
+      <li><strong>toggle 生效时机</strong>：连接期间点 toggle 立即起/停对应 tunnel（本地 socket 关闭再重开）· 未连接时点 toggle 只是改配置</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

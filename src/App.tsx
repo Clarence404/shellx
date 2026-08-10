@@ -18,8 +18,13 @@ import { useFilesStore } from "./state/files";
 import { SYSTEM_FONT_MAP } from "./types/settings";
 import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
-import { getHostPassword } from "./ipc/hosts";
+import { getHostPassword, getHostPassphrase, setHostPassphrase } from "./ipc/hosts";
 import { onConnectionClosed } from "./ipc/events";
+import { onHostkeyChallenge } from "./ipc/hostkeys";
+import { useChallenges } from "./state/challenges";
+import { HostKeyDialog } from "./components/HostKeyDialog";
+import { PassphraseDialog } from "./components/PassphraseDialog";
+import { AuthFailedDialog } from "./components/AuthFailedDialog";
 import { installSessionStream } from "./state/sessionStream";
 import { onTransferStarted, onTransferProgress, onTransferDone, onTransferState } from "./ipc/transfers";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
@@ -38,20 +43,19 @@ export function App() {
   const setActivity = useSessions((s) => s.setActivity);
   const railView = useSessions((s) => s.railView);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
-  // First host-id currently mid-connect. Drives the Connecting panel that
-  // fills the main pane while the SSH handshake is in flight and there's
-  // no active session yet (the very-first-connect flow). If more than one
-  // handshake is running we just surface the first — the tab bar / rail
-  // pulse still communicates the rest.
+  // Which host the user most recently clicked to connect. Used to surface
+  // ConnectingPanel even when another session is already active — clicking
+  // an unconnected host deselects the current session and shows this panel.
+  const [pendingConnectHostId, setPendingConnectHostId] = useState<string | null>(null);
+  // Fallback: first host-id currently mid-connect (for the zero-session case
+  // where pendingConnectHostId wasn't set, e.g. initial app launch).
   const connectingHostId = useSessions((s) => Object.keys(s.connecting)[0] ?? null);
-  // Look up the label for the connecting host from the saved-hosts store.
-  // Falls back to the raw id (a UUID) — ugly but non-blank if the host was
-  // somehow removed mid-connect. Subscribing to hosts here so a rename
-  // during handshake re-renders the panel.
+  // Effective connecting host for label + ConnectingPanel display.
+  const displayConnectingHostId = pendingConnectHostId ?? connectingHostId;
   const connectingHostLabel = useHostsStore((s) => {
-    if (!connectingHostId) return "";
-    const h = s.hosts.find((x) => x.id === connectingHostId);
-    return h?.label ?? h?.host ?? connectingHostId;
+    if (!displayConnectingHostId) return "";
+    const h = s.hosts.find((x) => x.id === displayConnectingHostId);
+    return h?.label ?? h?.host ?? displayConnectingHostId;
   });
 
   const loadHosts = useHostsStore((s) => s.load);
@@ -71,6 +75,12 @@ export function App() {
   // native positioning (WebView2 opens it at the top-left of the app
   // window on Windows, floating disconnected from shellx's chrome).
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [passphraseReq, setPassphraseReq] = useState<{
+    host: HostInfo;
+    attempt: number;
+    error: string | null;
+  } | null>(null);
+  const [authFailed, setAuthFailed] = useState<{ host: HostInfo; message: string } | null>(null);
 
   useEffect(() => { void loadHosts(); }, [loadHosts]);
 
@@ -201,6 +211,18 @@ export function App() {
     };
   }, [markSessionClosed, removeSession]);
 
+  // Wire the backend's hostkey:challenge event into the challenges store so the
+  // HostKeyDialog can prompt the user to accept or reject server host keys.
+  useEffect(() => {
+    let cancelled = false;
+    let un: (() => void) | undefined;
+    onHostkeyChallenge((c) => useChallenges.getState().push(c)).then((u) => {
+      if (cancelled) { u(); return; }
+      un = u;
+    });
+    return () => { cancelled = true; un?.(); };
+  }, []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
@@ -263,6 +285,54 @@ export function App() {
     },
   });
 
+  async function attemptConnect(
+    host: HostInfo,
+    opts: { passphrase?: string; rememberPassphrase?: boolean }
+  ) {
+    const st = useSessions.getState();
+    setPendingConnectHostId(host.id);
+    st.beginConnecting(host.id);
+    try {
+      const info = await openConnection({
+        host: host.host, port: host.port, username: host.username,
+        password: "",
+        label: host.label, host_id: host.id,
+        auth_method: "publickey", key_path: host.key_path ?? undefined,
+        passphrase: opts.passphrase,
+      });
+      if (opts.passphrase && opts.rememberPassphrase) {
+        void setHostPassphrase(host.id, opts.passphrase);
+      }
+      setPassphraseReq(null);
+      setPendingConnectHostId(null);
+      addSession(info);
+    } catch (e) {
+      useSessions.getState().endConnecting(host.id);
+      setPendingConnectHostId(null);
+      const msg = String(e);
+      if (msg.includes("passphrase-needed")) {
+        setPassphraseReq((prev) => {
+          const nextAttempt = (prev?.attempt ?? 0) + 1;
+          if (nextAttempt > 3) {
+            setAuthFailed({ host, message: "passphrase 三次输入错误" });
+            return null;
+          }
+          return {
+            host,
+            attempt: nextAttempt,
+            error: prev ? "passphrase 不正确，请重新输入" : null,
+          };
+        });
+      } else if (msg.includes("key-rejected")) {
+        setAuthFailed({ host, message: msg });
+      } else if (msg.includes("hostkey-declined")) {
+        // user declined fingerprint dialog — silent
+      } else {
+        setErrorMsg(`Connection failed: ${e}`);
+      }
+    }
+  }
+
   async function handleConnectSavedHost(host: HostInfo, forceNew: boolean = false) {
     // Ignore concurrent in-flight handshakes for the same host — two
     // simultaneous `open_connection` calls would both succeed but only
@@ -275,7 +345,8 @@ export function App() {
     // sees a clean slate.
     const st = useSessions.getState();
     if (st.connecting[host.id]) {
-      console.warn("[handleConnectSavedHost] already connecting to", host.id, host.label);
+      // Already in-flight — surface the ConnectingPanel for this host.
+      setPendingConnectHostId(host.id);
       return;
     }
 
@@ -297,6 +368,13 @@ export function App() {
       }
     }
 
+    if (host.auth_method === "publickey") {
+      const storedPassphrase = await getHostPassphrase(host.id);
+      void attemptConnect(host, { passphrase: storedPassphrase ?? undefined, rememberPassphrase: false });
+      return;
+    }
+
+    // Password auth (original path)
     // Try to fetch password from keychain; if missing, prompt via ConnectDialog
     const password = await getHostPassword(host.id);
     if (!password) {
@@ -304,6 +382,7 @@ export function App() {
       setDialog({ mode: "edit", initial: host });
       return;
     }
+    setPendingConnectHostId(host.id);
     st.beginConnecting(host.id);
     try {
       const info = await openConnection({
@@ -312,9 +391,11 @@ export function App() {
         label: host.label,
         host_id: host.id,
       });
-      addSession(info);  // clears the connecting flag as part of the same set
+      setPendingConnectHostId(null);
+      addSession(info);
     } catch (e) {
       useSessions.getState().endConnecting(host.id);
+      setPendingConnectHostId(null);
       setErrorMsg(`Connection failed: ${e}`);
     }
   }
@@ -347,7 +428,7 @@ export function App() {
             while the Settings pane is being viewed. */}
         {activeId && (
           <div style={{
-            display: railView === "hosts" ? "flex" : "none",
+            display: (railView === "hosts" && !pendingConnectHostId) ? "flex" : "none",
             flexDirection: "column", height: "100%", minHeight: 0,
           }}>
             <ActivityToolbar
@@ -387,20 +468,23 @@ export function App() {
           </div>
         )}
 
-        {railView === "hosts" && !activeId && connectingHostId && (
-          // First-connect from the Hosts sidebar: no session yet, but a
-          // handshake is in flight. Show the shared ConnectingPanel here
-          // instead of EmptyState so the user sees an unmistakable signal
-          // while the SSH negotiation runs. Cancel calls endConnecting;
-          // the underlying openConnection can't be aborted mid-flight so
-          // if it happens to succeed anyway, the session still lands
-          // (addSession fires and swaps this panel out for the terminal).
+        {railView === "hosts" && displayConnectingHostId && (
+          // ConnectingPanel fills the main pane whenever a handshake is in
+          // flight. Sessions div above stays mounted (display:none) so xterm
+          // instances are never destroyed across tab switches. Cancel calls
+          // endConnecting; if the in-flight openConnection succeeds anyway the
+          // session still lands.
           <ConnectingPanel
             hostLabel={connectingHostLabel}
-            onCancel={() => useSessions.getState().endConnecting(connectingHostId)}
+            onCancel={() => {
+              if (displayConnectingHostId) {
+                useSessions.getState().endConnecting(displayConnectingHostId);
+              }
+              setPendingConnectHostId(null);
+            }}
           />
         )}
-        {railView === "hosts" && !activeId && !connectingHostId && (
+        {railView === "hosts" && !activeId && !displayConnectingHostId && (
           <EmptyState onNewConnection={() => setDialog({ mode: "create" })} />
         )}
         {railView === "files" && (
@@ -428,6 +512,31 @@ export function App() {
         onConnect={(host) => void handleConnectSavedHost(host)}
       />
       <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />
+      <HostKeyDialog />
+      {passphraseReq && (
+        <PassphraseDialog
+          open
+          keyName={(passphraseReq.host.key_path ?? "").split(/[/\\]/).pop() ?? ""}
+          attempt={passphraseReq.attempt}
+          error={passphraseReq.error}
+          onSubmit={(pp, remember) =>
+            void attemptConnect(passphraseReq.host, { passphrase: pp, rememberPassphrase: remember })
+          }
+          onCancel={() => {
+            useSessions.getState().endConnecting(passphraseReq.host.id);
+            setPassphraseReq(null);
+          }}
+        />
+      )}
+      {authFailed && (
+        <AuthFailedDialog
+          message={authFailed.message}
+          onUsePassword={() => { setAuthFailed(null); setDialog({ mode: "edit", initial: authFailed.host }); }}
+          onPickAnotherKey={() => { setAuthFailed(null); setDialog({ mode: "edit", initial: authFailed.host }); }}
+          onRetry={() => { const h = authFailed.host; setAuthFailed(null); void attemptConnect(h, {}); }}
+          onClose={() => setAuthFailed(null)}
+        />
+      )}
     </>
   );
 }

@@ -3,7 +3,9 @@
 
 pub mod config;
 pub mod events;
+pub mod hostkeys;
 pub mod hosts;
+pub mod keys;
 pub mod local;
 pub mod settings;
 pub mod sftp;
@@ -15,6 +17,7 @@ use crate::session::manager::SessionManager;
 use crate::session::{ConnectionInfo, SessionId};
 use events::{ClosedEvent, DataEvent, EV_CLOSED, EV_DATA};
 use serde::Deserialize;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
 #[derive(Deserialize)]
@@ -25,6 +28,9 @@ pub struct OpenSshArgs {
     pub password: String,
     pub label: String,
     pub host_id: Option<uuid::Uuid>,
+    pub auth_method: Option<String>,   // None|"password" → password; "publickey" → key
+    pub key_path: Option<String>,
+    pub passphrase: Option<String>,
 }
 
 /// Opens an SSH connection and eagerly opens its shell channel (matching
@@ -39,12 +45,23 @@ pub async fn open_connection(
     mgr: State<'_, SessionManager>,
     host_store: State<'_, crate::store::HostStore>,
 ) -> Result<ConnectionInfo> {
-    let auth = AuthConfig {
-        username: args.username,
-        method: AuthMethod::Password(args.password),
+    let auth = match args.auth_method.as_deref() {
+        Some("publickey") => {
+            let path = args.key_path.clone()
+                .ok_or_else(|| crate::error::Error::Protocol("publickey auth requires key_path".into()))?;
+            AuthConfig {
+                username: args.username.clone(),
+                method: AuthMethod::Key { path, passphrase: args.passphrase.clone() },
+            }
+        }
+        _ => AuthConfig {
+            username: args.username.clone(),
+            method: AuthMethod::Password(args.password.clone()),
+        },
     };
+    let policy = Arc::new(hostkeys::TofuPolicy { app: app.clone() });
     let info = mgr
-        .open_connection(&args.host, args.port, auth, args.label, args.host_id)
+        .open_connection(&args.host, args.port, auth, args.label, args.host_id, policy)
         .await?;
     if let Err(e) = mgr.open_shell(info.id).await {
         // open_connection already parked a LiveConnection (with its

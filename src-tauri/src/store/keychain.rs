@@ -55,6 +55,47 @@ impl KeychainStore {
             Err(e) => Err(Error::Protocol(format!("keychain delete: {e}"))),
         }
     }
+
+    pub fn set_passphrase(&self, host_id: Uuid, passphrase: &str) -> Result<()> {
+        if !self.available {
+            return Err(Error::Protocol("keychain unavailable on this system".into()));
+        }
+        let entry = Entry::new(SERVICE, &passphrase_account(host_id))
+            .map_err(|e| Error::Protocol(format!("keychain entry: {e}")))?;
+        entry.set_password(passphrase)
+            .map_err(|e| Error::Protocol(format!("keychain set: {e}")))?;
+        Ok(())
+    }
+
+    pub fn get_passphrase(&self, host_id: Uuid) -> Result<Option<String>> {
+        if !self.available {
+            return Ok(None);
+        }
+        let entry = Entry::new(SERVICE, &passphrase_account(host_id))
+            .map_err(|e| Error::Protocol(format!("keychain entry: {e}")))?;
+        match entry.get_password() {
+            Ok(pp) => Ok(Some(pp)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(Error::Protocol(format!("keychain get: {e}"))),
+        }
+    }
+
+    pub fn delete_passphrase(&self, host_id: Uuid) -> Result<()> {
+        if !self.available {
+            return Ok(());
+        }
+        let entry = Entry::new(SERVICE, &passphrase_account(host_id))
+            .map_err(|e| Error::Protocol(format!("keychain entry: {e}")))?;
+        match entry.delete_credential() {
+            Ok(()) => Ok(()),
+            Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(Error::Protocol(format!("keychain delete: {e}"))),
+        }
+    }
+}
+
+fn passphrase_account(host_id: Uuid) -> String {
+    format!("passphrase:{host_id}")
 }
 
 fn probe() -> bool {
@@ -107,5 +148,22 @@ mod tests {
         // Not previously set — should still return Ok
         k.delete_password(id).unwrap();
         k.delete_password(id).unwrap();
+    }
+
+    #[test]
+    fn passphrase_roundtrip_or_unavailable() {
+        let k = KeychainStore::open();
+        let id = Uuid::new_v4();
+        if k.is_available() {
+            k.set_passphrase(id, "pp").unwrap();
+            assert_eq!(k.get_passphrase(id).unwrap().as_deref(), Some("pp"));
+            // must NOT collide with password entry for the same id
+            assert!(k.get_password(id).unwrap().is_none());
+            k.delete_passphrase(id).unwrap();
+        } else {
+            // unavailable: all ops still succeed/return None
+            assert!(k.get_passphrase(id).unwrap().is_none());
+            k.delete_passphrase(id).unwrap();
+        }
     }
 }

@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>shellx v0.8 · Dev 用户 Tunnels 全流程</title>
+<style>
+  :root {
+    --bg: #1e1c24;
+    --chrome: #1a1a1c;
+    --panel-1: #232326;
+    --panel-2: #252529;
+    --panel-3: #2c2c30;
+    --border: #2c2c30;
+    --border-hi: #3a373f;
+    --text-1: #d4d0dc;
+    --text-2: #a0a0a5;
+    --text-3: #7a7a7f;
+    --text-muted: #8b869a;
+    --accent: #7c5cff;
+    --accent-light: #a89bff;
+    --accent-fade: #3a2f5f;
+    --success: #7c9c80;
+    --success-fade: #1a4a2a;
+    --warn: #f2c8a2;
+    --warn-fade: #3a2f1f;
+    --error: #e24b4a;
+    --error-fade: #3a1a1a;
+    --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, monospace;
+    --font-ui: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 60px;
+    background: #F5F3EE;
+    font-family: var(--font-ui);
+    color: #2C2C2A;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1240px; margin: 0 auto; }
+  h1 { color: #26215C; font-size: 22px; margin: 0 0 6px; }
+  .lede { color: #5F5E5A; font-size: 13px; margin-bottom: 32px; }
+
+  .phase {
+    margin-top: 36px;
+    padding: 22px 24px;
+    background: white;
+    border: 1px solid #E5E1D5; border-radius: 10px;
+  }
+  .phase-title {
+    font-size: 15px; font-weight: 700; color: #26215C; margin: 0 0 6px;
+  }
+  .phase-sub {
+    font-size: 12px; color: #5F5E5A; margin-bottom: 22px;
+  }
+
+  .steps {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px;
+  }
+  .step {
+    background: #FAF9F5;
+    border: 1px solid #E5E1D5;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .step-hd {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: white;
+    font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .step-title {
+    font-size: 13px; font-weight: 600; color: #26215C;
+  }
+  .step-body {
+    font-size: 11.5px; color: #5F5E5A; line-height: 1.65;
+    margin-top: 8px;
+  }
+  .step-body b { color: #26215C; }
+  .step-body code {
+    font-family: var(--font-mono); font-size: 10.5px;
+    background: #EEEDFE; padding: 1px 6px; border-radius: 3px; color: #26215C;
+  }
+
+  /* Mini shellx frame */
+  .win {
+    background: var(--chrome);
+    border: 1px solid var(--border);
+    border-radius: 6px; overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .win-body { display: flex; }
+  .rail {
+    width: 42px; background: var(--chrome);
+    border-right: 0.5px solid var(--border);
+    padding: 8px 0; display: flex; flex-direction: column; gap: 3px; align-items: center;
+    flex-shrink: 0;
+  }
+  .rail-item {
+    width: 30px; padding: 4px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    border-radius: 4px;
+    color: var(--text-3); font-size: 7px;
+    position: relative;
+  }
+  .rail-item .ico { font-size: 13px; line-height: 1; }
+  .rail-item.active { background: var(--accent); color: white; }
+  .rail-item .badge {
+    position: absolute; top: -1px; right: -1px;
+    background: var(--success); color: white;
+    font-size: 7px; font-weight: 700;
+    border-radius: 8px; padding: 1px 3px;
+    min-width: 12px; text-align: center;
+    border: 1px solid var(--chrome);
+    line-height: 1;
+  }
+  .main { flex: 1; min-width: 0; background: var(--bg); min-height: 190px; }
+
+  .titlebar {
+    height: 22px; background: var(--panel-1);
+    display: flex; align-items: center; padding: 0 8px; gap: 4px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .logo { color: var(--accent); font-family: var(--font-mono); font-weight: 700; font-size: 10px; }
+  .tab {
+    height: 16px; padding: 0 8px 0 6px; border-radius: 3px 3px 0 0;
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: var(--font-mono); font-size: 9px;
+    color: var(--text-3); background: transparent;
+  }
+  .tab.active { background: var(--panel-2); color: var(--text-1); }
+  .tab .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--success); }
+  .tab .dot.dim { background: var(--text-3); }
+  .tab .plus { color: var(--text-3); font-size: 12px; margin-left: 4px; }
+
+  /* Drawer (Hosts sidebar) */
+  .drawer {
+    width: 130px; background: var(--panel-1);
+    border-right: 0.5px solid var(--border);
+    padding: 8px; font-size: 9.5px; color: var(--text-2);
+    flex-shrink: 0;
+  }
+  .drawer-h {
+    font-size: 8px; font-weight: 700; letter-spacing: 0.6px; color: var(--text-3);
+    padding: 3px 4px 6px; text-transform: uppercase;
+  }
+  .drawer-row {
+    padding: 4px 6px; border-radius: 3px;
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono);
+    margin-bottom: 2px;
+  }
+  .drawer-row.active { background: var(--accent-fade); color: var(--accent-light); }
+  .drawer-row .d { width: 5px; height: 5px; border-radius: 50%; background: var(--text-3); }
+  .drawer-row .d.on { background: var(--success); }
+
+  /* Main area content */
+  .main-inner { padding: 10px 12px; }
+  .empty-hero {
+    padding: 20px; text-align: center;
+    color: var(--text-3); font-size: 10px;
+  }
+  .empty-hero .word { font-size: 16px; color: var(--accent); font-weight: 700; margin-bottom: 4px; }
+  .empty-hero .cta {
+    display: inline-block; margin-top: 12px; padding: 6px 12px;
+    background: var(--accent); color: white; border-radius: 4px;
+    font-size: 9px; font-weight: 600;
+  }
+
+  /* Conn strip */
+  .conn-strip {
+    height: 20px; padding: 0 10px;
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg); border-bottom: 0.5px solid var(--border);
+    font-family: var(--font-mono); font-size: 9px; color: var(--text-1);
+  }
+  .conn-strip .d { width: 5px; height: 5px; border-radius: 50%; background: var(--success); }
+  .conn-strip .env {
+    font-family: var(--font-ui);
+    font-size: 7.5px; font-weight: 700; letter-spacing: 0.5px;
+    padding: 1px 5px; border-radius: 3px;
+    background: var(--success-fade); border: 0.5px solid var(--success); color: #95b298;
+  }
+
+  /* Tunnel rows */
+  .tuns-h {
+    font-size: 9px; font-weight: 700; color: var(--accent-light); letter-spacing: 0.4px;
+    padding: 8px 10px 4px;
+    display: flex; align-items: center;
+  }
+  .tuns-h .add {
+    margin-left: auto; padding: 2px 6px;
+    background: var(--accent-fade); border-radius: 3px; color: var(--accent-light);
+    font-size: 8px;
+  }
+  .tun {
+    margin: 0 10px 4px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: var(--panel-2);
+    border: 0.5px solid var(--border);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tun.pending {
+    border-color: var(--accent-fade);
+    background: linear-gradient(90deg, var(--panel-2) 0%, var(--panel-2) 40%, var(--accent-fade) 50%, var(--panel-2) 60%, var(--panel-2) 100%);
+    background-size: 200% 100%;
+  }
+  .tun .tdot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+  .tun .tdot.pending { background: var(--accent-light); }
+  .tun .tdot.warn { background: var(--warn); }
+  .tun .tdot.off { background: var(--text-3); }
+  .tun .tbody { flex: 1; min-width: 0; }
+  .tun .ttitle { font-size: 9.5px; font-weight: 600; color: var(--text-1); }
+  .tun .tdetail { font-size: 8.5px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 1px; }
+  .tun .tbtn {
+    padding: 2px 6px; border-radius: 3px;
+    font-size: 8px; color: var(--text-1);
+    background: var(--panel-3); border: 0.5px solid var(--border-hi);
+  }
+  .tun.disabled { opacity: 0.4; border-style: dashed; background: transparent; }
+  .tun .off-tag {
+    font-size: 7px; color: var(--text-3); letter-spacing: 0.4px; margin-left: 4px;
+    text-transform: uppercase; font-weight: 600;
+  }
+  .tun .session-chip {
+    display: inline-flex; align-items: center;
+    font-size: 6.5px; font-weight: 700; letter-spacing: 0.3px;
+    padding: 1px 4px; border-radius: 2px;
+    background: var(--accent-fade); border: 0.3px solid var(--accent);
+    color: var(--accent-light); margin-left: 4px;
+  }
+
+  /* Form / dialog */
+  .modal {
+    background: var(--chrome); border: 1px solid var(--border-hi); border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    padding: 12px 14px; margin: 8px;
+    color: var(--text-1); font-size: 10px;
+  }
+  .modal-h {
+    font-size: 11px; font-weight: 700; margin-bottom: 8px; color: var(--text-1);
+  }
+  .form-field { margin-bottom: 8px; }
+  .form-label {
+    font-size: 8px; font-weight: 600; color: var(--text-3); letter-spacing: 0.4px;
+    text-transform: uppercase; margin-bottom: 3px;
+  }
+  .form-input {
+    height: 20px; padding: 0 6px;
+    background: var(--panel-2); border: 0.5px solid var(--border-hi); border-radius: 3px;
+    font-family: var(--font-mono); font-size: 9.5px;
+    color: var(--text-1); display: flex; align-items: center;
+  }
+  .form-row { display: flex; gap: 4px; }
+  .segmented {
+    display: flex; background: var(--panel-2); border-radius: 4px;
+    padding: 2px; border: 0.5px solid var(--border-hi);
+  }
+  .seg {
+    flex: 1; padding: 4px 6px; border-radius: 3px;
+    font-size: 9px; text-align: center; color: var(--text-3);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .seg.on { background: var(--accent); color: white; font-weight: 600; }
+  .seg .sub { font-size: 7px; opacity: 0.8; margin-top: 1px; font-weight: 400; }
+  .seg.on .sub { color: rgba(255,255,255,0.85); }
+  .rule-row {
+    padding: 4px 6px; border-radius: 3px; background: var(--panel-2);
+    border: 0.5px solid var(--border-hi); margin-bottom: 3px;
+    font-family: var(--font-mono); font-size: 8.5px; color: var(--text-1);
+    display: flex; align-items: center;
+  }
+  .rule-row .rule-info { flex: 1; }
+  .rule-row .rule-info b { font-family: var(--font-ui); font-size: 8.5px; }
+  .rule-row .rm { color: var(--text-3); font-size: 8px; }
+  .modal .row-btns {
+    display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px;
+    padding-top: 8px; border-top: 0.5px solid var(--border);
+  }
+  .btn-primary {
+    padding: 4px 12px; border-radius: 3px;
+    background: var(--accent); color: white; font-size: 9px; font-weight: 600;
+  }
+  .btn-cancel {
+    padding: 4px 12px; border-radius: 3px;
+    background: transparent; border: 0.5px solid var(--border-hi);
+    color: var(--text-2); font-size: 9px;
+  }
+
+  /* Cursor / animation */
+  .cursor-svg {
+    position: absolute;
+    width: 16px; height: 22px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+  }
+
+  /* Layout for step content */
+  .step-media {
+    position: relative;
+    margin-bottom: 8px;
+  }
+
+  .caption-arrow {
+    text-align: center; color: var(--accent); font-size: 22px;
+    line-height: 1; margin: -6px 0 6px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>shellx v0.8 · Dev 用户 Tunnels 全流程</h1>
+  <div class="lede">按你团队的用法（dev · 无 shell 权限 · 只用端口转发访问 PG/Redis/MQ）画出的完整操作路径。方案锁 C（混合），host "连接模式"默认 "仅 Tunnels"</div>
+
+  <!-- ========== 一次性配置 ========== -->
+  <div class="phase">
+    <div class="phase-title">阶段一 · 一次性配置（每台新主机做一次）</div>
+    <div class="phase-sub">shellx 首次使用，或团队来了个新 bastion，需要走这四步存下来</div>
+
+    <div class="steps">
+
+      <!-- STEP 1 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">1</span>
+          <span class="step-title">打开 shellx · 点右上 + 号</span>
+        </div>
+        <div class="step-media">
+          <div class="win">
+            <div class="titlebar">
+              <span class="logo">&gt;_</span>
+              <span class="plus" style="color:#a89bff;font-weight:700">+</span>
+              <span style="margin-left:auto;color:var(--text-3);font-size:9px">− □ ×</span>
+            </div>
+            <div class="win-body">
+              <div class="rail">
+                <div class="rail-item active"><div class="ico">🖥</div><div>Hosts</div></div>
+                <div class="rail-item"><div class="ico">📁</div><div>Files</div></div>
+                <div class="rail-item"><div class="ico">📡</div><div>Tunn</div></div>
+                <div class="rail-item"><div class="ico">🔌</div><div>Ser…</div></div>
+                <div class="rail-item"><div class="ico">⚙</div><div>Set</div></div>
+              </div>
+              <div class="main">
+                <div class="empty-hero" style="padding:36px 20px 30px">
+                  <div class="word">shellx</div>
+                  <div>轻巧的终端 · 文件传输客户端</div>
+                  <div class="cta">＋ New connection</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          空 shellx。点 titlebar 右上角的 <b>+</b> → 弹出快速菜单 → 选 <b>New SSH connection…</b>
+        </div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">2</span>
+          <span class="step-title">填主机信息 + 密钥文件</span>
+        </div>
+        <div class="step-media">
+          <div class="modal" style="margin:0">
+            <div class="modal-h">新建主机</div>
+            <div class="form-field">
+              <div class="form-label">标签</div>
+              <div class="form-input">test-bastion</div>
+            </div>
+            <div class="form-field">
+              <div class="form-label">主机 · 端口 · 用户</div>
+              <div class="form-row">
+                <div class="form-input" style="flex:1">test-bastion.company.com</div>
+                <div class="form-input" style="width:36px;justify-content:center">22</div>
+                <div class="form-input" style="width:64px">chen.han</div>
+              </div>
+            </div>
+            <div class="form-field">
+              <div class="form-label">认证 · 密钥</div>
+              <div class="form-row">
+                <div class="form-input" style="flex:1">~/.ssh/id_ed25519</div>
+                <div class="btn-cancel">选择…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          填标签、主机地址、端口、用户名，选密钥文件（<code>~/.ssh/id_ed25519</code>）。密钥文件的 passphrase 会存 OS keychain，之后连都不用再输
+        </div>
+      </div>
+
+      <!-- STEP 3 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">3</span>
+          <span class="step-title">选连接模式 · 仅 Tunnels</span>
+        </div>
+        <div class="step-media">
+          <div class="modal" style="margin:0">
+            <div class="modal-h">连接模式</div>
+            <div class="segmented">
+              <div class="seg"><span>Term+Tun</span><span class="sub">默认</span></div>
+              <div class="seg on"><span>仅 Tunnels</span><span class="sub">你选这个</span></div>
+              <div class="seg"><span>仅 Terminal</span><span class="sub">罕见</span></div>
+            </div>
+            <div class="form-field" style="margin-top:10px">
+              <div class="form-label">环境</div>
+              <div class="segmented" style="padding:2px">
+                <div class="seg on" style="padding:3px 6px">TEST</div>
+                <div class="seg" style="padding:3px 6px">STAGING</div>
+                <div class="seg" style="padding:3px 6px">PROD</div>
+                <div class="seg" style="padding:3px 6px">无</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          你们 dev 场景：跳板机常用 <code>ForceCommand</code> 只允许 <code>-L</code>，选 <b>仅 Tunnels</b> —— shellx 建立 SSH transport 就行，不请求 PTY、不 exec shell。附带标 <b>TEST</b> 环境
+        </div>
+      </div>
+
+      <!-- STEP 4 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">4</span>
+          <span class="step-title">加 3 条端口转发规则</span>
+        </div>
+        <div class="step-media">
+          <div class="modal" style="margin:0">
+            <div class="modal-h">端口转发规则 · 3 条 <span style="float:right;color:var(--accent-light);font-size:8px;font-weight:600">+ 添加</span></div>
+            <div class="rule-row"><div class="rule-info"><b style="color:var(--text-1)">PG (test)</b><br>local 15432 → test-pg.internal:5432</div><span class="rm">编辑 · 删除</span></div>
+            <div class="rule-row"><div class="rule-info"><b style="color:var(--text-1)">Redis (test)</b><br>local 16379 → test-redis.internal:6379</div><span class="rm">编辑 · 删除</span></div>
+            <div class="rule-row"><div class="rule-info"><b style="color:var(--text-1)">RabbitMQ Web · HTTP</b><br>local 15672 → test-mq.internal:15672</div><span class="rm">编辑 · 删除</span></div>
+            <div class="row-btns">
+              <div class="btn-cancel">取消</div>
+              <div class="btn-primary">保存主机</div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          点 <b>+ 添加</b> 三次，每次填：标签、本地端口、远端 host:port。HTTP 服务（RabbitMQ 管理页那种）勾一下 "HTTP" 选项，之后 Tunnels 面板会出现"在浏览器打开"按钮。<b>保存主机</b> → 关闭对话框
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========== 日常使用 ========== -->
+  <div class="phase">
+    <div class="phase-title">阶段二 · 日常使用（每次开工做一次）</div>
+    <div class="phase-sub">替代你现在"打开记事本 → 复制 ssh 命令 → 粘贴到 CMD"的完整流程</div>
+
+    <div class="steps">
+
+      <!-- STEP 5 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">5</span>
+          <span class="step-title">切到 Tunnels rail</span>
+        </div>
+        <div class="step-media">
+          <div class="win">
+            <div class="titlebar">
+              <span class="logo">&gt;_</span>
+              <span class="plus" style="color:var(--text-3)">+</span>
+            </div>
+            <div class="win-body">
+              <div class="rail">
+                <div class="rail-item"><div class="ico">🖥</div><div>Hosts</div></div>
+                <div class="rail-item"><div class="ico">📁</div><div>Files</div></div>
+                <div class="rail-item active"><div class="ico">📡</div><div>Tunn</div></div>
+                <div class="rail-item"><div class="ico">🔌</div><div>Ser…</div></div>
+                <div class="rail-item"><div class="ico">⚙</div><div>Set</div></div>
+              </div>
+              <div class="main">
+                <div class="conn-strip">
+                  <span style="color:var(--text-2);font-family:var(--font-ui)">所有 Tunnel · 未连接</span>
+                </div>
+                <div class="tuns-h">已保存的主机 · 2</div>
+                <div class="tun" style="border-style:dashed;opacity:0.75">
+                  <span class="tdot off"></span>
+                  <div class="tbody">
+                    <div class="ttitle">test-bastion <span style="font-size:7.5px;color:#95b298;letter-spacing:0.3px;font-weight:600;background:var(--success-fade);padding:1px 4px;border-radius:2px;margin-left:4px">TEST</span></div>
+                    <div class="tdetail">3 条规则 · PG · Redis · RabbitMQ</div>
+                  </div>
+                  <div class="tbtn" style="background:var(--accent);color:white;border-color:var(--accent)">连接</div>
+                </div>
+                <div class="tun" style="border-style:dashed;opacity:0.75">
+                  <span class="tdot off"></span>
+                  <div class="tbody">
+                    <div class="ttitle">prod-bastion <span style="font-size:7.5px;color:#ff9080;letter-spacing:0.3px;font-weight:600;background:var(--error-fade);padding:1px 4px;border-radius:2px;margin-left:4px">PROD</span></div>
+                    <div class="tdetail">3 条规则 · 上次使用 2 天前</div>
+                  </div>
+                  <div class="tbtn">连接</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          rail 里点 <b>Tunnels</b> → 全局 tunnels 视图。列表显示你保存的所有 host 及各自规则数。<b>test-bastion</b> 右边的"连接"按钮是紫色主按钮，一眼看到主要动作
+        </div>
+      </div>
+
+      <!-- STEP 6 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">6</span>
+          <span class="step-title">点"连接" · 观察握手 + tunnel 陆续起</span>
+        </div>
+        <div class="step-media">
+          <div class="win">
+            <div class="titlebar">
+              <span class="logo">&gt;_</span>
+              <div class="tab active"><span class="dot" style="background:var(--accent-light);"></span>test-bastion · connecting</div>
+            </div>
+            <div class="win-body">
+              <div class="rail">
+                <div class="rail-item"><div class="ico">🖥</div><div>Hosts</div></div>
+                <div class="rail-item"><div class="ico">📁</div><div>Files</div></div>
+                <div class="rail-item active"><div class="ico">📡</div><div>Tunn</div><span class="badge" style="background:var(--accent-light)">…</span></div>
+                <div class="rail-item"><div class="ico">🔌</div><div>Ser…</div></div>
+                <div class="rail-item"><div class="ico">⚙</div><div>Set</div></div>
+              </div>
+              <div class="main">
+                <div class="conn-strip">
+                  <span class="d" style="background:var(--accent-light)"></span>
+                  <span>正在连接 test-bastion…</span>
+                  <span class="env">TEST</span>
+                </div>
+                <div class="tuns-h">端口转发 · 3 条 · 建立中</div>
+                <div class="tun">
+                  <span class="tdot"></span>
+                  <div class="tbody">
+                    <div class="ttitle">PG (test) · <span style="color:var(--success);font-size:8px">已就绪</span></div>
+                    <div class="tdetail">localhost:15432 → test-pg.internal:5432</div>
+                  </div>
+                </div>
+                <div class="tun pending">
+                  <span class="tdot pending"></span>
+                  <div class="tbody">
+                    <div class="ttitle">Redis (test) · <span style="color:var(--accent-light);font-size:8px">正在建立…</span></div>
+                    <div class="tdetail">localhost:16379 → test-redis.internal:6379</div>
+                  </div>
+                </div>
+                <div class="tun" style="opacity:0.6">
+                  <span class="tdot off"></span>
+                  <div class="tbody">
+                    <div class="ttitle">RabbitMQ · <span style="color:var(--text-3);font-size:8px">等待中</span></div>
+                    <div class="tdetail">localhost:15672 → test-mq.internal:15672</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          点"连接"→ tab bar 出现 "test-bastion · connecting" tab（脉冲状态点）· 三条 tunnel 从上往下依次点亮。<b>整个过程 1-2 秒</b>（跟命令行 <code>ssh -N -L … user@host</code> 一样快）
+        </div>
+      </div>
+
+      <!-- STEP 7 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">7</span>
+          <span class="step-title">全部就绪 · 直接用 pgAdmin/RedisInsight 等</span>
+        </div>
+        <div class="step-media">
+          <div class="win">
+            <div class="titlebar">
+              <span class="logo">&gt;_</span>
+              <div class="tab active"><span class="dot"></span>test-bastion</div>
+            </div>
+            <div class="win-body">
+              <div class="rail">
+                <div class="rail-item"><div class="ico">🖥</div><div>Hosts</div></div>
+                <div class="rail-item"><div class="ico">📁</div><div>Files</div></div>
+                <div class="rail-item active"><div class="ico">📡</div><div>Tunn</div><span class="badge">3</span></div>
+                <div class="rail-item"><div class="ico">🔌</div><div>Ser…</div></div>
+                <div class="rail-item"><div class="ico">⚙</div><div>Set</div></div>
+              </div>
+              <div class="main">
+                <div class="conn-strip">
+                  <span class="d"></span>
+                  <span>test-bastion · 3 tunnel 全部活跃</span>
+                  <span class="env">TEST</span>
+                </div>
+                <div class="tun" style="margin-top:8px">
+                  <span class="tdot"></span>
+                  <div class="tbody">
+                    <div class="ttitle">PG (test)</div>
+                    <div class="tdetail">localhost:15432 → test-pg.internal:5432</div>
+                  </div>
+                  <div class="tbtn">复制</div>
+                  <div class="tbtn">连接串</div>
+                </div>
+                <div class="tun">
+                  <span class="tdot"></span>
+                  <div class="tbody">
+                    <div class="ttitle">Redis (test)</div>
+                    <div class="tdetail">localhost:16379 → test-redis.internal:6379</div>
+                  </div>
+                  <div class="tbtn">复制</div>
+                </div>
+                <div class="tun">
+                  <span class="tdot"></span>
+                  <div class="tbody">
+                    <div class="ttitle">RabbitMQ · HTTP</div>
+                    <div class="tdetail">localhost:15672 → test-mq.internal:15672</div>
+                  </div>
+                  <div class="tbtn" style="background:var(--accent-fade);border-color:var(--accent);color:var(--accent-light)">🌐 打开</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          三个绿点全亮 · Tunnels rail 图标显示"3"徽章。切到 pgAdmin，连 <code>localhost:15432</code> 立刻能用。<b>整个过程你没打开过一次命令行</b>
+        </div>
+      </div>
+
+      <!-- STEP 8 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">8</span>
+          <span class="step-title">HTTP tunnel 一键打开浏览器</span>
+        </div>
+        <div class="step-media">
+          <div class="win">
+            <div class="titlebar" style="background:var(--panel-2)">
+              <span class="logo" style="color:var(--text-2)">Chrome</span>
+              <span style="color:var(--text-2);font-size:9px;font-family:var(--font-mono)">localhost:15672/#/</span>
+            </div>
+            <div style="height:170px;background:#F5F0E7;padding:14px;font-family:sans-serif;font-size:9px;color:#5F5E5A">
+              <div style="font-size:14px;color:#e2721a;font-weight:700;margin-bottom:6px">RabbitMQ Management</div>
+              <div style="color:#666">Overview · Connections · Channels · Exchanges · Queues …</div>
+              <div style="background:white;border:1px solid #ddd;border-radius:3px;padding:8px;margin-top:8px;font-family:var(--font-mono);font-size:8px;color:#333">
+                <b>Cluster</b> rabbit@test-mq-1<br>
+                <b>Version</b> RabbitMQ 3.12 · Erlang 26.1<br>
+                <b>Ports</b> 5672 (AMQP) · 15672 (HTTP)
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          在图 7 里点 <b>🌐 打开</b> → 系统默认浏览器打开 <code>http://localhost:15672</code> → 直接进入 RabbitMQ 管理页面。相当于替你敲了 <code>start http://localhost:15672</code> 这一步
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========== 会话中交互 ========== -->
+  <div class="phase">
+    <div class="phase-title">阶段三 · 会话中的临时操作</div>
+    <div class="phase-sub">已经连上后，一些常见的临时调整场景</div>
+
+    <div class="steps">
+
+      <!-- STEP 9 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">9</span>
+          <span class="step-title">临时加一条 tunnel（不保存）</span>
+        </div>
+        <div class="step-media">
+          <div class="win">
+            <div class="titlebar">
+              <span class="logo">&gt;_</span>
+              <div class="tab active"><span class="dot"></span>test-bastion</div>
+            </div>
+            <div class="win-body">
+              <div class="rail">
+                <div class="rail-item"><div class="ico">🖥</div><div>Hosts</div></div>
+                <div class="rail-item"><div class="ico">📁</div><div>Files</div></div>
+                <div class="rail-item active"><div class="ico">📡</div><div>Tunn</div></div>
+                <div class="rail-item"><div class="ico">🔌</div><div>Ser…</div></div>
+                <div class="rail-item"><div class="ico">⚙</div><div>Set</div></div>
+              </div>
+              <div class="main" style="position:relative">
+                <div class="conn-strip">
+                  <span class="d"></span><span>test-bastion · 3 活跃</span><span class="env">TEST</span>
+                </div>
+                <div class="tuns-h">端口转发 · 3 条 <span class="add">+ 添加</span></div>
+                <div style="opacity:0.5;padding:0 10px">
+                  <div class="tun"><span class="tdot"></span><div class="tbody"><div class="ttitle">PG (test)</div></div></div>
+                  <div class="tun"><span class="tdot"></span><div class="tbody"><div class="ttitle">Redis (test)</div></div></div>
+                </div>
+                <div class="modal" style="position:absolute;top:38px;right:8px;margin:0;width:170px">
+                  <div class="modal-h" style="font-size:9.5px">添加端口转发</div>
+                  <div class="form-field">
+                    <div class="form-label">标签</div>
+                    <div class="form-input">Grafana</div>
+                  </div>
+                  <div class="form-field">
+                    <div class="form-label">端口</div>
+                    <div class="form-row">
+                      <div class="form-input" style="flex:0 0 32px;justify-content:center">13000</div>
+                      <div class="form-input" style="flex:1">grafana:3000</div>
+                    </div>
+                  </div>
+                  <div class="form-field">
+                    <div class="form-label">保存方式</div>
+                    <div class="segmented">
+                      <div class="seg" style="padding:3px"><span style="font-size:7.5px">保存</span></div>
+                      <div class="seg on" style="padding:3px"><span style="font-size:7.5px">仅本次</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          点右上 <b>+ 添加</b> → popover 弹出 → 填 label + 端口 + 目标 → 选"仅本次会话"（默认）→ 一条带 <b>SESSION</b> 徽章的紫色 tunnel 加进列表。断开后自动消失，不污染主机配置
+        </div>
+      </div>
+
+      <!-- STEP 10 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">10</span>
+          <span class="step-title">禁用其中一条（不删）</span>
+        </div>
+        <div class="step-media">
+          <div class="win">
+            <div class="titlebar">
+              <span class="logo">&gt;_</span>
+              <div class="tab active"><span class="dot"></span>test-bastion</div>
+            </div>
+            <div class="win-body">
+              <div class="rail">
+                <div class="rail-item"><div class="ico">🖥</div><div>Hosts</div></div>
+                <div class="rail-item"><div class="ico">📁</div><div>Files</div></div>
+                <div class="rail-item active"><div class="ico">📡</div><div>Tunn</div><span class="badge">2</span></div>
+                <div class="rail-item"><div class="ico">🔌</div><div>Ser…</div></div>
+                <div class="rail-item"><div class="ico">⚙</div><div>Set</div></div>
+              </div>
+              <div class="main">
+                <div class="conn-strip">
+                  <span class="d"></span><span>test-bastion · 2 活跃 · 1 禁用</span><span class="env">TEST</span>
+                </div>
+                <div style="padding:8px 0">
+                  <div class="tun">
+                    <span style="width:20px;height:12px;border-radius:6px;background:var(--accent);flex-shrink:0;position:relative">
+                      <span style="position:absolute;top:1px;right:1px;width:10px;height:10px;border-radius:50%;background:white"></span>
+                    </span>
+                    <span class="tdot"></span>
+                    <div class="tbody"><div class="ttitle">PG (test)</div><div class="tdetail">15432 → test-pg:5432</div></div>
+                  </div>
+                  <div class="tun">
+                    <span style="width:20px;height:12px;border-radius:6px;background:var(--accent);flex-shrink:0;position:relative">
+                      <span style="position:absolute;top:1px;right:1px;width:10px;height:10px;border-radius:50%;background:white"></span>
+                    </span>
+                    <span class="tdot"></span>
+                    <div class="tbody"><div class="ttitle">Redis (test)</div><div class="tdetail">16379 → test-redis:6379</div></div>
+                  </div>
+                  <div class="tun disabled">
+                    <span style="width:20px;height:12px;border-radius:6px;background:var(--border-hi);flex-shrink:0;position:relative">
+                      <span style="position:absolute;top:1px;left:1px;width:10px;height:10px;border-radius:50%;background:white"></span>
+                    </span>
+                    <span class="tdot off"></span>
+                    <div class="tbody"><div class="ttitle">RabbitMQ<span class="off-tag">已禁用</span></div><div class="tdetail">15672 → test-mq:15672</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          每行左边小 toggle 拨到"关" → 那条 tunnel 立即停用（本地端口释放）· 行变虚线灰色 · 配置保留没删。想再用就再拨回去。徽章数从 3 变 2
+        </div>
+      </div>
+
+      <!-- STEP 11 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">11</span>
+          <span class="step-title">tunnel 断了 · 自动重连</span>
+        </div>
+        <div class="step-media">
+          <div class="win">
+            <div class="titlebar">
+              <span class="logo">&gt;_</span>
+              <div class="tab active"><span class="dot" style="background:var(--warn)"></span>test-bastion · 重连</div>
+            </div>
+            <div class="win-body">
+              <div class="rail">
+                <div class="rail-item"><div class="ico">🖥</div><div>Hosts</div></div>
+                <div class="rail-item"><div class="ico">📁</div><div>Files</div></div>
+                <div class="rail-item active"><div class="ico">📡</div><div>Tunn</div><span class="badge" style="background:var(--warn)">!</span></div>
+                <div class="rail-item"><div class="ico">🔌</div><div>Ser…</div></div>
+                <div class="rail-item"><div class="ico">⚙</div><div>Set</div></div>
+              </div>
+              <div class="main">
+                <div class="conn-strip" style="background:var(--warn-fade)">
+                  <span class="d" style="background:var(--warn)"></span>
+                  <span style="color:var(--warn)">SSH 断线 · 自动重连中…</span>
+                </div>
+                <div style="padding:8px 0">
+                  <div class="tun">
+                    <span class="tdot warn"></span>
+                    <div class="tbody"><div class="ttitle">PG (test)</div><div class="tdetail" style="color:var(--warn)">上次探活失败 · 重连中…</div></div>
+                    <div class="tbtn">立即重试</div>
+                  </div>
+                  <div class="tun">
+                    <span class="tdot warn"></span>
+                    <div class="tbody"><div class="ttitle">Redis (test)</div><div class="tdetail" style="color:var(--warn)">重连中…</div></div>
+                  </div>
+                </div>
+                <div style="padding:10px;color:var(--text-3);font-size:9px;text-align:center">shellx 已尝试 2/5 次 · 下次 3 秒后</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          WiFi 抽风 / VPN 抖动 / 服务器短暂重启 → SSH 会话断开 → tunnels 变黄 · 顶部条变警告色 · shellx 自动重连（指数退避 3s / 6s / 12s…）· 成功后 tunnel 自动恢复，你的 pgAdmin 都不用重开
+        </div>
+      </div>
+
+      <!-- STEP 12 -->
+      <div class="step">
+        <div class="step-hd">
+          <span class="step-num">12</span>
+          <span class="step-title">主动断开 · 关掉 tab</span>
+        </div>
+        <div class="step-media">
+          <div class="win">
+            <div class="titlebar">
+              <span class="logo">&gt;_</span>
+              <div class="tab active"><span class="dot"></span>test-bastion <span style="color:var(--text-3);margin-left:4px">×</span></div>
+            </div>
+            <div class="win-body">
+              <div class="rail">
+                <div class="rail-item"><div class="ico">🖥</div><div>Hosts</div></div>
+                <div class="rail-item"><div class="ico">📁</div><div>Files</div></div>
+                <div class="rail-item active"><div class="ico">📡</div><div>Tunn</div></div>
+                <div class="rail-item"><div class="ico">🔌</div><div>Ser…</div></div>
+                <div class="rail-item"><div class="ico">⚙</div><div>Set</div></div>
+              </div>
+              <div class="main">
+                <div class="conn-strip"><span class="d"></span><span>test-bastion · 3 活跃</span></div>
+                <div class="modal" style="position:relative;margin:20px 20px;padding:14px;text-align:center">
+                  <div style="color:var(--warn);font-size:22px;margin-bottom:6px">?</div>
+                  <div style="color:var(--text-1);font-size:11px;margin-bottom:4px;font-weight:600">断开 test-bastion?</div>
+                  <div style="color:var(--text-3);font-size:9px;margin-bottom:10px">3 条 tunnel 将关闭 · 用到 localhost:15432/16379/15672 的应用会掉线</div>
+                  <div class="row-btns" style="justify-content:center;border-top:none;padding-top:0">
+                    <div class="btn-cancel">取消</div>
+                    <div class="btn-primary" style="background:var(--warn);color:var(--bg)">断开</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="step-body">
+          关 tab（点 <b>×</b>）或点顶部 Disconnect → 弹确认 "3 条 tunnel 将关闭，用 localhost:15432 的应用会掉线" → 确认后立即断开、SSH 关闭、本地端口释放。<b>下次要用重新回阶段二从第 5 步开始</b>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="phase-title">总结 · 一次配置 · 天天用</div>
+    <div class="phase-sub" style="margin-bottom:0">
+      阶段一 4 步：<b>你只做一次</b>（每台新 bastion）<br>
+      阶段二 4 步：<b>每天开工的固定操作</b> —— 目前你要"打开记事本 → 找命令 → 复制 → 粘贴到 CMD → 输 passphrase"至少 5 步；shellx 后是"点 Tunnels → 点连接" 2 步。<br>
+      阶段三 4 个场景：<b>临时需求出现时</b>你比命令行多出的能力 —— 命令行下你要新开一个 SSH 或改配置重连，shellx 里直接点就完事。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

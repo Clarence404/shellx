@@ -14,6 +14,9 @@ pub struct SaveHostArgs {
     pub username: String,
     pub notes: Option<String>,
     pub password: Option<String>, // non-empty = store in keychain
+    pub auth_method: Option<String>,   // defaults to "password" when absent
+    pub key_path: Option<String>,
+    pub passphrase: Option<String>,    // store in keychain after successful insert
 }
 
 #[derive(Deserialize)]
@@ -28,6 +31,11 @@ pub struct UpdateHostArgs {
     // Three-state: absent = leave unchanged; null = delete keychain entry; string = set new
     #[serde(default, deserialize_with = "crate::store::hosts::double_option_deserialize")]
     pub password: Option<Option<String>>,
+    pub auth_method: Option<String>,
+    #[serde(default, deserialize_with = "crate::store::hosts::double_option_deserialize")]
+    pub key_path: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::store::hosts::double_option_deserialize")]
+    pub passphrase: Option<Option<String>>,
 }
 
 #[derive(Deserialize)]
@@ -69,6 +77,8 @@ pub async fn save_host(
             port: args.port,
             username: args.username,
             notes: args.notes,
+            auth_method: args.auth_method.unwrap_or_else(|| "password".to_string()),
+            key_path: args.key_path,
         })
         .await?;
     let password_stored = match args.password.filter(|p| !p.is_empty()) {
@@ -77,6 +87,10 @@ pub async fn save_host(
         // No password was supplied, so there is nothing to store — trivially satisfied.
         None => true,
     };
+    // Passphrase: fire-and-forget; caller expects success after connect, not save.
+    if let Some(pp) = args.passphrase.filter(|p| !p.is_empty()) {
+        let _ = keychain.set_passphrase(record.id, &pp);
+    }
     Ok(HostSaveResult { host: record, password_stored })
 }
 
@@ -95,6 +109,8 @@ pub async fn update_host(
                 port: args.port,
                 username: args.username,
                 notes: args.notes,
+                auth_method: args.auth_method,
+                key_path: args.key_path,
             },
         )
         .await?;
@@ -111,6 +127,12 @@ pub async fn update_host(
         }
         Some(Some(_)) => true, // empty string — treat as no-op, unchanged
     };
+    match args.passphrase {
+        None => {}  // absent — leave unchanged
+        Some(None) => { let _ = keychain.delete_passphrase(args.id); }
+        Some(Some(pp)) if !pp.is_empty() => { let _ = keychain.set_passphrase(args.id, &pp).is_ok(); }
+        Some(Some(_)) => {}  // empty string — no-op
+    }
     Ok(HostSaveResult { host: updated, password_stored })
 }
 
@@ -122,6 +144,7 @@ pub async fn delete_host(
 ) -> Result<()> {
     store.delete(args.id).await?;
     let _ = keychain.delete_password(args.id);
+    let _ = keychain.delete_passphrase(args.id);
     Ok(())
 }
 
@@ -131,6 +154,33 @@ pub async fn get_host_password(
     keychain: State<'_, KeychainStore>,
 ) -> Result<Option<String>> {
     keychain.get_password(args.id)
+}
+
+#[derive(Deserialize)]
+pub struct GetHostPassphraseArgs {
+    pub id: Uuid,
+}
+
+#[tauri::command]
+pub async fn get_host_passphrase(
+    args: GetHostPassphraseArgs,
+    keychain: State<'_, KeychainStore>,
+) -> Result<Option<String>> {
+    keychain.get_passphrase(args.id)
+}
+
+#[derive(Deserialize)]
+pub struct SetHostPassphraseArgs {
+    pub id: Uuid,
+    pub passphrase: String,
+}
+
+#[tauri::command]
+pub async fn set_host_passphrase(
+    args: SetHostPassphraseArgs,
+    keychain: State<'_, KeychainStore>,
+) -> crate::error::Result<()> {
+    keychain.set_passphrase(args.id, &args.passphrase)
 }
 
 #[tauri::command]

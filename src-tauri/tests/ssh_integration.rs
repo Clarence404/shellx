@@ -1,5 +1,6 @@
-use shellx::protocol::{AuthConfig, AuthMethod};
+use shellx::protocol::{AcceptAllPolicy, AuthConfig, AuthMethod};
 use shellx::session::manager::SessionManager;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn e2e_open_write_read_close() {
@@ -10,7 +11,7 @@ async fn e2e_open_write_read_close() {
         method: AuthMethod::Password("pw".into()),
     };
     let info = mgr
-        .open_connection("127.0.0.1", port, auth, "e2e".into(), None)
+        .open_connection("127.0.0.1", port, auth, "e2e".into(), None, Arc::new(AcceptAllPolicy))
         .await
         .unwrap();
     mgr.open_shell(info.id).await.unwrap();

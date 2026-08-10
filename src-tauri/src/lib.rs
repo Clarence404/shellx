@@ -1,5 +1,7 @@
 pub mod config_paths;
 pub mod error;
+pub mod hostkeys;
+pub mod keys;
 pub mod ipc;
 pub mod local;
 pub mod protocol;

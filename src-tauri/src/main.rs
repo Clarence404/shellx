@@ -36,6 +36,7 @@ fn main() {
         .manage(keychain)
         .manage(settings_store)
         .manage(shellx::ipc::config::ConfigDir(config_dir.clone()))
+        .manage(shellx::ipc::hostkeys::ChallengeRegistry::default())
         .invoke_handler(tauri::generate_handler![
             ipc::open_connection,
             ipc::open_shell,
@@ -48,7 +49,10 @@ fn main() {
             ipc::hosts::update_host,
             ipc::hosts::delete_host,
             ipc::hosts::get_host_password,
+            ipc::hosts::get_host_passphrase,
+            ipc::hosts::set_host_passphrase,
             ipc::hosts::keychain_available,
+            ipc::keys::keys_discover,
             ipc::sftp::sftp_list_dir,
             ipc::sftp::sftp_stat,
             ipc::sftp::sftp_rename,
@@ -80,6 +84,8 @@ fn main() {
             ipc::settings::load_settings,
             ipc::settings::save_settings,
             ipc::config::get_config_paths,
+            ipc::hostkeys::hostkey_respond,
+            ipc::hostkeys::hostkeys_list,
         ])
         .run(tauri::generate_context!())
         .expect("shellx failed to start");

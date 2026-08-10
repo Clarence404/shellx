@@ -15,6 +15,12 @@ pub enum Error {
     Timeout,
     #[error("closed")]
     Closed,
+    #[error("passphrase-needed")]
+    PassphraseNeeded,
+    #[error("key-rejected: {0}")]
+    KeyRejected(String),
+    #[error("hostkey-declined")]
+    HostKeyDeclined,
 }
 
 impl Serialize for Error {

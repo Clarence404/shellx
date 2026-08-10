@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>shellx v0.8 · 端口转发 UX 草稿</title>
+<style>
+  :root {
+    /* shellx dark palette */
+    --bg: #1e1c24;
+    --chrome: #1a1a1c;
+    --panel-1: #232326;
+    --panel-2: #252529;
+    --border: #2c2c30;
+    --border-hi: #3a373f;
+    --text-1: #d4d0dc;
+    --text-2: #a0a0a5;
+    --text-3: #7a7a7f;
+    --text-muted: #8b869a;
+    --accent: #7c5cff;
+    --accent-light: #a89bff;
+    --accent-fade: #3a2f5f;
+    --success: #7c9c80;
+    --success-fade: #1a4a2a;
+    --warn: #f2c8a2;
+    --warn-fade: #3a2f1f;
+    --error: #e24b4a;
+    --error-fade: #3a1a1a;
+    --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, monospace;
+    --font-ui: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 40px 20px;
+    background: #F5F3EE;
+    font-family: var(--font-ui);
+    color: #2C2C2A;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  .panel-heading {
+    font-size: 16px; font-weight: 700; color: #26215C; margin: 40px 0 4px;
+  }
+  .panel-sub {
+    font-size: 12px; color: #5F5E5A; margin-bottom: 14px;
+  }
+  .panel-heading:first-of-type { margin-top: 0; }
+
+  /* shellx window frame */
+  .win {
+    background: var(--chrome);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.08);
+  }
+  .win.prod {
+    border: 2px solid var(--error);
+  }
+  .win .prod-stripe {
+    background: var(--error); height: 4px;
+  }
+  .titlebar {
+    height: 34px; background: var(--panel-1);
+    display: flex; align-items: center; padding: 0 12px; gap: 8px;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .logo {
+    color: var(--accent); font-family: var(--font-mono);
+    font-weight: 700; font-size: 13px; margin-right: 4px;
+  }
+  .prod .logo { color: var(--error); }
+  .tab {
+    height: 22px; padding: 0 12px 0 8px; border-radius: 4px 4px 0 0;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-3); background: transparent;
+  }
+  .tab.active { background: var(--panel-2); color: var(--text-1); }
+  .prod .tab.active { background: #3a2020; color: #f5c7c7; }
+  .tab .status-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+  }
+  .prod .tab.active .status-dot { background: var(--error); }
+  .tab .close { opacity: 0.6; margin-left: 4px; font-size: 12px; }
+  .tab-plus {
+    color: var(--text-3); padding: 4px 8px; font-size: 14px;
+  }
+  .win-ctrls {
+    margin-left: auto; display: flex; gap: 12px; color: var(--text-3); font-size: 12px;
+  }
+
+  /* Body layout */
+  .body { display: flex; }
+  .rail {
+    width: 52px; background: var(--chrome);
+    border-right: 0.5px solid var(--border);
+    padding: 12px 0; display: flex; flex-direction: column; gap: 6px; align-items: center;
+    flex-shrink: 0;
+  }
+  .rail-item {
+    width: 32px; padding: 6px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    border-radius: 5px;
+    color: var(--text-2); font-size: 9px;
+    cursor: default;
+  }
+  .rail-item.active {
+    background: var(--accent); color: white;
+  }
+  .rail-item .rail-icon {
+    width: 16px; height: 16px;
+    background-color: currentColor;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .main { flex: 1; min-width: 0; background: var(--bg); }
+
+  /* Activity toolbar */
+  .activity-toolbar {
+    height: 38px; background: var(--panel-1);
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; padding: 0 14px; gap: 6px;
+  }
+  .act-btn {
+    height: 22px; padding: 0 12px; border-radius: 4px;
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text-1);
+    background: transparent;
+  }
+  .act-btn.active { background: var(--border-hi); }
+  .act-btn.tunnels-page { background: var(--panel-2); font-weight: 600; }
+  .act-btn .count-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+    margin-left: 2px;
+  }
+
+  /* Connection status strip */
+  .conn-strip {
+    height: 30px; padding: 0 14px;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg); border-bottom: 0.5px solid var(--border);
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-1);
+  }
+  .conn-strip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+  .env-tag {
+    font-family: var(--font-ui);
+    font-size: 9px; font-weight: 700; letter-spacing: 0.6px;
+    padding: 2px 8px; border-radius: 4px;
+    border: 0.7px solid;
+  }
+  .env-tag.test { background: var(--success-fade); border-color: var(--success); color: #95b298; }
+  .env-tag.prod { background: var(--error-fade); border-color: var(--error); color: #ff9080; }
+  .conn-strip .spacer { flex: 1; }
+  .btn-ghost {
+    padding: 4px 10px; font-size: 11px; color: var(--text-2);
+    background: transparent; border: 0.5px solid var(--border-hi); border-radius: 4px;
+  }
+
+  /* Tunnels panel */
+  .tunnels {
+    padding: 14px 16px;
+  }
+  .tunnels-header {
+    display: flex; align-items: center; margin-bottom: 10px;
+    font-size: 11px; font-weight: 700; color: var(--accent-light); letter-spacing: 0.5px;
+  }
+  .tunnels-header .add-btn {
+    margin-left: auto; font-weight: 500; color: var(--accent-light); font-size: 11px;
+  }
+  .prod .tunnels-header { color: #ff9080; }
+  .prod .tunnels-header .warn { margin-left: 8px; color: var(--warn); font-weight: 600; }
+
+  .tun {
+    padding: 10px 14px;
+    border-radius: 6px;
+    background: var(--panel-2);
+    border: 0.5px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 8px;
+  }
+  .prod .tun { border-color: #4a2020; }
+  .tun .tun-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--success);
+    flex-shrink: 0;
+  }
+  .tun .tun-dot.warn { background: var(--warn); }
+  .tun .tun-dot.err { background: var(--error); }
+  .tun .tun-body { flex: 1; min-width: 0; }
+  .tun .tun-title {
+    font-size: 12.5px; font-weight: 600; color: var(--text-1); margin-bottom: 3px;
+  }
+  .tun .tun-detail {
+    font-size: 10.5px; color: var(--text-muted); font-family: var(--font-mono);
+  }
+  .tun .tun-detail.warn { color: var(--warn); }
+  .tun .tun-actions {
+    display: flex; gap: 6px; flex-shrink: 0;
+  }
+  .tun-btn {
+    padding: 5px 12px; border-radius: 4px;
+    font-size: 10.5px; color: var(--text-1);
+    background: var(--border); border: 0.5px solid var(--border-hi);
+  }
+  .tun-btn.accent { background: var(--accent-fade); border-color: var(--accent); color: var(--accent-light); }
+  .tun-btn.danger { background: var(--error-fade); border-color: var(--error); color: #ff9080; }
+
+  /* Terminal area */
+  .terminal {
+    padding: 14px 16px;
+    border-top: 0.5px solid var(--border);
+    font-family: var(--font-mono); font-size: 12px; color: var(--text-1);
+    min-height: 140px;
+  }
+  .terminal .title {
+    font-family: var(--font-ui);
+    font-size: 11px; font-weight: 700; color: var(--accent-light); letter-spacing: 0.5px;
+    margin-bottom: 10px;
+  }
+  .terminal .line { line-height: 1.5; color: var(--text-muted); }
+  .terminal .line.prompt { color: var(--text-1); }
+  .cursor {
+    display: inline-block; width: 7px; height: 13px;
+    background: var(--accent); vertical-align: -2px;
+    animation: blink 1s infinite;
+  }
+  @keyframes blink {
+    0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; }
+  }
+
+  /* Panel 3: config form */
+  .form-panel {
+    background: var(--chrome); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; width: 500px;
+  }
+  .form-header {
+    height: 38px; padding: 0 16px; background: var(--panel-1);
+    display: flex; align-items: center;
+    font-size: 12px; font-weight: 700; color: var(--text-1);
+    border-bottom: 0.5px solid var(--border);
+  }
+  .form-header .close-x {
+    margin-left: auto; color: var(--text-3); font-size: 14px;
+  }
+  .form-body { padding: 16px; }
+  .field-label {
+    font-size: 10px; font-weight: 600; color: var(--text-3);
+    letter-spacing: 0.4px; text-transform: uppercase;
+    margin-bottom: 6px; margin-top: 12px;
+  }
+  .field-label:first-child { margin-top: 0; }
+  .input {
+    height: 30px; padding: 0 10px; border-radius: 4px;
+    background: var(--panel-2); border: 0.5px solid var(--border-hi);
+    font-family: var(--font-mono); font-size: 11.5px;
+    color: var(--text-1); display: flex; align-items: center; width: 100%;
+  }
+  .input.narrow { width: 80px; }
+  .input-row { display: flex; gap: 8px; }
+  .env-picker { display: flex; gap: 8px; }
+  .env-picker .opt {
+    height: 30px; padding: 0 16px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--text-3);
+    background: transparent; border: 0.5px solid var(--border-hi);
+  }
+  .env-picker .opt.selected {
+    background: var(--success-fade); border-color: var(--success);
+    color: #95b298; font-weight: 600;
+  }
+  .rules-header {
+    display: flex; align-items: center; font-size: 10px; font-weight: 600;
+    color: var(--accent-light); letter-spacing: 0.4px; text-transform: uppercase;
+    margin-top: 16px; margin-bottom: 6px;
+  }
+  .rules-header .add { margin-left: auto; }
+  .rule-row {
+    padding: 8px 12px; border-radius: 4px;
+    background: var(--panel-2); border: 0.5px solid var(--border-hi);
+    display: flex; align-items: center; margin-bottom: 6px;
+  }
+  .rule-row .rule-body { flex: 1; min-width: 0; }
+  .rule-row .rule-title { font-size: 11px; font-weight: 600; color: var(--text-1); margin-bottom: 2px; }
+  .rule-row .rule-detail { font-size: 10.5px; font-family: var(--font-mono); color: var(--text-muted); }
+  .rule-row .rule-actions { font-size: 10.5px; color: var(--text-3); }
+  .form-actions {
+    display: flex; justify-content: flex-end; gap: 8px;
+    padding: 14px 16px 16px; border-top: 0.5px solid var(--border);
+  }
+  .btn-primary {
+    padding: 7px 18px; border-radius: 4px;
+    background: var(--accent); color: white; font-size: 11px; font-weight: 600;
+  }
+  .btn-cancel {
+    padding: 7px 18px; border-radius: 4px;
+    background: transparent; border: 0.5px solid var(--border-hi);
+    color: var(--text-2); font-size: 11px;
+  }
+
+  /* Panel 4: prod confirmation dialog */
+  .dialog-frame {
+    background: var(--chrome); border: 1px solid var(--border); border-radius: 10px;
+    width: 500px; height: 400px; position: relative; overflow: hidden;
+    background-image:
+      linear-gradient(rgba(26,26,28,0.75), rgba(26,26,28,0.75)),
+      linear-gradient(180deg, #1e1c24 0%, #1a1a1c 100%);
+  }
+  .dialog {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 400px; padding: 28px 24px 22px;
+    background: var(--bg); border: 2px solid var(--error); border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  }
+  .alert-icon {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--error-fade); border: 2px solid var(--error);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--error); font-size: 26px; font-weight: 700;
+    margin: 0 auto 14px;
+  }
+  .dialog h3 {
+    text-align: center; color: #ff9080; font-size: 15px; font-weight: 700;
+    margin: 0 0 12px;
+  }
+  .dialog .desc {
+    text-align: center; color: var(--text-1); font-size: 12px; line-height: 1.6;
+    margin-bottom: 14px;
+  }
+  .dialog .desc .host {
+    color: var(--text-1); font-family: var(--font-mono); font-weight: 600;
+  }
+  .rule-list {
+    background: #2c1818; border: 0.6px solid #4a2020; border-radius: 6px;
+    padding: 10px 14px; margin-bottom: 14px;
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--warn);
+    line-height: 1.7;
+  }
+  .dialog-check {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--text-1); margin-bottom: 16px;
+  }
+  .dialog-check .box {
+    width: 14px; height: 14px; border-radius: 3px;
+    background: var(--panel-2); border: 0.5px solid var(--border-hi);
+  }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .btn-danger {
+    padding: 8px 20px; border-radius: 4px;
+    background: var(--error); color: white; font-size: 11px; font-weight: 600;
+  }
+
+  /* Layout for 3 + 4 side by side */
+  .row { display: flex; gap: 24px; align-items: flex-start; }
+  .col { flex: 1; }
+  .notes {
+    margin-top: 32px; padding: 20px 24px; background: white;
+    border: 1px solid #E5E1D5; border-radius: 10px;
+  }
+  .notes h4 { margin: 0 0 12px; color: #26215C; font-size: 14px; }
+  .notes ol { margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.8; color: #2C2C2A; }
+  .notes ol li strong { color: #7F77DD; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ================== PANEL 1: TEST env, connected ================== -->
+  <div class="panel-heading">① 已连接 · TEST 环境（正常场景）</div>
+  <div class="panel-sub">左上 tab 显示所有已开的会话 · 主区上半是 Tunnels 面板 · 下半是终端</div>
+
+  <div class="win">
+    <div class="titlebar">
+      <span class="logo">&gt;_</span>
+      <div class="tab active"><span class="status-dot"></span>test-bastion<span class="close">×</span></div>
+      <div class="tab"><span class="status-dot" style="background:#5F5E5A"></span>prod-bastion<span class="close">×</span></div>
+      <span class="tab-plus">+</span>
+      <div class="win-ctrls"><span>−</span><span>□</span><span>×</span></div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <div class="rail-item active">
+          <div style="font-size:16px;line-height:1">🖥</div>
+          <div>Hosts</div>
+        </div>
+        <div class="rail-item"><div style="font-size:16px;line-height:1">📁</div><div>Files</div></div>
+        <div class="rail-item"><div style="font-size:16px;line-height:1">🔌</div><div>Serial</div></div>
+        <div class="rail-item"><div style="font-size:16px;line-height:1">⚙</div><div>Set…</div></div>
+      </div>
+      <div class="main">
+        <div class="activity-toolbar">
+          <div class="act-btn"><span>💬</span>Terminal</div>
+          <div class="act-btn tunnels-page"><span>📡</span>Tunnels · 3<span class="count-dot"></span></div>
+          <div class="act-btn"><span>📂</span>Files</div>
+        </div>
+        <div class="conn-strip">
+          <span class="dot"></span>
+          <span>chen.han@test-bastion.company.com</span>
+          <span class="env-tag test">TEST</span>
+          <span class="spacer"></span>
+          <button class="btn-ghost">Disconnect</button>
+        </div>
+        <div class="tunnels">
+          <div class="tunnels-header">
+            <span>端口转发 · 3 条 · 全部活跃</span>
+            <span class="add-btn">+ 添加</span>
+          </div>
+
+          <div class="tun">
+            <span class="tun-dot"></span>
+            <div class="tun-body">
+              <div class="tun-title">PG (test)</div>
+              <div class="tun-detail">localhost:15432  →  test-pg.internal:5432</div>
+            </div>
+            <div class="tun-actions">
+              <button class="tun-btn">复制端口</button>
+              <button class="tun-btn">复制连接串</button>
+            </div>
+          </div>
+
+          <div class="tun">
+            <span class="tun-dot"></span>
+            <div class="tun-body">
+              <div class="tun-title">Redis (test)</div>
+              <div class="tun-detail">localhost:16379  →  test-redis.internal:6379</div>
+            </div>
+            <div class="tun-actions">
+              <button class="tun-btn">复制端口</button>
+              <button class="tun-btn">redis://localhost:16379</button>
+            </div>
+          </div>
+
+          <div class="tun">
+            <span class="tun-dot"></span>
+            <div class="tun-body">
+              <div class="tun-title">RabbitMQ 管理页</div>
+              <div class="tun-detail">localhost:15672  →  test-mq.internal:15672 · HTTP</div>
+            </div>
+            <div class="tun-actions">
+              <button class="tun-btn">复制端口</button>
+              <button class="tun-btn accent">在浏览器打开</button>
+            </div>
+          </div>
+        </div>
+        <div class="terminal">
+          <div class="title">终端</div>
+          <div class="line prompt">chen.han@test-bastion:~$ tail -f /var/log/app.log</div>
+          <div class="line">2026-08-08 14:23:11 INFO&nbsp; loading configuration from /etc/app/…</div>
+          <div class="line">2026-08-08 14:23:12 INFO&nbsp; connected to PG pool (max=20)</div>
+          <div class="line">2026-08-08 14:23:13 INFO&nbsp; redis client ready</div>
+          <div class="line prompt">$ <span class="cursor"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================== PANEL 2: PROD env, red visuals ================== -->
+  <div class="panel-heading">② 已连接 · PROD 环境（视觉警戒）</div>
+  <div class="panel-sub">整个窗口 2px 红边 · PROD 徽章红色 · 一条 tunnel 挂了正在自动重连 · 危险按钮变红</div>
+
+  <div class="win prod">
+    <div class="prod-stripe"></div>
+    <div class="titlebar">
+      <span class="logo">&gt;_</span>
+      <div class="tab active"><span class="status-dot"></span>prod-bastion<span class="close">×</span></div>
+      <span class="tab-plus">+</span>
+      <div class="win-ctrls"><span>−</span><span>□</span><span>×</span></div>
+    </div>
+    <div class="body">
+      <div class="rail">
+        <div class="rail-item active" style="background:#e24b4a">
+          <div style="font-size:16px;line-height:1">🖥</div>
+          <div>Hosts</div>
+        </div>
+        <div class="rail-item"><div style="font-size:16px;line-height:1">📁</div><div>Files</div></div>
+        <div class="rail-item"><div style="font-size:16px;line-height:1">🔌</div><div>Serial</div></div>
+        <div class="rail-item"><div style="font-size:16px;line-height:1">⚙</div><div>Set…</div></div>
+      </div>
+      <div class="main">
+        <div class="conn-strip">
+          <span class="dot"></span>
+          <span>chen.han@prod-bastion.company.com</span>
+          <span class="env-tag prod">PROD</span>
+          <span class="spacer"></span>
+          <button class="btn-ghost">Disconnect</button>
+        </div>
+        <div class="tunnels">
+          <div class="tunnels-header">
+            <span>端口转发 · 3 条 · 2 活跃 · 1 重连中</span>
+            <span class="warn">⚠ 生产环境</span>
+            <span class="add-btn" style="margin-left:auto;color:#ff9080">+ 添加</span>
+          </div>
+
+          <div class="tun">
+            <span class="tun-dot"></span>
+            <div class="tun-body">
+              <div class="tun-title">PG (prod)</div>
+              <div class="tun-detail">localhost:25432  →  prod-pg.internal:5432</div>
+            </div>
+            <div class="tun-actions">
+              <button class="tun-btn">复制端口</button>
+              <button class="tun-btn danger">复制连接串 ⚠</button>
+            </div>
+          </div>
+
+          <div class="tun">
+            <span class="tun-dot"></span>
+            <div class="tun-body">
+              <div class="tun-title">Redis (prod)</div>
+              <div class="tun-detail">localhost:26379  →  prod-redis.internal:6379</div>
+            </div>
+            <div class="tun-actions">
+              <button class="tun-btn">复制端口</button>
+            </div>
+          </div>
+
+          <div class="tun">
+            <span class="tun-dot warn"></span>
+            <div class="tun-body">
+              <div class="tun-title">RabbitMQ 管理页</div>
+              <div class="tun-detail warn">localhost:25672 · 上次探活失败 3s 前 · 自动重连中…</div>
+            </div>
+            <div class="tun-actions">
+              <button class="tun-btn">立即重试</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================== PANEL 3 & 4: side by side ================== -->
+  <div class="row" style="margin-top:32px">
+
+    <div class="col">
+      <div class="panel-heading" style="margin-top:0">③ 主机记录配置</div>
+      <div class="panel-sub">编辑 test-bastion · 环境标签 + 端口转发规则</div>
+
+      <div class="form-panel">
+        <div class="form-header">
+          编辑主机 · test-bastion
+          <span class="close-x">×</span>
+        </div>
+        <div class="form-body">
+          <div class="field-label">标签</div>
+          <div class="input">test-bastion</div>
+
+          <div class="field-label">主机 · 端口 · 用户</div>
+          <div class="input-row">
+            <div class="input" style="flex:1">test-bastion.company.com</div>
+            <div class="input narrow" style="justify-content:center">22</div>
+            <div class="input" style="width:110px">chen.han</div>
+          </div>
+
+          <div class="field-label">环境</div>
+          <div class="env-picker">
+            <div class="opt selected">TEST</div>
+            <div class="opt">STAGING</div>
+            <div class="opt">PROD</div>
+            <div class="opt">无</div>
+          </div>
+
+          <div class="field-label">认证 · 密钥文件</div>
+          <div class="input-row">
+            <div class="input" style="flex:1">~/.ssh/id_ed25519</div>
+            <button class="btn-cancel" style="width:auto">选择…</button>
+          </div>
+
+          <div class="rules-header">
+            端口转发规则 · 3 条
+            <span class="add" style="color:var(--accent-light)">+ 添加</span>
+          </div>
+
+          <div class="rule-row">
+            <div class="rule-body">
+              <div class="rule-title">PG (test)</div>
+              <div class="rule-detail">local 15432 → test-pg.internal:5432</div>
+            </div>
+            <div class="rule-actions">编辑 · 删除</div>
+          </div>
+
+          <div class="rule-row">
+            <div class="rule-body">
+              <div class="rule-title">Redis (test)</div>
+              <div class="rule-detail">local 16379 → test-redis.internal:6379</div>
+            </div>
+            <div class="rule-actions">编辑 · 删除</div>
+          </div>
+
+          <div class="rule-row">
+            <div class="rule-body">
+              <div class="rule-title">RabbitMQ 管理页 · HTTP</div>
+              <div class="rule-detail">local 15672 → test-mq.internal:15672</div>
+            </div>
+            <div class="rule-actions">编辑 · 删除</div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-cancel">取消</button>
+          <button class="btn-primary">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="panel-heading" style="margin-top:0">④ 生产环境二次确认</div>
+      <div class="panel-sub">环境标签是 PROD 时才弹 · 列出即将建立的 tunnel</div>
+
+      <div class="dialog-frame">
+        <div class="dialog">
+          <div class="alert-icon">!</div>
+          <h3>你正在连接生产环境</h3>
+          <div class="desc">
+            <div class="host">prod-bastion.company.com</div>
+            <div style="margin-top:4px">将建立 3 条端口转发到生产数据库和消息队列</div>
+          </div>
+          <div class="rule-list">
+            <div>→ PG (prod)&emsp;&emsp; local :25432</div>
+            <div>→ Redis (prod)&emsp;&nbsp; local :26379</div>
+            <div>→ RabbitMQ&emsp;&emsp;&nbsp; local :25672</div>
+          </div>
+          <div class="dialog-check">
+            <div class="box"></div>
+            我知道自己在做什么，本次会话不再提醒
+          </div>
+          <div class="dialog-actions">
+            <button class="btn-cancel">取消</button>
+            <button class="btn-danger">继续连接生产</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h4>设计要点</h4>
+    <ol>
+      <li><strong>Activity tab 里加 "Tunnels" 页</strong>：和 Terminal / Files 并列，数字标当前活跃 tunnel 数，绿点=全通</li>
+      <li><strong>每条 tunnel 一行</strong>：状态点（绿=活跃 · 黄=重连中 · 红=挂了）· 标签 · 本地端口 → 远端 · 一键复制端口 / 连接串 / 打开浏览器</li>
+      <li><strong>环境标签驱动视觉</strong>：TEST 绿边 · STAGING 蓝边 · PROD 红边 + 顶部一条红警示条，危险按钮（复制连接串）也变红加 ⚠</li>
+      <li><strong>生产环境二次确认</strong>：弹框列出将要建立的 3 条 tunnel 让你复盘，可勾"本次会话不再提醒"</li>
+      <li><strong>tunnel 挂了自动重连</strong>：图 ② 里第三条就是"探活失败 · 自动重连中"状态，用户手动"立即重试"也行</li>
+      <li><strong>HTTP tunnel 特殊按钮</strong>：RabbitMQ Web / Grafana / Kibana 这类，识别到 HTTP 就多一个"在浏览器打开"按钮</li>
+    </ol>
+  </div>
+
+</div>
+</body>
+</html>
