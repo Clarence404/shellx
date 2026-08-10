@@ -545,20 +545,6 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
           <div style={{ display: "flex", gap: 4 }}>
             <button
               type="button"
-              aria-pressed={authMode === "publickey"}
-              onClick={() => setAuthMode("publickey")}
-              style={{
-                flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 4, cursor: "pointer",
-                border: "1px solid var(--border)",
-                background: authMode === "publickey" ? "var(--accent)" : "var(--panel-1)",
-                color: authMode === "publickey" ? "var(--text-on-accent)" : "var(--text-2)",
-                fontWeight: authMode === "publickey" ? 600 : 400,
-              }}
-            >
-              密钥文件
-            </button>
-            <button
-              type="button"
               aria-pressed={authMode === "password"}
               onClick={() => setAuthMode("password")}
               style={{
@@ -570,6 +556,20 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               }}
             >
               密码
+            </button>
+            <button
+              type="button"
+              aria-pressed={authMode === "publickey"}
+              onClick={() => setAuthMode("publickey")}
+              style={{
+                flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 4, cursor: "pointer",
+                border: "1px solid var(--border)",
+                background: authMode === "publickey" ? "var(--accent)" : "var(--panel-1)",
+                color: authMode === "publickey" ? "var(--text-on-accent)" : "var(--text-2)",
+                fontWeight: authMode === "publickey" ? 600 : 400,
+              }}
+            >
+              密钥文件
             </button>
           </div>
 
