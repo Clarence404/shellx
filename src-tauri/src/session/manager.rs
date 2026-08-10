@@ -15,10 +15,12 @@
 
 use crate::error::{Error, Result};
 use crate::protocol::sftp_types::{Entry, EntryKind};
-use crate::protocol::{AuthConfig, Connection, HostKeyPolicy, ShellHandle, SftpHandle, SshProtocol};
+use crate::protocol::{AuthConfig, Connection, HostKeyPolicy, RusshHandle, ShellHandle, SftpHandle, SshProtocol};
+use crate::session::tunnel::TunnelHandle;
 use crate::session::{ConnectionId, ConnectionInfo, ConnectionKind, ConnectionState};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tauri::AppHandle;
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
@@ -27,6 +29,12 @@ pub(crate) struct LiveConnection {
     pub(crate) conn: Box<dyn Connection>,
     pub(crate) shell: Option<ShellDriver>,
     pub(crate) sftp: Option<SftpHandle>,
+    /// Cloneable handle to the underlying russh connection.
+    /// None for non-SSH or pre-v0.9 connections.
+    pub(crate) ssh_handle: Option<RusshHandle>,
+    /// Live tunnel tasks keyed by rule_id (Uuid string for persisted
+    /// rules, ephemeral UUID string for session-only rules).
+    pub(crate) tunnels: HashMap<String, TunnelHandle>,
 }
 
 /// Handle to the background task pumping bytes for this connection's shell
@@ -90,7 +98,8 @@ impl SessionManager {
         host_id: Option<Uuid>,
         policy: Arc<dyn HostKeyPolicy>,
     ) -> Result<ConnectionInfo> {
-        let connection = SshProtocol::connect(host, port, auth, policy).await?;
+        let ssh_conn = SshProtocol::connect(host, port, auth, policy).await?;
+        let ssh_handle = Some(ssh_conn.handle_clone());
         let id = Uuid::new_v4();
         let info = ConnectionInfo {
             id,
@@ -101,9 +110,11 @@ impl SessionManager {
         };
         let live = LiveConnection {
             info: info.clone(),
-            conn: Box::new(connection),
+            conn: Box::new(ssh_conn),
             shell: None,
             sftp: None,
+            ssh_handle,
+            tunnels: HashMap::new(),
         };
         self.inner
             .lock()
@@ -187,6 +198,8 @@ impl SessionManager {
     }
 
     pub async fn close(&self, id: ConnectionId) -> Result<()> {
+        // Abort all active tunnels before removing the connection.
+        self.close_all_tunnels(id).await;
         let removed = self.inner.lock().await.remove(&id);
         if let Some(live_arc) = removed {
             let mut live = live_arc.lock().await;
@@ -197,6 +210,60 @@ impl SessionManager {
         }
         self.subs.lock().await.remove(&id);
         Ok(())
+    }
+
+    pub async fn open_tunnel(
+        &self,
+        session_id: Uuid,
+        rule_id: String,
+        local_port: u16,
+        remote_host: String,
+        remote_port: u16,
+        bind_all: bool,
+        app: AppHandle,
+    ) -> crate::error::Result<()> {
+        let lc_arc = self.inner.lock().await
+            .get(&session_id)
+            .cloned()
+            .ok_or_else(|| crate::error::Error::Protocol("session not found".into()))?;
+        let mut lc = lc_arc.lock().await;
+        let ssh = lc.ssh_handle.clone()
+            .ok_or_else(|| crate::error::Error::Protocol("no SSH handle for this session".into()))?;
+        let handle = crate::session::tunnel::spawn_tunnel(
+            ssh, session_id, rule_id.clone(), local_port, remote_host, remote_port, bind_all, app,
+        ).await.map_err(|e| crate::error::Error::Protocol(e))?;
+        lc.tunnels.insert(rule_id, handle);
+        Ok(())
+    }
+
+    pub async fn close_tunnel(&self, session_id: Uuid, rule_id: &str) -> crate::error::Result<()> {
+        let lc_arc = self.inner.lock().await.get(&session_id).cloned();
+        if let Some(lc_arc) = lc_arc {
+            let mut lc = lc_arc.lock().await;
+            if let Some(handle) = lc.tunnels.remove(rule_id) {
+                handle.abort();
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns a cloned `RusshHandle` for `id`, or `None` if the session does
+    /// not exist or has no SSH handle. Used by the `tunnels_only` transport
+    /// monitor to probe liveness without holding the per-connection lock.
+    pub async fn get_ssh_handle(&self, id: ConnectionId) -> Option<RusshHandle> {
+        let lc_arc = self.inner.lock().await.get(&id).cloned()?;
+        let lc = lc_arc.lock().await;
+        lc.ssh_handle.clone()
+    }
+
+    pub async fn close_all_tunnels(&self, session_id: Uuid) {
+        let lc_arc = self.inner.lock().await.get(&session_id).cloned();
+        if let Some(lc_arc) = lc_arc {
+            let mut lc = lc_arc.lock().await;
+            for (_, handle) in lc.tunnels.drain() {
+                handle.abort();
+            }
+        }
     }
 
     pub async fn list(&self) -> Vec<ConnectionInfo> {
@@ -576,6 +643,8 @@ mod tests {
                 conn: Box::new(ShellRejectingConnection),
                 shell: None,
                 sftp: None,
+                ssh_handle: None,
+                tunnels: HashMap::new(),
             })),
         );
 

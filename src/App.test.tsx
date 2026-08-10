@@ -105,6 +105,10 @@ vi.mock("./ipc/hostkeys", () => ({
   onHostkeyChallenge: vi.fn().mockResolvedValue(() => {}),
 }));
 
+vi.mock("./ipc/tunnels", () => ({
+  onTunnelStatus: vi.fn().mockResolvedValue(() => {}),
+}));
+
 describe("App shell", () => {
   afterEach(() => {
     // Unmount first — resetting the (real, shared) sessions store while a

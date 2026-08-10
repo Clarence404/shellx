@@ -6,7 +6,7 @@ pub mod sftp_types;
 pub mod ssh;
 
 use crate::error::Result;
-pub use ssh::{ShellHandle, SftpHandle, SshConnection, SshProtocol};
+pub use ssh::{RusshHandle, ShellHandle, SftpHandle, SshConnection, SshProtocol};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthConfig {

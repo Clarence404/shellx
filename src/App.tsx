@@ -6,6 +6,7 @@ import { ErrorDialog } from "./components/ErrorDialog";
 import { TerminalView } from "./components/TerminalView";
 import { ActivityToolbar } from "./components/ActivityToolbar";
 import { FileBrowserView } from "./components/FileBrowserView";
+import { TunnelsPanel } from "./components/TunnelsPanel";
 import { RailFilesView } from "./components/RailFilesView";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
@@ -27,8 +28,10 @@ import { PassphraseDialog } from "./components/PassphraseDialog";
 import { AuthFailedDialog } from "./components/AuthFailedDialog";
 import { installSessionStream } from "./state/sessionStream";
 import { onTransferStarted, onTransferProgress, onTransferDone, onTransferState } from "./ipc/transfers";
+import { onTunnelStatus } from "./ipc/tunnels";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
 import type { HostInfo } from "./types/host";
+import type { ActivityKind } from "./types/connection";
 
 export function App() {
   const sessions = useSessions((s) => s.sessions);
@@ -58,7 +61,34 @@ export function App() {
     return h?.label ?? h?.host ?? displayConnectingHostId;
   });
 
+  const hosts = useHostsStore((s) => s.hosts);
   const loadHosts = useHostsStore((s) => s.load);
+
+  // Derive connection_mode for the currently active session.
+  const activeSession = sessions.find((s) => s.id === activeId) ?? null;
+  const activeHost = hosts.find((h) => h.id === (activeSession?.host_id ?? ""));
+  const mode = activeHost?.connection_mode ?? "terminal_only";
+
+  // Build the tab list based on connection_mode.
+  const availableTabs: { id: ActivityKind; label: string }[] =
+    mode === "tunnels_only"
+      ? [{ id: "tunnel", label: "Tunnels" }]
+      : mode === "term_tunnels"
+      ? [
+          { id: "terminal", label: "Terminal" },
+          { id: "files", label: "Files" },
+          { id: "tunnel", label: "Tunnels" },
+        ]
+      : [
+          { id: "terminal", label: "Terminal" },
+          { id: "files", label: "Files" },
+        ];
+
+  // Clamp activeActivity to a valid tab for the current session.
+  const effectiveActivity: ActivityKind = availableTabs.some((t) => t.id === activeActivity)
+    ? activeActivity
+    : (availableTabs[0]?.id ?? "terminal");
+
   const themeId = useSettingsStore((s) => s.themeId);
   const density = useSettingsStore((s) => s.density);
   const systemFont = useSettingsStore((s) => s.systemFont);
@@ -223,6 +253,18 @@ export function App() {
     return () => { cancelled = true; un?.(); };
   }, []);
 
+  // Wire the backend's tunnel:status events into the sessions store so
+  // the tunnel panel and activity toolbar can reflect live tunnel state.
+  useEffect(() => {
+    let cancelled = false;
+    let un: (() => void) | undefined;
+    onTunnelStatus((s) => useSessions.getState().setTunnelStatus(s.session_id, s)).then((u) => {
+      if (cancelled) { u(); return; }
+      un = u;
+    });
+    return () => { cancelled = true; un?.(); };
+  }, []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
@@ -306,6 +348,9 @@ export function App() {
       setPassphraseReq(null);
       setPendingConnectHostId(null);
       addSession(info);
+      // Set default activity based on connection_mode so tunnels_only sessions
+      // open directly on the Tunnels tab instead of the (unavailable) Terminal.
+      setActivity(info.id, host.connection_mode === "tunnels_only" ? "tunnel" : "terminal");
     } catch (e) {
       useSessions.getState().endConnecting(host.id);
       setPendingConnectHostId(null);
@@ -393,6 +438,7 @@ export function App() {
       });
       setPendingConnectHostId(null);
       addSession(info);
+      setActivity(info.id, host.connection_mode === "tunnels_only" ? "tunnel" : "terminal");
     } catch (e) {
       useSessions.getState().endConnecting(host.id);
       setPendingConnectHostId(null);
@@ -432,8 +478,9 @@ export function App() {
             flexDirection: "column", height: "100%", minHeight: 0,
           }}>
             <ActivityToolbar
-              activity={activeActivity}
+              activity={effectiveActivity}
               onChange={(a) => setActivity(activeId, a)}
+              tabs={availableTabs}
             />
             <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
               {/* One TerminalView + FileBrowserView per session, always
@@ -455,15 +502,27 @@ export function App() {
                     display: isActive ? "block" : "none",
                     position: "absolute", inset: 0,
                   }}>
-                    <div style={{ display: activeActivity === "terminal" ? "block" : "none", height: "100%" }}>
+                    <div style={{ display: effectiveActivity === "terminal" ? "block" : "none", height: "100%" }}>
                       <TerminalView sessionId={s.id} />
                     </div>
-                    <div style={{ display: activeActivity === "files" ? "block" : "none", height: "100%" }}>
+                    <div style={{ display: effectiveActivity === "files" ? "block" : "none", height: "100%" }}>
                       <FileBrowserView connectionId={s.id} />
                     </div>
                   </div>
                 );
               })}
+              {/* TunnelsPanel: rendered only when the tunnel tab is active.
+                  State survives tab switches via the Zustand tunnelStatuses store
+                  and the backend, so conditional mounting is safe here. */}
+              {effectiveActivity === "tunnel" && activeId && activeSession && (
+                <div style={{ position: "absolute", inset: 0 }}>
+                  <TunnelsPanel
+                    sessionId={activeId}
+                    hostId={activeSession.host_id ?? null}
+                    connectionMode={mode}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}

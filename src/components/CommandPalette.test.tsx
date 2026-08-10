@@ -7,13 +7,13 @@ import type { HostInfo } from "../types/host";
 const HOSTS: HostInfo[] = [
   { id: "1", label: "prod-1", host: "10.0.0.1", port: 22, username: "chen",
     notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
-    auth_method: "password", key_path: null },
+    auth_method: "password", key_path: null, connection_mode: "terminal_only" },
   { id: "2", label: "db-master", host: "10.0.0.2", port: 22, username: "root",
     notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
-    auth_method: "password", key_path: null },
+    auth_method: "password", key_path: null, connection_mode: "terminal_only" },
   { id: "3", label: "stage-web", host: "stage.example.com", port: 22, username: "deploy",
     notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
-    auth_method: "password", key_path: null },
+    auth_method: "password", key_path: null, connection_mode: "terminal_only" },
 ];
 
 vi.mock("../state/hosts", () => ({

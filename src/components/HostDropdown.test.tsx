@@ -30,7 +30,7 @@ describe("HostDropdown", () => {
     const host = {
       id: "h1", label: "prod-1", host: "10.0.0.1", port: 22, username: "chen",
       notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
-      auth_method: "password", key_path: null,
+      auth_method: "password", key_path: null, connection_mode: "terminal_only",
     };
     useHostsStore.setState({ hosts: [host], keychainAvailable: false, loaded: true });
     const onConnectSavedHost = vi.fn();
@@ -49,7 +49,7 @@ describe("HostDropdown", () => {
     const host = {
       id: "h1", label: "prod-1", host: "10.0.0.1", port: 22, username: "chen",
       notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
-      auth_method: "password", key_path: null,
+      auth_method: "password", key_path: null, connection_mode: "terminal_only",
     };
     useHostsStore.setState({ hosts: [host], keychainAvailable: false, loaded: true });
     useSessions.setState({

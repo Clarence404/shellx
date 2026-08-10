@@ -10,6 +10,7 @@ export interface HostInfo {
   sort_order: number;
   auth_method: string;   // "password" | "publickey"
   key_path: string | null;
+  connection_mode: string;  // "terminal_only" | "term_tunnels" | "tunnels_only"
 }
 
 export interface SaveHostArgs {
@@ -22,6 +23,7 @@ export interface SaveHostArgs {
   auth_method?: string;
   key_path?: string | null;
   passphrase?: string;
+  connection_mode?: string;
 }
 
 export interface UpdateHostArgs {
@@ -35,6 +37,7 @@ export interface UpdateHostArgs {
   auth_method?: string;
   key_path?: string | null;
   passphrase?: string | null;
+  connection_mode?: string;
 }
 
 // Response for save_host/update_host: the saved/updated host plus whether the

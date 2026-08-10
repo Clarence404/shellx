@@ -17,6 +17,7 @@ pub struct SaveHostArgs {
     pub auth_method: Option<String>,   // defaults to "password" when absent
     pub key_path: Option<String>,
     pub passphrase: Option<String>,    // store in keychain after successful insert
+    pub connection_mode: Option<String>, // None defaults to "terminal_only"
 }
 
 #[derive(Deserialize)]
@@ -36,6 +37,7 @@ pub struct UpdateHostArgs {
     pub key_path: Option<Option<String>>,
     #[serde(default, deserialize_with = "crate::store::hosts::double_option_deserialize")]
     pub passphrase: Option<Option<String>>,
+    pub connection_mode: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -79,6 +81,7 @@ pub async fn save_host(
             notes: args.notes,
             auth_method: args.auth_method.unwrap_or_else(|| "password".to_string()),
             key_path: args.key_path,
+            connection_mode: args.connection_mode,
         })
         .await?;
     let password_stored = match args.password.filter(|p| !p.is_empty()) {
@@ -111,6 +114,7 @@ pub async fn update_host(
                 notes: args.notes,
                 auth_method: args.auth_method,
                 key_path: args.key_path,
+                connection_mode: args.connection_mode,
             },
         )
         .await?;

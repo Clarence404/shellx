@@ -8,6 +8,7 @@
 use serde::Serialize;
 
 pub mod manager;
+pub mod tunnel;
 
 pub type ConnectionId = uuid::Uuid;
 /// Backwards-compat alias while callers migrate.

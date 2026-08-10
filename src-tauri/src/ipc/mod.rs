@@ -10,11 +10,13 @@ pub mod local;
 pub mod settings;
 pub mod sftp;
 pub mod transfer;
+pub mod tunnels;
 
 use crate::error::Result;
 use crate::protocol::{AuthConfig, AuthMethod};
 use crate::session::manager::SessionManager;
 use crate::session::{ConnectionInfo, SessionId};
+use crate::store::TunnelStore;
 use events::{ClosedEvent, DataEvent, EV_CLOSED, EV_DATA};
 use serde::Deserialize;
 use std::sync::Arc;
@@ -31,6 +33,10 @@ pub struct OpenSshArgs {
     pub auth_method: Option<String>,   // None|"password" → password; "publickey" → key
     pub key_path: Option<String>,
     pub passphrase: Option<String>,
+    /// Override connection mode. When host_id is set, the stored mode is
+    /// used and this field is ignored; for unsaved connections it defaults
+    /// to "terminal_only".
+    pub connection_mode: Option<String>,
 }
 
 /// Opens an SSH connection and eagerly opens its shell channel (matching
@@ -44,6 +50,7 @@ pub async fn open_connection(
     app: AppHandle,
     mgr: State<'_, SessionManager>,
     host_store: State<'_, crate::store::HostStore>,
+    tunnel_store: State<'_, TunnelStore>,
 ) -> Result<ConnectionInfo> {
     let auth = match args.auth_method.as_deref() {
         Some("publickey") => {
@@ -63,14 +70,91 @@ pub async fn open_connection(
     let info = mgr
         .open_connection(&args.host, args.port, auth, args.label, args.host_id, policy)
         .await?;
-    if let Err(e) = mgr.open_shell(info.id).await {
-        // open_connection already parked a LiveConnection (with its
-        // authenticated transport + keepalive) in the map; without this,
-        // a shell-open failure (e.g. sshd rejecting the shell subsystem)
-        // leaks it there for the process lifetime since the frontend never
-        // receives an `info.id` to call close_connection with.
-        let _ = mgr.close(info.id).await;
-        return Err(e);
+
+    // Determine effective connection_mode: prefer the stored host's mode when
+    // host_id is set; otherwise fall back to args.connection_mode or the
+    // hard default "terminal_only".
+    let mode = if let Some(hid) = args.host_id {
+        host_store.get(hid).await.ok().flatten()
+            .map(|h| h.connection_mode.clone())
+            .unwrap_or_else(|| "terminal_only".into())
+    } else {
+        args.connection_mode.clone().unwrap_or_else(|| "terminal_only".into())
+    };
+
+    match mode.as_str() {
+        "tunnels_only" => {
+            // No shell. Start all enabled tunnels.
+            if let Some(hid) = args.host_id {
+                let rules = tunnel_store.list_for_host(hid).await.unwrap_or_default();
+                for rule in rules.into_iter().filter(|r| r.enabled) {
+                    let _ = mgr.open_tunnel(info.id, rule.id.to_string(), rule.local_port, rule.remote_host, rule.remote_port, rule.bind_all, app.clone()).await;
+                }
+            }
+            // There is no ShellDriver for tunnels_only, so nothing would
+            // normally emit EV_CLOSED if the SSH transport dies. Spawn a
+            // lightweight keepalive monitor that probes the transport every
+            // 15 seconds; on failure it calls mgr.close() which drops the
+            // subscription sender, causing the subscriber task below to see
+            // rx.recv() == None and fire EV_CLOSED naturally.
+            let mgr_monitor: SessionManager = (*mgr).clone();
+            if let Some(ssh_handle) = mgr.get_ssh_handle(info.id).await {
+                let monitor_id = info.id;
+                tokio::spawn(async move {
+                    loop {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+                        // Check if the session was already closed by the user.
+                        if mgr_monitor.get_ssh_handle(monitor_id).await.is_none() {
+                            break;
+                        }
+                        // Probe transport liveness by opening a null session
+                        // channel. When the SSH transport is dead this fails
+                        // immediately; when alive we close the probe channel.
+                        let probe = tokio::time::timeout(
+                            tokio::time::Duration::from_secs(10),
+                            ssh_handle.channel_open_session(),
+                        )
+                        .await;
+                        match probe {
+                            Ok(Ok(ch)) => {
+                                // Transport alive — close the probe channel.
+                                let _ = ch.close().await;
+                            }
+                            _ => {
+                                // Transport dead or timed out; trigger EV_CLOSED.
+                                let _ = mgr_monitor.close(monitor_id).await;
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        "term_tunnels" => {
+            // Shell + tunnels.
+            if let Err(e) = mgr.open_shell(info.id).await {
+                let _ = mgr.close(info.id).await;
+                return Err(e);
+            }
+            if let Some(hid) = args.host_id {
+                let rules = tunnel_store.list_for_host(hid).await.unwrap_or_default();
+                for rule in rules.into_iter().filter(|r| r.enabled) {
+                    let _ = mgr.open_tunnel(info.id, rule.id.to_string(), rule.local_port, rule.remote_host, rule.remote_port, rule.bind_all, app.clone()).await;
+                }
+            }
+        }
+        _ => {
+            // terminal_only (default): open shell only, no tunnels.
+            if let Err(e) = mgr.open_shell(info.id).await {
+                // open_connection already parked a LiveConnection (with its
+                // authenticated transport + keepalive) in the map; without this,
+                // a shell-open failure (e.g. sshd rejecting the shell subsystem)
+                // leaks it there for the process lifetime since the frontend never
+                // receives an `info.id` to call close_connection with.
+                let _ = mgr.close(info.id).await;
+                return Err(e);
+            }
+        }
     }
 
     // Best-effort: record that this saved host was just connected to.

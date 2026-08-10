@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ActivityKind, ConnectionId, ConnectionInfo } from "../types/connection";
+import type { TunnelStatus } from "../types/tunnel";
 
 export type RailView = "hosts" | "files" | "serial" | "settings";
 
@@ -31,6 +32,16 @@ interface SessionsState {
 
   setActivity: (id: ConnectionId, activity: ActivityKind) => void;
   markSessionClosed: (id: ConnectionId) => void;
+
+  tunnelStatuses: Record<string, TunnelStatus[]>;
+  setTunnelStatus: (sessionId: string, status: TunnelStatus) => void;
+  removeTunnelStatus: (sessionId: string, ruleId: string) => void;
+  clearTunnelStatuses: (sessionId: string) => void;
+
+  /** Incremented whenever tunnel rules for a host change (add/delete).
+   *  TunnelsPanel subscribes to this to know when to re-fetch. */
+  rulesVersion: Record<string, number>;
+  bumpRulesVersion: (hostId: string) => void;
 }
 
 export const useSessions = create<SessionsState>((set, get) => ({
@@ -38,6 +49,8 @@ export const useSessions = create<SessionsState>((set, get) => ({
   activeId: null,
   activeActivity: {},
   connecting: {},
+  tunnelStatuses: {},
+  rulesVersion: {},
 
   railView: "hosts",
   setRailView: (v) => set((st) => (
@@ -87,7 +100,40 @@ export const useSessions = create<SessionsState>((set, get) => ({
     set((st) => ({ activeActivity: { ...st.activeActivity, [id]: activity } })),
 
   markSessionClosed: (id) =>
-    set((st) => ({
-      sessions: st.sessions.map((s) => (s.id === id ? { ...s, state: "closed" } : s)),
+    set((st) => {
+      const { [id]: _dropped, ...restTunnels } = st.tunnelStatuses;
+      return {
+        sessions: st.sessions.map((s) => (s.id === id ? { ...s, state: "closed" } : s)),
+        tunnelStatuses: restTunnels,
+      };
+    }),
+
+  setTunnelStatus: (sessionId, status) =>
+    set((s) => {
+      const existing = s.tunnelStatuses[sessionId] ?? [];
+      const idx = existing.findIndex((t) => t.rule_id === status.rule_id);
+      const updated = idx >= 0
+        ? existing.map((t, i) => (i === idx ? { ...t, ...status } : t))
+        : [...existing, status];
+      return { tunnelStatuses: { ...s.tunnelStatuses, [sessionId]: updated } };
+    }),
+
+  removeTunnelStatus: (sessionId, ruleId) =>
+    set((s) => ({
+      tunnelStatuses: {
+        ...s.tunnelStatuses,
+        [sessionId]: (s.tunnelStatuses[sessionId] ?? []).filter((t) => t.rule_id !== ruleId),
+      },
+    })),
+
+  clearTunnelStatuses: (sessionId) =>
+    set((s) => {
+      const { [sessionId]: _, ...rest } = s.tunnelStatuses;
+      return { tunnelStatuses: rest };
+    }),
+
+  bumpRulesVersion: (hostId) =>
+    set((s) => ({
+      rulesVersion: { ...s.rulesVersion, [hostId]: (s.rulesVersion[hostId] ?? 0) + 1 },
     })),
 }));
