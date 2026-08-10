@@ -22,6 +22,7 @@ pub struct HostRecord {
     pub sort_order: i64,
     pub auth_method: String,
     pub key_path: Option<String>,
+    pub connection_mode: String, // "terminal_only" | "term_tunnels" | "tunnels_only"
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -31,8 +32,9 @@ pub struct NewHost {
     pub port: u16,
     pub username: String,
     pub notes: Option<String>,
-    pub auth_method: String,       // "password" | "publickey"
+    pub auth_method: String,        // "password" | "publickey"
     pub key_path: Option<String>,
+    pub connection_mode: Option<String>, // None defaults to "terminal_only"
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -43,9 +45,10 @@ pub struct HostUpdate {
     pub username: Option<String>,
     #[serde(default, deserialize_with = "double_option_deserialize")]
     pub notes: Option<Option<String>>,  // None = leave unchanged; Some(None) = clear; Some(Some(s)) = set
-    pub auth_method: Option<String>,                       // None = leave unchanged
+    pub auth_method: Option<String>,                        // None = leave unchanged
     #[serde(default, deserialize_with = "double_option_deserialize")]
-    pub key_path: Option<Option<String>>,                 // triple-state: absent/null/string
+    pub key_path: Option<Option<String>>,                  // triple-state: absent/null/string
+    pub connection_mode: Option<String>,
 }
 
 // Serde support for triple-state Option<Option<T>>.
@@ -82,13 +85,26 @@ impl HostStore {
             )
             .map_err(|e| Error::Protocol(format!("apply auth migration: {e}")))?;
         }
+        // Idempotent migration: add connection_mode column if not present (upgrades pre-v0.9 databases).
+        let has_mode: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('hosts') WHERE name='connection_mode'")
+            .map_err(|e| Error::Protocol(format!("prepare migration check: {e}")))?
+            .exists([])
+            .map_err(|e| Error::Protocol(format!("migration check: {e}")))?;
+        if !has_mode {
+            conn.execute_batch(
+                // Default is terminal_only so existing hosts keep v0.8 behaviour unchanged.
+                "ALTER TABLE hosts ADD COLUMN connection_mode TEXT NOT NULL DEFAULT 'terminal_only';",
+            )
+            .map_err(|e| Error::Protocol(format!("migration: {e}")))?;
+        }
         Ok(Self { conn: Arc::new(Mutex::new(conn)) })
     }
 
     pub async fn list(&self) -> Result<Vec<HostRecord>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, label, host, port, username, notes, created_at, last_connected_at, sort_order, auth_method, key_path \
+            "SELECT id, label, host, port, username, notes, created_at, last_connected_at, sort_order, auth_method, key_path, connection_mode \
              FROM hosts ORDER BY sort_order ASC"
         ).map_err(|e| Error::Protocol(format!("prepare list: {e}")))?;
         let rows = stmt.query_map([], row_to_record)
@@ -103,7 +119,7 @@ impl HostStore {
     pub async fn get(&self, id: Uuid) -> Result<Option<HostRecord>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
-            "SELECT id, label, host, port, username, notes, created_at, last_connected_at, sort_order, auth_method, key_path \
+            "SELECT id, label, host, port, username, notes, created_at, last_connected_at, sort_order, auth_method, key_path, connection_mode \
              FROM hosts WHERE id = ?1"
         ).map_err(|e| Error::Protocol(format!("prepare get: {e}")))?;
         let mut rows = stmt.query_map(params![id.to_string()], row_to_record)
@@ -129,16 +145,17 @@ impl HostStore {
             sort_order: now,
             auth_method: new.auth_method,
             key_path: new.key_path,
+            connection_mode: new.connection_mode.unwrap_or_else(|| "terminal_only".to_string()),
         };
         let conn = self.conn.lock().await;
         conn.execute(
-            "INSERT INTO hosts (id, label, host, port, username, notes, created_at, last_connected_at, sort_order, auth_method, key_path) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            "INSERT INTO hosts (id, label, host, port, username, notes, created_at, last_connected_at, sort_order, auth_method, key_path, connection_mode) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 record.id.to_string(), &record.label, &record.host, record.port,
                 &record.username, &record.notes, record.created_at,
                 record.last_connected_at, record.sort_order,
-                &record.auth_method, &record.key_path,
+                &record.auth_method, &record.key_path, &record.connection_mode,
             ],
         ).map_err(|e| Error::Protocol(format!("insert host: {e}")))?;
         Ok(record)
@@ -149,7 +166,7 @@ impl HostStore {
         // Read current
         let current: HostRecord = {
             let mut stmt = conn.prepare(
-                "SELECT id, label, host, port, username, notes, created_at, last_connected_at, sort_order, auth_method, key_path \
+                "SELECT id, label, host, port, username, notes, created_at, last_connected_at, sort_order, auth_method, key_path, connection_mode \
                  FROM hosts WHERE id = ?1"
             ).map_err(|e| Error::Protocol(format!("prepare update-read: {e}")))?;
             let mut rows = stmt.query_map(params![id.to_string()], row_to_record)
@@ -176,12 +193,14 @@ impl HostStore {
                 None => current.key_path,
                 Some(v) => v,
             },
+            connection_mode: patch.connection_mode.unwrap_or(current.connection_mode),
         };
         conn.execute(
-            "UPDATE hosts SET label=?2, host=?3, port=?4, username=?5, notes=?6, auth_method=?7, key_path=?8 WHERE id=?1",
+            "UPDATE hosts SET label=?2, host=?3, port=?4, username=?5, notes=?6, auth_method=?7, key_path=?8, connection_mode=?9 WHERE id=?1",
             params![
                 merged.id.to_string(), &merged.label, &merged.host, merged.port,
                 &merged.username, &merged.notes, &merged.auth_method, &merged.key_path,
+                &merged.connection_mode,
             ],
         ).map_err(|e| Error::Protocol(format!("update host: {e}")))?;
         Ok(merged)
@@ -201,6 +220,12 @@ impl HostStore {
             params![id.to_string(), now_ms()],
         ).map_err(|e| Error::Protocol(format!("touch last_connected: {e}")))?;
         Ok(())
+    }
+
+    /// Return a clone of the underlying connection Arc so other stores (e.g. TunnelStore)
+    /// can share the same SQLite connection without opening a second file handle.
+    pub fn conn_arc(&self) -> Arc<Mutex<Connection>> {
+        self.conn.clone()
     }
 }
 
@@ -227,6 +252,7 @@ fn row_to_record(row: &rusqlite::Row) -> rusqlite::Result<HostRecord> {
         sort_order: row.get(8)?,
         auth_method: row.get(9)?,
         key_path: row.get(10)?,
+        connection_mode: row.get::<_, Option<String>>(11)?.unwrap_or_else(|| "terminal_only".to_string()),
     })
 }
 
@@ -248,6 +274,7 @@ mod tests {
             label: "prod-1".into(), host: "10.0.0.1".into(),
             port: 22, username: "chen".into(), notes: None,
             auth_method: "password".into(), key_path: None,
+            connection_mode: None,
         };
         let inserted = store.insert(new).await.unwrap();
         assert_eq!(inserted.label, "prod-1");
@@ -267,6 +294,7 @@ mod tests {
             label: "old".into(), host: "h".into(), port: 22,
             username: "u".into(), notes: None,
             auth_method: "password".into(), key_path: None,
+            connection_mode: None,
         }).await.unwrap();
 
         let updated = store.update(r.id, HostUpdate {
@@ -274,6 +302,7 @@ mod tests {
             port: Some(2222),
             host: None, username: None, notes: None,
             auth_method: None, key_path: None,
+            connection_mode: None,
         }).await.unwrap();
 
         assert_eq!(updated.label, "new");
@@ -289,6 +318,7 @@ mod tests {
             label: "x".into(), host: "h".into(), port: 22,
             username: "u".into(), notes: None,
             auth_method: "password".into(), key_path: None,
+            connection_mode: None,
         }).await.unwrap();
         store.delete(r.id).await.unwrap();
         assert!(store.list().await.unwrap().is_empty());
@@ -303,6 +333,7 @@ mod tests {
             label: "x".into(), host: "h".into(), port: 22,
             username: "u".into(), notes: None,
             auth_method: "password".into(), key_path: None,
+            connection_mode: None,
         }).await.unwrap();
         assert!(r.last_connected_at.is_none());
         store.touch_last_connected(r.id).await.unwrap();
@@ -318,6 +349,7 @@ mod tests {
             notes: None,
             auth_method: "publickey".into(),
             key_path: Some("C:/Users/x/.ssh/id_ed25519".into()),
+            connection_mode: None,
         }).await.unwrap();
         let got = store.get(rec.id).await.unwrap().unwrap();
         assert_eq!(got.auth_method, "publickey");

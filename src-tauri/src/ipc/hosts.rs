@@ -79,6 +79,7 @@ pub async fn save_host(
             notes: args.notes,
             auth_method: args.auth_method.unwrap_or_else(|| "password".to_string()),
             key_path: args.key_path,
+            connection_mode: None, // defaults to "terminal_only"; Task 4 will wire this through
         })
         .await?;
     let password_stored = match args.password.filter(|p| !p.is_empty()) {
@@ -111,6 +112,7 @@ pub async fn update_host(
                 notes: args.notes,
                 auth_method: args.auth_method,
                 key_path: args.key_path,
+                connection_mode: None, // Task 4 will wire this through from UpdateHostArgs
             },
         )
         .await?;
