@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { TunnelRule, SessionTunnelInfo } from "../types/tunnel";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { TunnelRule, TunnelStatus, SessionTunnelInfo } from "../types/tunnel";
 import type { Uuid } from "../types/connection";
 
 export async function listTunnelsForHost(host_id: Uuid): Promise<TunnelRule[]> {
@@ -56,3 +57,6 @@ export async function addSessionTunnel(args: {
 }): Promise<SessionTunnelInfo> {
   return invoke("tunnel_add_session", { args });
 }
+
+export const onTunnelStatus = (h: (s: TunnelStatus) => void): Promise<UnlistenFn> =>
+  listen<TunnelStatus>("tunnel:status", (ev) => h(ev.payload));

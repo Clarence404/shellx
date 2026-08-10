@@ -27,6 +27,7 @@ import { PassphraseDialog } from "./components/PassphraseDialog";
 import { AuthFailedDialog } from "./components/AuthFailedDialog";
 import { installSessionStream } from "./state/sessionStream";
 import { onTransferStarted, onTransferProgress, onTransferDone, onTransferState } from "./ipc/transfers";
+import { onTunnelStatus } from "./ipc/tunnels";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
 import type { HostInfo } from "./types/host";
 
@@ -217,6 +218,18 @@ export function App() {
     let cancelled = false;
     let un: (() => void) | undefined;
     onHostkeyChallenge((c) => useChallenges.getState().push(c)).then((u) => {
+      if (cancelled) { u(); return; }
+      un = u;
+    });
+    return () => { cancelled = true; un?.(); };
+  }, []);
+
+  // Wire the backend's tunnel:status events into the sessions store so
+  // the tunnel panel and activity toolbar can reflect live tunnel state.
+  useEffect(() => {
+    let cancelled = false;
+    let un: (() => void) | undefined;
+    onTunnelStatus((s) => useSessions.getState().setTunnelStatus(s.session_id, s)).then((u) => {
       if (cancelled) { u(); return; }
       un = u;
     });

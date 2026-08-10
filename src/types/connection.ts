@@ -1,6 +1,6 @@
 export type ConnectionId = string;
 export type Uuid = string;
-export type ActivityKind = "terminal" | "files";
+export type ActivityKind = "terminal" | "files" | "tunnel";
 
 export interface ConnectionInfo {
   id: ConnectionId;
