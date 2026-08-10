@@ -107,7 +107,7 @@ export const useSessions = create<SessionsState>((set, get) => ({
       const existing = s.tunnelStatuses[sessionId] ?? [];
       const idx = existing.findIndex((t) => t.rule_id === status.rule_id);
       const updated = idx >= 0
-        ? existing.map((t, i) => (i === idx ? status : t))
+        ? existing.map((t, i) => (i === idx ? { ...t, ...status } : t))
         : [...existing, status];
       return { tunnelStatuses: { ...s.tunnelStatuses, [sessionId]: updated } };
     }),

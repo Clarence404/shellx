@@ -91,6 +91,44 @@ pub async fn open_connection(
                     let _ = mgr.open_tunnel(info.id, rule.id.to_string(), rule.local_port, rule.remote_host, rule.remote_port, app.clone()).await;
                 }
             }
+            // There is no ShellDriver for tunnels_only, so nothing would
+            // normally emit EV_CLOSED if the SSH transport dies. Spawn a
+            // lightweight keepalive monitor that probes the transport every
+            // 15 seconds; on failure it calls mgr.close() which drops the
+            // subscription sender, causing the subscriber task below to see
+            // rx.recv() == None and fire EV_CLOSED naturally.
+            let mgr_monitor: SessionManager = (*mgr).clone();
+            if let Some(ssh_handle) = mgr.get_ssh_handle(info.id).await {
+                let monitor_id = info.id;
+                tokio::spawn(async move {
+                    loop {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+                        // Check if the session was already closed by the user.
+                        if mgr_monitor.get_ssh_handle(monitor_id).await.is_none() {
+                            break;
+                        }
+                        // Probe transport liveness by opening a null session
+                        // channel. When the SSH transport is dead this fails
+                        // immediately; when alive we close the probe channel.
+                        let probe = tokio::time::timeout(
+                            tokio::time::Duration::from_secs(10),
+                            ssh_handle.channel_open_session(),
+                        )
+                        .await;
+                        match probe {
+                            Ok(Ok(ch)) => {
+                                // Transport alive — close the probe channel.
+                                let _ = ch.close().await;
+                            }
+                            _ => {
+                                // Transport dead or timed out; trigger EV_CLOSED.
+                                let _ = mgr_monitor.close(monitor_id).await;
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
         }
         "term_tunnels" => {
             // Shell + tunnels.

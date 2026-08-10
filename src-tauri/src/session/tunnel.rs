@@ -50,9 +50,22 @@ pub async fn spawn_tunnel(
     app: AppHandle,
 ) -> Result<TunnelHandle, String> {
     let addr: SocketAddr = format!("127.0.0.1:{local_port}").parse().unwrap();
-    let listener = TcpListener::bind(addr)
-        .await
-        .map_err(|e| format!("bind 127.0.0.1:{local_port}: {e}"))?;
+    let listener = match TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            let msg = format!("bind 127.0.0.1:{local_port}: {e}");
+            let _ = app.emit(
+                EV_TUNNEL_STATUS,
+                TunnelStatusEvent {
+                    session_id,
+                    rule_id: rule_id.clone(),
+                    status: "error".to_string(),
+                    error: Some(msg.clone()),
+                },
+            );
+            return Err(msg);
+        }
+    };
 
     let (abort_tx, mut abort_rx) = oneshot::channel::<()>();
 

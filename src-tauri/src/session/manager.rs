@@ -246,6 +246,15 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Returns a cloned `RusshHandle` for `id`, or `None` if the session does
+    /// not exist or has no SSH handle. Used by the `tunnels_only` transport
+    /// monitor to probe liveness without holding the per-connection lock.
+    pub async fn get_ssh_handle(&self, id: ConnectionId) -> Option<RusshHandle> {
+        let lc_arc = self.inner.lock().await.get(&id).cloned()?;
+        let lc = lc_arc.lock().await;
+        lc.ssh_handle.clone()
+    }
+
     pub async fn close_all_tunnels(&self, session_id: Uuid) {
         let lc_arc = self.inner.lock().await.get(&session_id).cloned();
         if let Some(lc_arc) = lc_arc {
