@@ -1,11 +1,12 @@
 use crate::error::{Error, Result};
 use crate::protocol::sftp_types::{Entry, EntryKind};
-use crate::protocol::{AuthConfig, AuthMethod, Connection};
+use crate::protocol::{AuthConfig, AuthMethod, Connection, HostKeyPolicy};
 use async_trait::async_trait;
 use russh::client::{self, Handle};
 use russh::keys::PublicKey;
 use russh::{Channel, ChannelMsg};
 use russh_sftp::client::SftpSession;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -41,25 +42,70 @@ pub struct SftpHandle {
 /// staring at a spinner for half a minute.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+enum AuthKind {
+    Key,
+    Password,
+}
+
 impl SshProtocol {
-    pub async fn connect(host: &str, port: u16, auth: AuthConfig) -> Result<SshConnection> {
+    pub async fn connect(
+        host: &str,
+        port: u16,
+        auth: AuthConfig,
+        policy: Arc<dyn HostKeyPolicy>,
+    ) -> Result<SshConnection> {
         let config = Arc::new(client::Config::default());
-        let handler = ClientHandler;
+        let rejected = Arc::new(AtomicBool::new(false));
+        let handler = ClientHandler {
+            host: host.to_string(),
+            port,
+            policy,
+            rejected: rejected.clone(),
+        };
         let mut handle = tokio::time::timeout(
             CONNECT_TIMEOUT,
             client::connect(config, (host, port), handler),
         )
         .await
         .map_err(|_| Error::Timeout)?
-        .map_err(|e| Error::Protocol(format!("connect: {e}")))?;
+        .map_err(|e| {
+            if rejected.load(Ordering::Relaxed) {
+                Error::HostKeyDeclined
+            } else {
+                Error::Protocol(format!("connect: {e}"))
+            }
+        })?;
+        let auth_kind = match &auth.method {
+            AuthMethod::Key { .. } => AuthKind::Key,
+            AuthMethod::Password(_) => AuthKind::Password,
+        };
         let authed = match auth.method {
             AuthMethod::Password(pw) => handle
                 .authenticate_password(auth.username, pw)
                 .await
                 .map_err(|e| Error::Auth(format!("password: {e}")))?,
+            AuthMethod::Key { path, passphrase } => {
+                let key = crate::keys::load(std::path::Path::new(&path), passphrase.as_deref())?;
+                let key_arc = Arc::new(key);
+                let best_hash = handle
+                    .best_supported_rsa_hash()
+                    .await
+                    .map_err(|e| Error::Protocol(format!("rsa-hash query: {e}")))?
+                    .flatten();
+                handle
+                    .authenticate_publickey(
+                        auth.username,
+                        russh::keys::PrivateKeyWithHashAlg::new(key_arc, best_hash),
+                    )
+                    .await
+                    .map_err(|e| Error::Auth(format!("publickey: {e}")))?
+            }
         };
         if !authed.success() {
-            return Err(Error::Auth("rejected".into()));
+            return Err(match auth_kind {
+                AuthKind::Key => Error::KeyRejected("server rejected the key".into()),
+                AuthKind::Password => Error::Auth("rejected".into()),
+            });
         }
         Ok(SshConnection {
             handle: Arc::new(handle),
@@ -253,17 +299,27 @@ impl SftpHandle {
     }
 }
 
-struct ClientHandler;
+struct ClientHandler {
+    host: String,
+    port: u16,
+    policy: Arc<dyn HostKeyPolicy>,
+    /// Set to `true` when the policy rejects a key so the connect caller can
+    /// distinguish a policy-driven refusal from a network or protocol error.
+    rejected: Arc<AtomicBool>,
+}
 
 impl client::Handler for ClientHandler {
     type Error = russh::Error;
 
     async fn check_server_key(
         &mut self,
-        _server_key: &PublicKey,
+        server_key: &PublicKey,
     ) -> std::result::Result<bool, Self::Error> {
-        // v0.1: trust on first use, no verification. v0.2 will add known-hosts.
-        Ok(true)
+        let accepted = self.policy.verify(&self.host, self.port, server_key).await;
+        if !accepted {
+            self.rejected.store(true, Ordering::Relaxed);
+        }
+        Ok(accepted)
     }
 }
 
@@ -304,6 +360,14 @@ pub mod testing {
             }
         }
 
+        async fn auth_publickey(
+            &mut self,
+            _user: &str,
+            _key: &russh::keys::ssh_key::PublicKey,
+        ) -> std::result::Result<Auth, Self::Error> {
+            Ok(Auth::Accept)
+        }
+
         async fn channel_open_session(
             &mut self,
             _channel: russh::Channel<srv::Msg>,
@@ -339,6 +403,7 @@ pub mod testing {
             methods: {
                 let mut m = MethodSet::empty();
                 m.push(MethodKind::Password);
+                m.push(MethodKind::PublicKey);
                 m
             },
             inactivity_timeout: Some(Duration::from_secs(3)),
@@ -663,6 +728,14 @@ pub mod testing {
             }
         }
 
+        async fn auth_publickey(
+            &mut self,
+            _user: &str,
+            _key: &russh::keys::ssh_key::PublicKey,
+        ) -> std::result::Result<Auth, Self::Error> {
+            Ok(Auth::Accept)
+        }
+
         async fn channel_open_session(
             &mut self,
             channel: russh::Channel<srv::Msg>,
@@ -726,6 +799,18 @@ pub mod testing {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::AcceptAllPolicy;
+
+    // Same key used in src-tauri/src/keys/mod.rs — reused here to test key auth end-to-end.
+    // Unencrypted ed25519 test key (generated with `ssh-keygen -t ed25519 -N "" -C plan-test`).
+    // Checked-in as test data — never used on a real server.
+    const ED25519_PLAIN: &str = "-----BEGIN OPENSSH PRIVATE KEY-----\n\
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n\
+QyNTUxOQAAACDts7+VHRlQca5kyUBPVu2tL5DCMT6bjKiL9X//FR4Y8wAAAJDCcHY8wnB2\n\
+PAAAAAtzc2gtZWQyNTUxOQAAACDts7+VHRlQca5kyUBPVu2tL5DCMT6bjKiL9X//FR4Y8w\n\
+AAAEDyaRnxSvCwZAN1uWo9G0BwHhHWPVGgtN3NGv1/UCvvN+2zv5UdGVBxrmTJQE9W7a0v\n\
+kMIxPpuMqIv1f/8VHhjzAAAACXBsYW4tdGVzdAECAwQ=\n\
+-----END OPENSSH PRIVATE KEY-----\n";
 
     #[tokio::test]
     async fn ssh_password_auth_and_echo() {
@@ -735,7 +820,9 @@ mod tests {
             username: "chen".into(),
             method: AuthMethod::Password("pw".into()),
         };
-        let mut conn = SshProtocol::connect("127.0.0.1", port, auth).await.unwrap();
+        let mut conn = SshProtocol::connect("127.0.0.1", port, auth, Arc::new(AcceptAllPolicy))
+            .await
+            .unwrap();
         let mut shell = conn.open_shell().await.unwrap();
         shell.write_input(b"hello").await.unwrap();
         let mut buf = Vec::new();
@@ -743,5 +830,50 @@ mod tests {
         assert!(n >= 5);
         assert!(buf.starts_with(b"hello"));
         shell.close().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn connects_with_ed25519_key_auth() {
+        let td = tempfile::TempDir::new().unwrap();
+        let key_path = td.path().join("id_ed25519");
+        std::fs::write(&key_path, ED25519_PLAIN).unwrap();
+        let (port, _handle) = testing::start_echo_ssh_server().await;
+        let auth = AuthConfig {
+            username: "test".into(),
+            method: AuthMethod::Key {
+                path: key_path.to_string_lossy().into_owned(),
+                passphrase: None,
+            },
+        };
+        let conn =
+            SshProtocol::connect("127.0.0.1", port, auth, Arc::new(AcceptAllPolicy)).await;
+        assert!(conn.is_ok(), "key auth should succeed: {:?}", conn.err());
+    }
+
+    #[tokio::test]
+    async fn rejecting_policy_fails_connect() {
+        struct RejectAll;
+        #[async_trait::async_trait]
+        impl crate::protocol::HostKeyPolicy for RejectAll {
+            async fn verify(
+                &self,
+                _h: &str,
+                _p: u16,
+                _k: &russh::keys::PublicKey,
+            ) -> bool {
+                false
+            }
+        }
+        let (port, _handle) = testing::start_echo_ssh_server().await;
+        let auth = AuthConfig {
+            username: "test".into(),
+            method: AuthMethod::Password("pw".into()),
+        };
+        let res =
+            SshProtocol::connect("127.0.0.1", port, auth, Arc::new(RejectAll)).await;
+        assert!(
+            res.is_err(),
+            "connect must fail when policy rejects the host key"
+        );
     }
 }

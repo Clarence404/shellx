@@ -12,7 +12,7 @@ Current release: **v0.7.0** — see [`docs/release-notes/`](docs/release-notes/)
 
 shellx is a desktop app that gives you:
 
-- **SSH terminal** in tabs — connect to Linux / BSD / macOS servers, get a working shell with themes, custom fonts, cursor style
+- **SSH terminal** in tabs — connect to Linux / BSD / macOS servers, get a working shell with themes, custom fonts, cursor style; public-key (Ed25519/RSA/ECDSA) or password auth, host-key verification against `~/.ssh/known_hosts`
 - **SFTP file browser** — WinSCP-style dual-pane (local ↔ remote) with drag-and-drop upload / download, folder transfers, pause / resume / cancel
 - **Saved hosts + keychain** — store your servers once, quick-connect from the sidebar or the `+` menu; passwords live in the OS keychain, not a plaintext config
 
@@ -193,12 +193,6 @@ cargo --version && rustc --version
 **`warning: output filename collision at ... shellx.pdb`** — benign; `[lib]` and `[[bin]]` share the crate name. Build succeeds. See [rust-lang/cargo#6313](https://github.com/rust-lang/cargo/issues/6313).
 
 **Windows Defender flags the built exe** — it's unsigned. Code signing is on the v1.0 roadmap; for now, right-click → Properties → **Unblock**.
-
----
-
-## Security note
-
-shellx does not yet verify SSH host keys — every server is trusted on first connection. Do not use over untrusted networks. Host-key TOFU and public-key auth are on the near-term roadmap.
 
 ---
 

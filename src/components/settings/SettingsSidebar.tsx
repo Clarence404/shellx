@@ -1,7 +1,7 @@
-import { Palette, Info, Wrench, type LucideIcon } from "lucide-react";
+import { Palette, Info, Wrench, Shield, type LucideIcon } from "lucide-react";
 import { useSettingsStore, useIconSizes } from "../../state/settings";
 
-type Section = "appearance" | "about";
+type Section = "appearance" | "about" | "trusted-servers";
 
 interface Props {
   active: Section;
@@ -49,6 +49,8 @@ export function SettingsSidebar({ active, onSelect }: Props) {
         onClick={() => onSelect("appearance")} />
       <Row id="about" label="About" Icon={Info}
         onClick={() => onSelect("about")} />
+      <Row id="trusted-servers" label="已信任的服务器" Icon={Shield}
+        onClick={() => onSelect("trusted-servers")} />
       <Row id="advanced" label="Advanced" Icon={Wrench} dim />
       <div style={{ flex: 1 }} />
       <button

@@ -37,10 +37,11 @@ vi.mock("./components/Titlebar", () => ({ Titlebar: () => null }));
 const DUMMY_HOST = {
   id: "dummy", label: "dummy", host: "127.0.0.1", port: 22, username: "root",
   notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
+  auth_method: "password", key_path: null,
 };
 
 const mockHostsState = {
-  hosts: [] as Array<{ id: string; label: string; host: string; port: number; username: string; notes: string | null; created_at: number; last_connected_at: number | null; sort_order: number }>,
+  hosts: [] as Array<{ id: string; label: string; host: string; port: number; username: string; notes: string | null; created_at: number; last_connected_at: number | null; sort_order: number; auth_method: string; key_path: string | null }>,
   keychainAvailable: false,
   loaded: false,
   load: vi.fn(),
@@ -62,6 +63,8 @@ vi.mock("./ipc/hosts", () => ({
   listHosts: vi.fn().mockResolvedValue([]),
   keychainAvailable: vi.fn().mockResolvedValue(false),
   getHostPassword: vi.fn().mockResolvedValue(null),
+  getHostPassphrase: vi.fn().mockResolvedValue(null),
+  setHostPassphrase: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockTransfersState = {
@@ -94,6 +97,12 @@ vi.mock("./ipc/transfers", () => ({
 vi.mock("./ipc/settings", () => ({
   loadSettings: vi.fn().mockResolvedValue(null),
   saveSettings: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("./ipc/hostkeys", () => ({
+  hostkeyRespond: vi.fn().mockResolvedValue(undefined),
+  hostkeysList: vi.fn().mockResolvedValue([]),
+  onHostkeyChallenge: vi.fn().mockResolvedValue(() => {}),
 }));
 
 describe("App shell", () => {
@@ -147,6 +156,7 @@ describe("App shell", () => {
       {
         id: "id-1", label: "prod-1", host: "10.0.0.1", port: 22, username: "chen",
         notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
+        auth_method: "password", key_path: null,
       },
     ];
     render(<App />);

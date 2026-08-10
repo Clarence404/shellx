@@ -15,4 +15,10 @@ export const deleteHost = (id: string) =>
 export const getHostPassword = (id: string) =>
   invoke<string | null>("get_host_password", { args: { id } });
 
+export const getHostPassphrase = (id: string) =>
+  invoke<string | null>("get_host_passphrase", { args: { id } });
+
+export const setHostPassphrase = (id: string, passphrase: string) =>
+  invoke<void>("set_host_passphrase", { args: { id, passphrase } });
+
 export const keychainAvailable = () => invoke<boolean>("keychain_available");

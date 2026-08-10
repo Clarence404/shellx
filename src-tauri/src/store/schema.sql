@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS hosts (
   notes              TEXT,
   created_at         INTEGER NOT NULL,
   last_connected_at  INTEGER,
-  sort_order         INTEGER NOT NULL
+  sort_order         INTEGER NOT NULL,
+  auth_method        TEXT NOT NULL DEFAULT 'password',
+  key_path           TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_hosts_sort_order ON hosts(sort_order);

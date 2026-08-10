@@ -16,4 +16,8 @@ export interface OpenConnectionArgs {
   password: string;
   label: string;
   host_id?: string;
+  // v0.8 auth fields
+  auth_method?: string;   // "password" | "publickey"
+  key_path?: string;
+  passphrase?: string;
 }

@@ -1,4 +1,5 @@
-use shellx::protocol::{AuthConfig, AuthMethod, Connection, SshProtocol};
+use shellx::protocol::{AcceptAllPolicy, AuthConfig, AuthMethod, Connection, SshProtocol};
+use std::sync::Arc;
 use tempfile::TempDir;
 
 #[tokio::test]
@@ -16,6 +17,7 @@ async fn sftp_list_dir_upload_download_roundtrip() {
             username: "chen".into(),
             method: AuthMethod::Password("pw".into()),
         },
+        Arc::new(AcceptAllPolicy),
     )
     .await
     .unwrap();

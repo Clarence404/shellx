@@ -12,7 +12,7 @@
 
 shellx 是一个桌面应用，提供：
 
-- **SSH 终端**（多 tab）—— 连接 Linux / BSD / macOS 服务器，主题、字体、光标样式全可定制
+- **SSH 终端**（多 tab）—— 连接 Linux / BSD / macOS 服务器，主题、字体、光标样式全可定制；支持公钥（Ed25519/RSA/ECDSA）或密码认证，连接时对照 `~/.ssh/known_hosts` 验证 host key
 - **SFTP 文件浏览器** —— WinSCP 风格的双面板（本地 ↔ 远程），支持拖拽上传下载、目录传输、暂停/继续/取消
 - **保存主机 + 系统密钥链** —— 存一次主机信息，从侧边栏或 `+` 菜单一键连接；密码存在 OS 的 keychain 里，不会明文写配置
 
@@ -193,12 +193,6 @@ cargo --version && rustc --version
 **`warning: output filename collision at ... shellx.pdb`** —— 无害。`[lib]` 和 `[[bin]]` 共享 crate 名。构建正常，二进制能跑。详见 [rust-lang/cargo#6313](https://github.com/rust-lang/cargo/issues/6313)。
 
 **Windows Defender 拦截构建出来的 exe** —— 没做代码签名。签名在 v1.0 路线图上，现在的解法：右键 → 属性 → **解除阻止**。
-
----
-
-## 安全声明
-
-shellx 目前**不验证 SSH host key** —— 首次连接完全信任服务器。请勿在不可信网络使用。Host-key TOFU 和公钥认证都在近期路线图上。
 
 ---
 

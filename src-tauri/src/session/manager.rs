@@ -15,7 +15,7 @@
 
 use crate::error::{Error, Result};
 use crate::protocol::sftp_types::{Entry, EntryKind};
-use crate::protocol::{AuthConfig, Connection, ShellHandle, SftpHandle, SshProtocol};
+use crate::protocol::{AuthConfig, Connection, HostKeyPolicy, ShellHandle, SftpHandle, SshProtocol};
 use crate::session::{ConnectionId, ConnectionInfo, ConnectionKind, ConnectionState};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -88,8 +88,9 @@ impl SessionManager {
         auth: AuthConfig,
         label: String,
         host_id: Option<Uuid>,
+        policy: Arc<dyn HostKeyPolicy>,
     ) -> Result<ConnectionInfo> {
-        let connection = SshProtocol::connect(host, port, auth).await?;
+        let connection = SshProtocol::connect(host, port, auth, policy).await?;
         let id = Uuid::new_v4();
         let info = ConnectionInfo {
             id,
@@ -438,7 +439,7 @@ async fn shell_driver_loop(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{AuthConfig, AuthMethod};
+    use crate::protocol::{AcceptAllPolicy, AuthConfig, AuthMethod};
     use async_trait::async_trait;
 
     async fn open_ssh_with_shell(
@@ -451,7 +452,14 @@ mod tests {
             method: AuthMethod::Password("pw".into()),
         };
         let info = mgr
-            .open_connection("127.0.0.1", port, auth, label.into(), None)
+            .open_connection(
+                "127.0.0.1",
+                port,
+                auth,
+                label.into(),
+                None,
+                Arc::new(AcceptAllPolicy),
+            )
             .await
             .unwrap();
         mgr.open_shell(info.id).await.unwrap();
