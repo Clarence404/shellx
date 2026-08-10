@@ -1,5 +1,6 @@
 import { Plus, PanelLeftClose } from "lucide-react";
 import { HostRow } from "./HostRow";
+import { SectionHeader } from "./SectionHeader";
 import { useHostsStore } from "../state/hosts";
 import { useSessions } from "../state/sessions";
 import { useRailFiles } from "../state/railFiles";
@@ -91,28 +92,24 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
       borderRight: "1px solid var(--border)", padding: "10px 12px",
       display: "flex", flexDirection: "column",
     }}>
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 8,
-      }}>
-        <span style={{
-          fontSize: 10, letterSpacing: 1, textTransform: "uppercase",
-          color: "var(--text-3)",
-        }}>{view}</span>
-        <button
-          aria-label="Collapse drawer"
-          title={navigator.userAgent.includes("Mac") ? "Collapse (⌘+B)" : "Collapse (Ctrl+Shift+B)"}
-          onClick={toggleDrawer}
-          style={{
-            color: "var(--text-3)", padding: "2px 4px", borderRadius: 3,
-            display: "flex", alignItems: "center",
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-1)"; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}
-        >
-          <PanelLeftClose size={12} strokeWidth={2} />
-        </button>
-      </div>
+      <SectionHeader
+        label={view}
+        action={
+          <button
+            aria-label="Collapse drawer"
+            title={navigator.userAgent.includes("Mac") ? "Collapse (⌘+B)" : "Collapse (Ctrl+Shift+B)"}
+            onClick={toggleDrawer}
+            style={{
+              color: "var(--text-3)", padding: "2px 4px", borderRadius: 3,
+              display: "flex", alignItems: "center",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-1)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}
+          >
+            <PanelLeftClose size={12} strokeWidth={2} />
+          </button>
+        }
+      />
       <div style={{ flex: 1, overflow: "auto", marginBottom: 8 }}>
         {view === "hosts" && hosts.map((h) => {
           const connected = hostIsConnected(h.id);

@@ -1,5 +1,6 @@
 import { Palette, Info, Wrench, Shield, type LucideIcon } from "lucide-react";
 import { useSettingsStore, useIconSizes } from "../../state/settings";
+import { SectionHeader } from "../SectionHeader";
 
 type Section = "appearance" | "about" | "trusted-servers";
 
@@ -38,13 +39,10 @@ export function SettingsSidebar({ active, onSelect }: Props) {
   return (
     <div style={{
       width: 150, background: "var(--panel-1)",
-      borderRight: "1px solid var(--border)", padding: "12px 0",
+      borderRight: "1px solid var(--border)", padding: "12px 8px",
       display: "flex", flexDirection: "column",
     }}>
-      <div style={{
-        fontSize: 10, letterSpacing: 1, color: "var(--text-3)",
-        textTransform: "uppercase", padding: "0 12px", marginBottom: 8,
-      }}>Settings</div>
+      <SectionHeader label="Settings" />
       <Row id="appearance" label="Appearance" Icon={Palette}
         onClick={() => onSelect("appearance")} />
       <Row id="about" label="About" Icon={Info}

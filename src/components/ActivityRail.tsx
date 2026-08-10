@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Monitor, Files, Cable, Settings, type LucideIcon } from "lucide-react";
+import { Server, Files, Cable, Settings, type LucideIcon } from "lucide-react";
 import { useSessions, type RailView } from "../state/sessions";
 
 export type { RailView };
 
 const ITEMS: { id: RailView; label: string; Icon: LucideIcon }[] = [
-  { id: "hosts", label: "Hosts", Icon: Monitor },
+  { id: "hosts", label: "Hosts", Icon: Server },
   { id: "files", label: "Files", Icon: Files },
   { id: "serial", label: "Serial", Icon: Cable },
   { id: "settings", label: "Settings", Icon: Settings },
