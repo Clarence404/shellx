@@ -3,7 +3,7 @@ import { useHostsStore } from "../state/hosts";
 import { useSessions } from "../state/sessions";
 import { openConnection } from "../ipc/commands";
 import { keysDiscover } from "../ipc/keys";
-import { listTunnelsForHost, addTunnel, deleteTunnel } from "../ipc/tunnels";
+import { listTunnelsForHost, addTunnel, deleteTunnel, updateTunnel } from "../ipc/tunnels";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { HostInfo } from "../types/host";
 import type { DiscoveredKey } from "../ipc/keys";
@@ -58,6 +58,11 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   const [newLocalPort, setNewLocalPort] = useState("");
   const [newRemoteHost, setNewRemoteHost] = useState("");
   const [newRemotePort, setNewRemotePort] = useState("");
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [editRuleLabel, setEditRuleLabel] = useState("");
+  const [editRuleLocalPort, setEditRuleLocalPort] = useState("");
+  const [editRuleRemoteHost, setEditRuleRemoteHost] = useState("");
+  const [editRuleRemotePort, setEditRuleRemotePort] = useState("");
 
   // Auth method state
   const [authMode, setAuthMode] = useState<"publickey" | "password">(
@@ -177,6 +182,34 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       setTunnelRules((r) => r.filter((x) => x.id !== id));
       if (initial?.id) bumpRulesVersion(initial.id);
     }
+  }
+
+  function startEditRule(rule: { id: string; label: string; local_port: number; remote_host: string; remote_port: number }) {
+    setEditingRuleId(rule.id);
+    setEditRuleLabel(rule.label ?? "");
+    setEditRuleLocalPort(String(rule.local_port));
+    setEditRuleRemoteHost(rule.remote_host);
+    setEditRuleRemotePort(String(rule.remote_port));
+  }
+
+  async function handleSaveEditRule() {
+    if (!editingRuleId) return;
+    const local = parseInt(editRuleLocalPort, 10);
+    const rport = parseInt(editRuleRemotePort, 10);
+    const rhost = editRuleRemoteHost.trim();
+    if (isNaN(local) || !rhost || isNaN(rport)) return;
+    if (editingRuleId.startsWith("pending-")) {
+      setPendingRules((r) => r.map((x) => x.id === editingRuleId
+        ? { ...x, label: editRuleLabel.trim(), local_port: local, remote_host: rhost, remote_port: rport }
+        : x));
+    } else {
+      await updateTunnel({ id: editingRuleId, label: editRuleLabel.trim(), local_port: local, remote_host: rhost, remote_port: rport });
+      setTunnelRules((r) => r.map((x) => x.id === editingRuleId
+        ? { ...x, label: editRuleLabel.trim(), local_port: local, remote_host: rhost, remote_port: rport }
+        : x));
+      if (initial?.id) bumpRulesVersion(initial.id);
+    }
+    setEditingRuleId(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -665,26 +698,44 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             {/* Scrollable rules list */}
             {(tunnelRules.length + pendingRules.length) > 0 && (
               <div style={{ maxHeight: 168, overflowY: "auto", borderTop: "1px solid var(--border)" }}>
-                {tunnelRules.map((rule) => (
-                  <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: rule.enabled ? "var(--success)" : "var(--text-3)", flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0 }}>{rule.label || `Port ${rule.local_port}`}</span>
-                    <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {rule.local_port} → {rule.remote_host}:{rule.remote_port}
-                    </span>
-                    <button type="button" onClick={() => handleDeleteRule(rule.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14, flexShrink: 0 }}>×</button>
-                  </div>
-                ))}
-                {pendingRules.map((rule) => (
-                  <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--text-3)", flexShrink: 0 }} />
-                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0 }}>{rule.label || `Port ${rule.local_port}`}</span>
-                    <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {rule.local_port} → {rule.remote_host}:{rule.remote_port}
-                    </span>
-                    <button type="button" onClick={() => handleDeleteRule(rule.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14, flexShrink: 0 }}>×</button>
-                  </div>
-                ))}
+                {[...tunnelRules.map((r) => ({ ...r, isPending: false })), ...pendingRules.map((r) => ({ ...r, enabled: false, isPending: true }))].map((rule) => {
+                  const isEditing = editingRuleId === rule.id;
+                  return (
+                    <div key={rule.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0" }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: (!rule.isPending && rule.enabled) ? "var(--success)" : "var(--text-3)", flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0 }}>{rule.label || `Port ${rule.local_port}`}</span>
+                        <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {rule.local_port} → {rule.remote_host}:{rule.remote_port}
+                        </span>
+                        <button type="button" onClick={() => isEditing ? setEditingRuleId(null) : startEditRule(rule)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: isEditing ? "var(--accent)" : "var(--text-3)", fontSize: 13, flexShrink: 0, padding: "0 1px" }}>✎</button>
+                        <button type="button" onClick={() => handleDeleteRule(rule.id)}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14, flexShrink: 0, padding: "0 1px" }}>×</button>
+                      </div>
+                      {isEditing && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 6 }}>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <input value={editRuleLabel} onChange={(e) => setEditRuleLabel(e.target.value)} placeholder="Label"
+                              style={{ flex: 1, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)" }} />
+                            <input value={editRuleLocalPort} onChange={(e) => setEditRuleLocalPort(e.target.value)} placeholder="Local port"
+                              style={{ width: 76, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+                          </div>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <input value={editRuleRemoteHost} onChange={(e) => setEditRuleRemoteHost(e.target.value)} placeholder="Remote host"
+                              style={{ flex: 1, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+                            <input value={editRuleRemotePort} onChange={(e) => setEditRuleRemotePort(e.target.value)} placeholder="Port"
+                              style={{ width: 52, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+                            <button type="button" onClick={handleSaveEditRule}
+                              style={{ padding: "3px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
+                            <button type="button" onClick={() => setEditingRuleId(null)}
+                              style={{ padding: "3px 6px", fontSize: 11, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 

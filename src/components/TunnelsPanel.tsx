@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSessions } from "../state/sessions";
-import { listTunnelsForHost, openTunnel, closeTunnel, updateTunnel, addTunnel } from "../ipc/tunnels";
+import { listTunnelsForHost, openTunnel, closeTunnel, updateTunnel, addTunnel, deleteTunnel } from "../ipc/tunnels";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
 
 const EMPTY_STATUSES: TunnelStatus[] = [];
@@ -23,6 +23,12 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   const [addErr, setAddErr] = useState<string | null>(null);
   const [toggleErrId, setToggleErrId] = useState<string | null>(null);
   const [toggleErrMsg, setToggleErrMsg] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLabel, setEditLabel] = useState("");
+  const [editLocalPort, setEditLocalPort] = useState("");
+  const [editRemoteHost, setEditRemoteHost] = useState("");
+  const [editRemotePort, setEditRemotePort] = useState("");
+  const [editErr, setEditErr] = useState<string | null>(null);
 
   // Re-fetch rules whenever hostId changes or rules are modified (rulesVersion bump)
   useEffect(() => {
@@ -84,6 +90,44 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
     setAddLabel(""); setAddLocalPort(""); setAddRemoteHost(""); setAddRemotePort("");
   }
 
+  function startEdit(rule: TunnelRule) {
+    setEditingId(rule.id);
+    setEditLabel(rule.label ?? "");
+    setEditLocalPort(String(rule.local_port));
+    setEditRemoteHost(rule.remote_host);
+    setEditRemotePort(String(rule.remote_port));
+    setEditErr(null);
+    setToggleErrId(null);
+    setToggleErrMsg(null);
+  }
+
+  async function handleSaveEdit() {
+    if (!editingId) return;
+    const local = parseInt(editLocalPort, 10);
+    const rport = parseInt(editRemotePort, 10);
+    const rhost = editRemoteHost.trim();
+    if (!rhost || isNaN(local) || isNaN(rport)) { setEditErr("Fill all fields"); return; }
+    try {
+      await updateTunnel({ id: editingId, label: editLabel.trim(), local_port: local, remote_host: rhost, remote_port: rport });
+      setRules((r) => r.map((x) => x.id === editingId ? { ...x, label: editLabel.trim(), local_port: local, remote_host: rhost, remote_port: rport } : x));
+      setEditingId(null);
+    } catch (e) {
+      setEditErr(String(e));
+    }
+  }
+
+  async function handleDelete(rule: TunnelRule) {
+    try {
+      const s = statusFor(rule.id);
+      if (s?.status === "active") await closeTunnel(sessionId, rule.id);
+      await deleteTunnel(rule.id);
+      setRules((r) => r.filter((x) => x.id !== rule.id));
+    } catch (e) {
+      setToggleErrId(rule.id);
+      setToggleErrMsg(String(e));
+    }
+  }
+
   const activeCount = tunnelStatuses.filter((s) => s.status === "active").length;
 
   return (
@@ -113,6 +157,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
           const hasError = s?.status === "error" || toggleErrId === rule.id;
           const errMsg = toggleErrId === rule.id ? toggleErrMsg : (s?.error ?? null);
           const dotColor = hasError ? "var(--error)" : active ? "var(--success)" : "var(--text-3)";
+          const isEditing = editingId === rule.id;
           return (
             <div key={rule.id} style={{ borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px" }}>
@@ -129,6 +174,16 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                 >
                   Copy port
                 </button>
+                <button
+                  onClick={() => isEditing ? setEditingId(null) : startEdit(rule)}
+                  title="Edit"
+                  style={{ fontSize: 13, color: isEditing ? "var(--accent)" : "var(--text-2)", background: "none", border: "none", cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
+                >✎</button>
+                <button
+                  onClick={() => handleDelete(rule)}
+                  title="Delete"
+                  style={{ fontSize: 14, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
+                >×</button>
                 <div
                   onClick={() => handleToggle(rule)}
                   role="switch"
@@ -138,7 +193,28 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                   <span style={{ position: "absolute", top: 2, ...(active ? { right: 2 } : { left: 2 }), width: 12, height: 12, borderRadius: "50%", background: "var(--text-on-accent)", transition: "left .15s, right .15s" }} />
                 </div>
               </div>
-              {hasError && errMsg && (
+              {isEditing && (
+                <div style={{ padding: "0 12px 8px 27px", display: "flex", flexDirection: "column", gap: 4 }}>
+                  {editErr && <div style={{ fontSize: 10, color: "var(--error)" }}>{editErr}</div>}
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} placeholder="Label"
+                      style={{ flex: 1, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)" }} />
+                    <input value={editLocalPort} onChange={(e) => setEditLocalPort(e.target.value)} placeholder="Local port"
+                      style={{ width: 76, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <input value={editRemoteHost} onChange={(e) => setEditRemoteHost(e.target.value)} placeholder="Remote host"
+                      style={{ flex: 1, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+                    <input value={editRemotePort} onChange={(e) => setEditRemotePort(e.target.value)} placeholder="Port"
+                      style={{ width: 52, fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+                    <button onClick={handleSaveEdit}
+                      style={{ padding: "3px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
+                    <button onClick={() => setEditingId(null)}
+                      style={{ padding: "3px 6px", fontSize: 11, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
+                  </div>
+                </div>
+              )}
+              {!isEditing && hasError && errMsg && (
                 <div style={{ fontSize: 10, color: "var(--error)", padding: "0 12px 6px 27px", wordBreak: "break-all" }}>
                   {errMsg}
                 </div>
