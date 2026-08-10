@@ -1,9 +1,5 @@
 name: release
 
-# Triggers:
-#   - push a tag matching v* (v0.3.1, v0.4.0-rc.1, etc.) → auto-build all platforms
-#     and attach installers to a draft release for that tag
-#   - manually via Actions → "Run workflow" (pick a tag that already exists)
 on:
   push:
     tags: ['v*']
@@ -15,22 +11,74 @@ on:
         type: string
 
 jobs:
-  publish-tauri:
+  # Always runs first — creates the GitHub Release with release notes
+  # regardless of whether the platform builds succeed. This guarantees
+  # a Release page exists even if compilation fails on some runners.
+  create-release:
     permissions:
       contents: write
-    # Any single platform can fail without turning the workflow red — you'll
-    # still get a Draft release with the installers that DID build. Check the
-    # per-job logs in the Actions tab to see which platform bailed out.
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load release notes
+        id: notes
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          NOTES_FILE="docs/release-notes/${TAG}.md"
+          {
+            echo "body<<EOF_NOTES"
+            if [ -f "$NOTES_FILE" ]; then
+              cat "$NOTES_FILE"
+              echo
+            else
+              echo "Auto-built from the tagged commit — release notes file"
+              echo "\`$NOTES_FILE\` was not present at build time."
+              echo
+            fi
+            echo "---"
+            echo
+            echo "Installers below are unsigned — Windows SmartScreen and macOS"
+            echo "Gatekeeper will warn on first launch. See the README for the"
+            echo "\"Run anyway\" steps until installer signing lands."
+            echo "EOF_NOTES"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        id: create
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = context.payload.inputs?.tag || context.ref.replace('refs/tags/', '');
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `shellx ${tag}`,
+              body: `${{ steps.notes.outputs.body }}`,
+              draft: true,
+              prerelease: false,
+            });
+            core.setOutput('id', data.id);
+
+  # Platform builds — run in parallel after the release is created.
+  # Each uploads its installer artifact to the existing release.
+  # continue-on-error keeps the workflow green if a single platform fails.
+  publish-tauri:
+    needs: create-release
+    permissions:
+      contents: write
     continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
         include:
-          # macOS universal binary — one runner builds both arm64 and x86_64
           - platform: macos-latest
             args: '--target universal-apple-darwin'
             rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
-          # Ubuntu 22.04 — Tauri 2 needs webkit2gtk-4.1 (not -4.0 which is v1)
           - platform: ubuntu-22.04
             args: ''
             rust-targets: ''
@@ -41,18 +89,9 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
-      - name: Check out
-        # Default behaviour: check out the ref that triggered this run.
-        # Push-tag trigger → checks out the tag. workflow_dispatch → checks
-        # out whichever branch/tag you picked in the UI's "Use workflow from"
-        # dropdown, so to build a specific tag manually, select that tag from
-        # that dropdown when firing the workflow.
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up pnpm
-        # Version pulled from package.json's `packageManager` field
-        # (pnpm@10.34.5) — no `with: version:` here, otherwise
-        # action-setup@v4 refuses to run with "Multiple versions specified".
         uses: pnpm/action-setup@v4
 
       - name: Set up Node
@@ -85,44 +124,10 @@ jobs:
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
 
-      # Load per-version release notes from docs/release-notes/<TAG>.md so
-      # each release page opens with the human-written changelog instead of
-      # a generic banner. When the file is missing (forgotten commit, ad-hoc
-      # tag), a placeholder keeps the release shipping.
-      # Emitted via GH_OUTPUT multiline heredoc — the delimiter (EOF_NOTES)
-      # must not appear in any file body, hence the distinctive marker.
-      - name: Load release notes
-        id: notes
-        shell: bash
-        run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          NOTES_FILE="docs/release-notes/${TAG}.md"
-          {
-            echo "body<<EOF_NOTES"
-            if [ -f "$NOTES_FILE" ]; then
-              cat "$NOTES_FILE"
-              echo
-            else
-              echo "Auto-built from the tagged commit — release notes file"
-              echo "\`$NOTES_FILE\` was not present at build time."
-              echo
-            fi
-            echo "---"
-            echo
-            echo "Installers below are unsigned — Windows SmartScreen and macOS"
-            echo "Gatekeeper will warn on first launch. See the README for the"
-            echo "\"Run anyway\" steps until installer signing lands."
-            echo "EOF_NOTES"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Build + upload to release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.event.inputs.tag || github.ref_name }}
-          releaseName: 'shellx ${{ github.event.inputs.tag || github.ref_name }}'
-          releaseBody: ${{ steps.notes.outputs.body }}
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
