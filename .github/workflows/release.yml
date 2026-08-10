@@ -59,7 +59,7 @@ jobs:
               tag_name: tag,
               name: `shellx ${tag}`,
               body: `${{ steps.notes.outputs.body }}`,
-              draft: true,
+              draft: false,
               prerelease: false,
             });
             core.setOutput('id', data.id);
