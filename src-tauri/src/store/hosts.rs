@@ -98,6 +98,19 @@ impl HostStore {
             )
             .map_err(|e| Error::Protocol(format!("migration: {e}")))?;
         }
+        // Idempotent migration: add bind_all column to tunnels if not present (upgrades pre-v0.9 databases).
+        let has_bind_all: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('tunnels') WHERE name='bind_all'")
+            .map_err(|e| Error::Protocol(format!("prepare migration check: {e}")))?
+            .exists([])
+            .map_err(|e| Error::Protocol(format!("migration check: {e}")))?;
+        if !has_bind_all {
+            conn.execute(
+                "ALTER TABLE tunnels ADD COLUMN bind_all INTEGER NOT NULL DEFAULT 0",
+                [],
+            )
+            .map_err(|e| Error::Protocol(format!("apply bind_all migration: {e}")))?;
+        }
         Ok(Self { conn: Arc::new(Mutex::new(conn)) })
     }
 

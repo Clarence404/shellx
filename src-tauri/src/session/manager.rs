@@ -219,6 +219,7 @@ impl SessionManager {
         local_port: u16,
         remote_host: String,
         remote_port: u16,
+        bind_all: bool,
         app: AppHandle,
     ) -> crate::error::Result<()> {
         let lc_arc = self.inner.lock().await
@@ -229,7 +230,7 @@ impl SessionManager {
         let ssh = lc.ssh_handle.clone()
             .ok_or_else(|| crate::error::Error::Protocol("no SSH handle for this session".into()))?;
         let handle = crate::session::tunnel::spawn_tunnel(
-            ssh, session_id, rule_id.clone(), local_port, remote_host, remote_port, app,
+            ssh, session_id, rule_id.clone(), local_port, remote_host, remote_port, bind_all, app,
         ).await.map_err(|e| crate::error::Error::Protocol(e))?;
         lc.tunnels.insert(rule_id, handle);
         Ok(())

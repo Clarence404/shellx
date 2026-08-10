@@ -52,17 +52,21 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   // Tunnel rules state
   const [tunnelRules, setTunnelRules] = useState<TunnelRule[]>([]);
   // Pending rules buffered in create mode (written to DB after host is saved)
-  const [pendingRules, setPendingRules] = useState<Array<{ id: string; label: string; local_port: number; remote_host: string; remote_port: number }>>([]);
+  const [pendingRules, setPendingRules] = useState<Array<{ id: string; label: string; local_port: number; remote_host: string; remote_port: number; bind_all: boolean }>>([]);
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newLocalPort, setNewLocalPort] = useState("");
   const [newRemoteHost, setNewRemoteHost] = useState("");
   const [newRemotePort, setNewRemotePort] = useState("");
+  const [newBindAll, setNewBindAll] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [editRuleLabel, setEditRuleLabel] = useState("");
   const [editRuleLocalPort, setEditRuleLocalPort] = useState("");
   const [editRuleRemoteHost, setEditRuleRemoteHost] = useState("");
   const [editRuleRemotePort, setEditRuleRemotePort] = useState("");
+  const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null);
+  const [importCmd, setImportCmd] = useState("");
+  const [importParsed, setImportParsed] = useState<Array<{ local_port: number; remote_host: string; remote_port: number }> | null>(null);
 
   // Auth method state
   const [authMode, setAuthMode] = useState<"publickey" | "password">(
@@ -141,6 +145,38 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     if (typeof p === "string") setSelectedKeyPath(p);
   }
 
+  function parseSSHImport(cmd: string) {
+    const results: Array<{ local_port: number; remote_host: string; remote_port: number }> = [];
+    const re = /-L\s+(\d+):([^:\s]+):(\d+)/g;
+    let m;
+    while ((m = re.exec(cmd)) !== null) {
+      results.push({ local_port: parseInt(m[1], 10), remote_host: m[2], remote_port: parseInt(m[3], 10) });
+    }
+    return results;
+  }
+
+  function handleParseImport() {
+    const parsed = parseSSHImport(importCmd);
+    setImportParsed(parsed.length > 0 ? parsed : []);
+  }
+
+  async function handleImportAdd() {
+    if (!importParsed || importParsed.length === 0) return;
+    for (const p of importParsed) {
+      if (!initial?.id) {
+        setPendingRules((r) => [...r, { id: `pending-${Date.now()}-${p.local_port}`, label: "", local_port: p.local_port, remote_host: p.remote_host, remote_port: p.remote_port, bind_all: false }]);
+      } else {
+        try {
+          const rule = await addTunnel({ host_id: initial.id, label: "", local_port: p.local_port, remote_host: p.remote_host, remote_port: p.remote_port });
+          setTunnelRules((r) => [...r, rule]);
+          bumpRulesVersion(initial.id);
+        } catch { /* skip */ }
+      }
+    }
+    setImportCmd("");
+    setImportParsed(null);
+  }
+
   async function handleAddRule() {
     const local = parseInt(newLocalPort, 10);
     const rport = parseInt(newRemotePort, 10);
@@ -153,6 +189,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
         local_port: local,
         remote_host: rhost,
         remote_port: rport,
+        bind_all: newBindAll,
       }]);
     } else {
       const rule = await addTunnel({
@@ -161,17 +198,18 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
         local_port: local,
         remote_host: rhost,
         remote_port: rport,
+        bind_all: newBindAll,
       });
       setTunnelRules((r) => [...r, rule]);
       bumpRulesVersion(initial.id);
     }
     setAddRuleOpen(false);
-    setNewLabel(""); setNewLocalPort(""); setNewRemoteHost(""); setNewRemotePort("");
+    setNewLabel(""); setNewLocalPort(""); setNewRemoteHost(""); setNewRemotePort(""); setNewBindAll(false);
   }
 
   function handleCancelAddRule() {
     setAddRuleOpen(false);
-    setNewLabel(""); setNewLocalPort(""); setNewRemoteHost(""); setNewRemotePort("");
+    setNewLabel(""); setNewLocalPort(""); setNewRemoteHost(""); setNewRemotePort(""); setNewBindAll(false);
   }
 
   async function handleDeleteRule(id: string) {
@@ -210,6 +248,17 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       if (initial?.id) bumpRulesVersion(initial.id);
     }
     setEditingRuleId(null);
+  }
+
+  async function handleToggleBindAllRule(rule: { id: string; bind_all: boolean; isPending: boolean }) {
+    const newVal = !rule.bind_all;
+    if (rule.isPending) {
+      setPendingRules((r) => r.map((x) => x.id === rule.id ? { ...x, bind_all: newVal } : x));
+    } else {
+      await updateTunnel({ id: rule.id, bind_all: newVal });
+      setTunnelRules((r) => r.map((x) => x.id === rule.id ? { ...x, bind_all: newVal } : x));
+      if (initial?.id) bumpRulesVersion(initial.id);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -263,7 +312,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               return;
             }
             for (const r of pendingRules) {
-              await addTunnel({ host_id: inserted.id, label: r.label, local_port: r.local_port, remote_host: r.remote_host, remote_port: r.remote_port });
+              await addTunnel({ host_id: inserted.id, label: r.label, local_port: r.local_port, remote_host: r.remote_host, remote_port: r.remote_port, bind_all: r.bind_all });
             }
             const info = await openConnection({
               host, port: pn, username, password: "", label,
@@ -295,7 +344,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               return;
             }
             for (const r of pendingRules) {
-              await addTunnel({ host_id: inserted.id, label: r.label, local_port: r.local_port, remote_host: r.remote_host, remote_port: r.remote_port });
+              await addTunnel({ host_id: inserted.id, label: r.label, local_port: r.local_port, remote_host: r.remote_host, remote_port: r.remote_port, bind_all: r.bind_all });
             }
             const info = await openConnection({
               host, port: pn, username, password, label,
@@ -679,6 +728,36 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
 
           {/* Port forwarding rules */}
           <div>
+            {/* Import bar */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, padding: "0 8px", height: 28, marginBottom: 6 }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--text-3)", flexShrink: 0 }}><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              <input
+                type="text"
+                value={importCmd}
+                onChange={(e) => { setImportCmd(e.target.value); setImportParsed(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleParseImport(); }}
+                placeholder="Paste SSH command to import rules…"
+                style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 11, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
+              />
+              {importCmd.trim() && (
+                <button type="button" onClick={handleParseImport} style={{ background: "none", border: "none", fontSize: 10, color: "var(--accent)", cursor: "pointer", padding: 0, whiteSpace: "nowrap", fontWeight: 500 }}>
+                  Parse
+                </button>
+              )}
+            </div>
+            {importParsed !== null && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", marginBottom: 6, background: importParsed.length > 0 ? "rgba(166,227,161,.08)" : "rgba(243,139,168,.08)", border: `1px solid ${importParsed.length > 0 ? "var(--success)" : "var(--error)"}`, borderRadius: 4 }}>
+                <span style={{ fontSize: 10, color: importParsed.length > 0 ? "var(--success)" : "var(--error)", flex: 1, fontFamily: "var(--font-mono)" }}>
+                  {importParsed.length > 0 ? importParsed.map((p) => `${p.local_port}→${p.remote_host}:${p.remote_port}`).join(", ") : "No -L rules found"}
+                </span>
+                {importParsed.length > 0 && (
+                  <button type="button" onClick={handleImportAdd} style={{ background: "none", border: "1px solid var(--success)", borderRadius: 3, color: "var(--success)", fontSize: 10, padding: "2px 8px", cursor: "pointer", fontWeight: 500 }}>
+                    Add {importParsed.length > 1 ? `${importParsed.length} rules` : "rule"}
+                  </button>
+                )}
+              </div>
+            )}
+
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontSize: 11, color: "var(--text-2)", fontWeight: 500, textTransform: "uppercase", letterSpacing: ".8px" }}>
                 Port forwarding
@@ -695,22 +774,30 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               )}
             </div>
 
-            {/* Scrollable rules list */}
+            {/* Rules list */}
             {(tunnelRules.length + pendingRules.length) > 0 && (
-              <div style={{ maxHeight: 168, overflowY: "auto", borderTop: "1px solid var(--border)" }}>
+              <div style={{ maxHeight: 200, overflowY: "auto", borderTop: "1px solid var(--border)" }}>
                 {[...tunnelRules.map((r) => ({ ...r, isPending: false })), ...pendingRules.map((r) => ({ ...r, enabled: false, isPending: true }))].map((rule) => {
                   const isEditing = editingRuleId === rule.id;
+                  const isExpanded = expandedRuleId === rule.id && !isEditing;
+                  const sshCmd = `ssh -L ${rule.local_port}:${rule.remote_host}:${rule.remote_port} ${username || "<user>"}@${host || "<host>"}`;
                   return (
                     <div key={rule.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0" }}>
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: (!rule.isPending && rule.enabled) ? "var(--success)" : "var(--text-3)", flexShrink: 0 }} />
-                        <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0 }}>{rule.label || `Port ${rule.local_port}`}</span>
+                      <div
+                        style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", cursor: "pointer" }}
+                        onClick={() => { if (!isEditing) setExpandedRuleId(isExpanded ? null : rule.id); }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: rule.bind_all ? "var(--accent)" : ((!rule.isPending && rule.enabled) ? "var(--success)" : "var(--text-3)"), flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {rule.label || `Port ${rule.local_port}`}
+                        </span>
                         <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {rule.local_port} → {rule.remote_host}:{rule.remote_port}
                         </span>
-                        <button type="button" onClick={() => isEditing ? setEditingRuleId(null) : startEditRule(rule)}
+                        <span style={{ fontSize: 10, color: isExpanded ? "var(--accent)" : "var(--text-3)", transition: "transform .15s", display: "inline-block", transform: isExpanded ? "rotate(90deg)" : "none" }}>›</span>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); isEditing ? setEditingRuleId(null) : startEditRule(rule); setExpandedRuleId(null); }}
                           style={{ background: "none", border: "none", cursor: "pointer", color: isEditing ? "var(--accent)" : "var(--text-3)", fontSize: 13, flexShrink: 0, padding: "0 1px" }}>✎</button>
-                        <button type="button" onClick={() => handleDeleteRule(rule.id)}
+                        <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteRule(rule.id); }}
                           style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14, flexShrink: 0, padding: "0 1px" }}>×</button>
                       </div>
                       {isEditing && (
@@ -733,6 +820,27 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                           </div>
                         </div>
                       )}
+                      {isExpanded && (
+                        <div style={{ paddingBottom: 8, borderTop: "1px solid var(--border)", background: "var(--panel-1)" }}>
+                          <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", padding: "6px 0 4px" }}>SSH command</div>
+                          <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 4, padding: "5px 7px" }}>
+                            <span style={{ flex: 1, fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-2)", lineHeight: 1.5, wordBreak: "break-all" }}>{sshCmd}</span>
+                            <button type="button" onClick={() => navigator.clipboard.writeText(sshCmd)}
+                              style={{ flexShrink: 0, background: "none", border: "1px solid var(--border)", borderRadius: 3, color: "var(--text-3)", fontSize: 9.5, padding: "2px 6px", cursor: "pointer" }}>Copy</button>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6 }}>
+                            <span style={{ fontSize: 10, color: "var(--text-2)" }}>局域网共享 (0.0.0.0)</span>
+                            <div
+                              onClick={() => handleToggleBindAllRule(rule)}
+                              role="switch"
+                              aria-checked={rule.bind_all}
+                              style={{ width: 24, height: 13, borderRadius: 7, background: rule.bind_all ? "var(--accent)" : "var(--text-3)", position: "relative", cursor: "pointer", flexShrink: 0, transition: "background .15s" }}
+                            >
+                              <span style={{ position: "absolute", top: 1.5, ...(rule.bind_all ? { right: 1.5 } : { left: 1.5 }), width: 10, height: 10, borderRadius: "50%", background: "var(--text-on-accent)", transition: "left .15s, right .15s" }} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -743,31 +851,23 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             {addRuleOpen && (
               <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 8, borderTop: tunnelRules.length + pendingRules.length === 0 ? "1px solid var(--border)" : "none" }}>
                 <div style={{ display: "flex", gap: 4 }}>
-                  <input
-                    value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
-                    placeholder="Label"
-                    style={{ flex: 1, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)" }}
-                  />
-                  <input
-                    value={newLocalPort} onChange={(e) => setNewLocalPort(e.target.value)}
-                    placeholder="Local port"
-                    style={{ width: 76, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
-                  />
+                  <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Label"
+                    style={{ flex: 1, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)" }} />
+                  <input value={newLocalPort} onChange={(e) => setNewLocalPort(e.target.value)} placeholder="Local port"
+                    style={{ width: 76, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  <input
-                    value={newRemoteHost} onChange={(e) => setNewRemoteHost(e.target.value)}
-                    placeholder="Remote host"
-                    style={{ flex: 1, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
-                  />
-                  <input
-                    value={newRemotePort} onChange={(e) => setNewRemotePort(e.target.value)}
-                    placeholder="Port"
-                    style={{ width: 52, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
-                  />
+                  <input value={newRemoteHost} onChange={(e) => setNewRemoteHost(e.target.value)} placeholder="Remote host"
+                    style={{ flex: 1, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+                  <input value={newRemotePort} onChange={(e) => setNewRemotePort(e.target.value)} placeholder="Port"
+                    style={{ width: 52, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
                   <button type="button" onClick={handleAddRule} style={{ padding: "4px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
                   <button type="button" onClick={handleCancelAddRule} style={{ padding: "4px 8px", fontSize: 11, background: "none", color: "var(--text-3)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer" }}>✕</button>
                 </div>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-2)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={newBindAll} onChange={(e) => setNewBindAll(e.target.checked)} />
+                  局域网共享 (0.0.0.0)
+                </label>
               </div>
             )}
           </div>

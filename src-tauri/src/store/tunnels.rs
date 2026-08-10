@@ -15,6 +15,7 @@ pub struct TunnelRule {
     pub remote_host: String,
     pub remote_port: u16,
     pub enabled: bool,
+    pub bind_all: bool,
     pub sort_order: i32,
     pub created_at: i64,
 }
@@ -26,7 +27,8 @@ pub struct NewTunnelRule {
     pub local_port: u16,
     pub remote_host: String,
     pub remote_port: u16,
-    pub enabled: Option<bool>, // defaults to true
+    pub enabled: Option<bool>,
+    pub bind_all: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -37,6 +39,7 @@ pub struct UpdateTunnelRule {
     pub remote_host: Option<String>,
     pub remote_port: Option<u16>,
     pub enabled: Option<bool>,
+    pub bind_all: Option<bool>,
     pub sort_order: Option<i32>,
 }
 
@@ -53,7 +56,7 @@ impl TunnelStore {
         let conn = self.conn.lock().await;
         let mut stmt = conn
             .prepare(
-                "SELECT id,host_id,label,local_port,remote_host,remote_port,enabled,sort_order,created_at \
+                "SELECT id,host_id,label,local_port,remote_host,remote_port,enabled,bind_all,sort_order,created_at \
                  FROM tunnels WHERE host_id=?1 ORDER BY sort_order,created_at",
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
@@ -73,8 +76,9 @@ impl TunnelStore {
                     remote_host: row.get(4)?,
                     remote_port: row.get::<_, i64>(5)? as u16,
                     enabled: row.get::<_, i64>(6)? != 0,
-                    sort_order: row.get::<_, i64>(7)? as i32,
-                    created_at: row.get(8)?,
+                    bind_all: row.get::<_, i64>(7)? != 0,
+                    sort_order: row.get::<_, i64>(8)? as i32,
+                    created_at: row.get(9)?,
                 })
             })
             .map_err(|e| Error::Protocol(e.to_string()))?;
@@ -89,10 +93,11 @@ impl TunnelStore {
             .unwrap_or_default()
             .as_secs() as i64;
         let enabled = r.enabled.unwrap_or(true);
+        let bind_all = r.bind_all.unwrap_or(false);
         let conn = self.conn.lock().await;
         conn.execute(
-            "INSERT INTO tunnels (id,host_id,label,local_port,remote_host,remote_port,enabled,sort_order,created_at) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,0,?8)",
+            "INSERT INTO tunnels (id,host_id,label,local_port,remote_host,remote_port,enabled,bind_all,sort_order,created_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,0,?9)",
             params![
                 id.to_string(),
                 r.host_id.to_string(),
@@ -101,6 +106,7 @@ impl TunnelStore {
                 r.remote_host,
                 r.remote_port as i64,
                 enabled as i64,
+                bind_all as i64,
                 now,
             ],
         )
@@ -113,6 +119,7 @@ impl TunnelStore {
             remote_host: r.remote_host,
             remote_port: r.remote_port,
             enabled,
+            bind_all,
             sort_order: 0,
             created_at: now,
         })
@@ -154,6 +161,13 @@ impl TunnelStore {
         if let Some(v) = u.enabled {
             tx.execute(
                 "UPDATE tunnels SET enabled=?1 WHERE id=?2",
+                params![v as i64, u.id.to_string()],
+            )
+            .map_err(|e| Error::Protocol(e.to_string()))?;
+        }
+        if let Some(v) = u.bind_all {
+            tx.execute(
+                "UPDATE tunnels SET bind_all=?1 WHERE id=?2",
                 params![v as i64, u.id.to_string()],
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;

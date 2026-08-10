@@ -14,6 +14,7 @@ export async function addTunnel(rule: {
   remote_host: string;
   remote_port: number;
   enabled?: boolean;
+  bind_all?: boolean;
 }): Promise<TunnelRule> {
   return invoke("tunnel_add", { rule });
 }
@@ -25,6 +26,7 @@ export async function updateTunnel(rule: {
   remote_host?: string;
   remote_port?: number;
   enabled?: boolean;
+  bind_all?: boolean;
   sort_order?: number;
 }): Promise<void> {
   return invoke("tunnel_update", { rule });
@@ -40,6 +42,7 @@ export async function openTunnel(args: {
   local_port: number;
   remote_host: string;
   remote_port: number;
+  bind_all?: boolean;
 }): Promise<void> {
   return invoke("tunnel_open", { args });
 }

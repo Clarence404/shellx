@@ -88,7 +88,7 @@ pub async fn open_connection(
             if let Some(hid) = args.host_id {
                 let rules = tunnel_store.list_for_host(hid).await.unwrap_or_default();
                 for rule in rules.into_iter().filter(|r| r.enabled) {
-                    let _ = mgr.open_tunnel(info.id, rule.id.to_string(), rule.local_port, rule.remote_host, rule.remote_port, app.clone()).await;
+                    let _ = mgr.open_tunnel(info.id, rule.id.to_string(), rule.local_port, rule.remote_host, rule.remote_port, rule.bind_all, app.clone()).await;
                 }
             }
             // There is no ShellDriver for tunnels_only, so nothing would
@@ -139,7 +139,7 @@ pub async fn open_connection(
             if let Some(hid) = args.host_id {
                 let rules = tunnel_store.list_for_host(hid).await.unwrap_or_default();
                 for rule in rules.into_iter().filter(|r| r.enabled) {
-                    let _ = mgr.open_tunnel(info.id, rule.id.to_string(), rule.local_port, rule.remote_host, rule.remote_port, app.clone()).await;
+                    let _ = mgr.open_tunnel(info.id, rule.id.to_string(), rule.local_port, rule.remote_host, rule.remote_port, rule.bind_all, app.clone()).await;
                 }
             }
         }

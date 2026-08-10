@@ -53,6 +53,7 @@ pub struct TunnelOpenArgs {
     pub local_port: u16,
     pub remote_host: String,
     pub remote_port: u16,
+    pub bind_all: Option<bool>,
 }
 
 #[tauri::command]
@@ -67,6 +68,7 @@ pub async fn tunnel_open(
         args.local_port,
         args.remote_host,
         args.remote_port,
+        args.bind_all.unwrap_or(false),
         app,
     )
     .await

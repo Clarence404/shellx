@@ -6,6 +6,7 @@ export interface TunnelRule {
   remote_host: string;
   remote_port: number;
   enabled: boolean;
+  bind_all: boolean;
   sort_order: number;
   created_at: number;
 }

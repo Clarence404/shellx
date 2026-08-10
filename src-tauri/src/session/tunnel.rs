@@ -47,9 +47,11 @@ pub async fn spawn_tunnel(
     local_port: u16,
     remote_host: String,
     remote_port: u16,
+    bind_all: bool,
     app: AppHandle,
 ) -> Result<TunnelHandle, String> {
-    let addr: SocketAddr = format!("127.0.0.1:{local_port}").parse().unwrap();
+    let bind_host = if bind_all { "0.0.0.0" } else { "127.0.0.1" };
+    let addr: SocketAddr = format!("{bind_host}:{local_port}").parse().unwrap();
     let listener = match (|| -> std::io::Result<TcpListener> {
         let sock = TcpSocket::new_v4()?;
         // SO_REUSEADDR lets us rebind immediately after the previous session
@@ -60,7 +62,7 @@ pub async fn spawn_tunnel(
     })() {
         Ok(l) => l,
         Err(e) => {
-            let msg = format!("bind 127.0.0.1:{local_port}: {e}");
+            let msg = format!("bind {bind_host}:{local_port}: {e}");
             let _ = app.emit(
                 EV_TUNNEL_STATUS,
                 TunnelStatusEvent {
