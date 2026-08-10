@@ -1,0 +1,58 @@
+import { invoke } from "@tauri-apps/api/core";
+import type { TunnelRule, SessionTunnelInfo } from "../types/tunnel";
+import type { Uuid } from "../types/connection";
+
+export async function listTunnelsForHost(host_id: Uuid): Promise<TunnelRule[]> {
+  return invoke("tunnel_list_for_host", { hostId: host_id });
+}
+
+export async function addTunnel(rule: {
+  host_id: Uuid;
+  label: string;
+  local_port: number;
+  remote_host: string;
+  remote_port: number;
+  enabled?: boolean;
+}): Promise<TunnelRule> {
+  return invoke("tunnel_add", { rule });
+}
+
+export async function updateTunnel(rule: {
+  id: Uuid;
+  label?: string;
+  local_port?: number;
+  remote_host?: string;
+  remote_port?: number;
+  enabled?: boolean;
+  sort_order?: number;
+}): Promise<void> {
+  return invoke("tunnel_update", { rule });
+}
+
+export async function deleteTunnel(id: Uuid): Promise<void> {
+  return invoke("tunnel_delete", { args: { id } });
+}
+
+export async function openTunnel(args: {
+  session_id: Uuid;
+  rule_id: string;
+  local_port: number;
+  remote_host: string;
+  remote_port: number;
+}): Promise<void> {
+  return invoke("tunnel_open", { args });
+}
+
+export async function closeTunnel(session_id: Uuid, rule_id: string): Promise<void> {
+  return invoke("tunnel_close", { args: { session_id, rule_id } });
+}
+
+export async function addSessionTunnel(args: {
+  session_id: Uuid;
+  label: string;
+  local_port: number;
+  remote_host: string;
+  remote_port: number;
+}): Promise<SessionTunnelInfo> {
+  return invoke("tunnel_add_session", { args });
+}

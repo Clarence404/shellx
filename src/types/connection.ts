@@ -1,4 +1,5 @@
 export type ConnectionId = string;
+export type Uuid = string;
 export type ActivityKind = "terminal" | "files";
 
 export interface ConnectionInfo {
@@ -20,4 +21,6 @@ export interface OpenConnectionArgs {
   auth_method?: string;   // "password" | "publickey"
   key_path?: string;
   passphrase?: string;
+  // v0.9 tunnel connection mode
+  connection_mode?: string;  // "terminal_only" | "term_tunnels" | "tunnels_only"
 }
