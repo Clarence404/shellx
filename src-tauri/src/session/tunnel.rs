@@ -78,7 +78,7 @@ pub async fn spawn_tunnel(
                         EV_TUNNEL_STATUS,
                         TunnelStatusEvent {
                             session_id,
-                            rule_id: rule_id2.clone(),
+                            rule_id: rule_id2,
                             status: "closed".into(),
                             error: None,
                         },
@@ -111,6 +111,15 @@ pub async fn spawn_tunnel(
                         }
                         Err(e) => {
                             log::warn!("tunnel accept error: {e}");
+                            let _ = app2.emit(
+                                EV_TUNNEL_STATUS,
+                                TunnelStatusEvent {
+                                    session_id,
+                                    rule_id: rule_id2,
+                                    status: "closed".into(),
+                                    error: Some(e.to_string()),
+                                },
+                            );
                             break;
                         }
                     }
