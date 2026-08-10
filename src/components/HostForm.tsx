@@ -47,8 +47,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     initial?.connection_mode ?? "terminal_only"
   );
 
-  // Tunnel rules state (edit mode only)
+  // Tunnel rules state
   const [tunnelRules, setTunnelRules] = useState<TunnelRule[]>([]);
+  // Pending rules buffered in create mode (written to DB after host is saved)
+  const [pendingRules, setPendingRules] = useState<Array<{ id: string; label: string; local_port: number; remote_host: string; remote_port: number }>>([]);
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newLocalPort, setNewLocalPort] = useState("");
@@ -94,7 +96,8 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     keysDiscover().then((keys) => {
       setDiscoveredKeys(keys);
       if (mode === "create" && keys.length > 0) {
-        setAuthMode("publickey");
+        // Pre-select the best key so the picker is ready if the user switches to key mode,
+        // but do NOT auto-switch authMode — password is the default.
         const firstSupported = keys.find((k) => k.kind === "supported");
         if (firstSupported) setSelectedKeyPath(firstSupported.path);
       }
@@ -131,26 +134,40 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   }
 
   async function handleAddRule() {
-    if (!initial?.id) return; // create mode: defer until after host is saved
     const local = parseInt(newLocalPort, 10);
     const [rhost, rportStr] = newRemote.split(":");
     const rport = parseInt(rportStr, 10);
-    if (!newLabel || isNaN(local) || !rhost || isNaN(rport)) return;
-    const rule = await addTunnel({
-      host_id: initial.id,
-      label: newLabel,
-      local_port: local,
-      remote_host: rhost,
-      remote_port: rport,
-    });
-    setTunnelRules((r) => [...r, rule]);
+    if (isNaN(local) || !rhost || isNaN(rport)) return;
+    if (!initial?.id) {
+      // Create mode: buffer locally; rules are written to DB after host is saved
+      setPendingRules((r) => [...r, {
+        id: `pending-${Date.now()}`,
+        label: newLabel.trim(),
+        local_port: local,
+        remote_host: rhost.trim(),
+        remote_port: rport,
+      }]);
+    } else {
+      const rule = await addTunnel({
+        host_id: initial.id,
+        label: newLabel.trim(),
+        local_port: local,
+        remote_host: rhost.trim(),
+        remote_port: rport,
+      });
+      setTunnelRules((r) => [...r, rule]);
+    }
     setAddRuleOpen(false);
     setNewLabel(""); setNewLocalPort(""); setNewRemote("");
   }
 
   async function handleDeleteRule(id: string) {
-    await deleteTunnel(id);
-    setTunnelRules((r) => r.filter((x) => x.id !== id));
+    if (id.startsWith("pending-")) {
+      setPendingRules((r) => r.filter((x) => x.id !== id));
+    } else {
+      await deleteTunnel(id);
+      setTunnelRules((r) => r.filter((x) => x.id !== id));
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -203,6 +220,9 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               setErr("Host saved, but credential storage failed. Try again or connect manually.");
               return;
             }
+            for (const r of pendingRules) {
+              await addTunnel({ host_id: inserted.id, label: r.label, local_port: r.local_port, remote_host: r.remote_host, remote_port: r.remote_port });
+            }
             const info = await openConnection({
               host, port: pn, username, password: "", label,
               host_id: inserted.id,
@@ -231,6 +251,9 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             if (!inserted.password_stored) {
               setErr("Host saved, but password storage failed. Try again or connect manually.");
               return;
+            }
+            for (const r of pendingRules) {
+              await addTunnel({ host_id: inserted.id, label: r.label, local_port: r.local_port, remote_host: r.remote_host, remote_port: r.remote_port });
             }
             const info = await openConnection({
               host, port: pn, username, password, label,
@@ -618,11 +641,9 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               <span style={{ fontSize: 11, color: "var(--text-2)", fontWeight: 500, textTransform: "uppercase", letterSpacing: ".8px" }}>
                 Port forwarding
               </span>
-              {initial?.id && (
-                <button type="button" onClick={() => setAddRuleOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>
-                  + Add
-                </button>
-              )}
+              <button type="button" onClick={() => setAddRuleOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>
+                + Add
+              </button>
             </div>
             {tunnelRules.map((rule) => (
               <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", borderTop: "1px solid var(--border)" }}>
@@ -634,11 +655,16 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 <button type="button" onClick={() => handleDeleteRule(rule.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14 }}>×</button>
               </div>
             ))}
-            {!initial?.id && (
-              <div style={{ fontSize: 11, color: "var(--text-3)", padding: "8px 0" }}>
-                Save the host first to add tunnel rules.
+            {pendingRules.map((rule) => (
+              <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", borderTop: "1px solid var(--border)" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--text-3)", flexShrink: 0 }} />
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0 }}>{rule.label || `Port ${rule.local_port}`}</span>
+                <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {rule.local_port} → {rule.remote_host}:{rule.remote_port}
+                </span>
+                <button type="button" onClick={() => handleDeleteRule(rule.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14 }}>×</button>
               </div>
-            )}
+            ))}
             {addRuleOpen && (
               <div style={{ display: "flex", gap: 4, paddingTop: 6, borderTop: "1px solid var(--border)" }}>
                 <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Label" style={{ width: 70, fontSize: 11, padding: "4px 5px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)" }} />

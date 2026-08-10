@@ -149,15 +149,30 @@ describe("HostForm", () => {
     expect(screen.queryByRole("checkbox", { name: /forget stored password/i })).not.toBeInTheDocument();
   });
 
-  it("defaults to key mode with best key preselected when keys exist", async () => {
+  it("defaults to password mode even when keys exist", async () => {
     const KEY = (name: string, algo = "ED25519") => ({
       path: `C:/Users/x/.ssh/${name}`, fileName: name, kind: "supported" as const,
       algo, comment: null, encrypted: true,
     });
     (keysDiscover as Mock).mockResolvedValue([KEY("id_ed25519"), KEY("id_rsa", "RSA-4096")]);
     render(<HostForm mode="create" onDone={() => {}} onCancel={() => {}} />);
+    // Wait for keysDiscover to settle — password mode must remain selected
+    await screen.findByRole("button", { name: /密码/ });
+    expect(screen.getByRole("button", { name: /密码/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /密钥文件/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("key picker pre-populated when switching to key mode", async () => {
+    const user = userEvent.setup();
+    const KEY = (name: string, algo = "ED25519") => ({
+      path: `C:/Users/x/.ssh/${name}`, fileName: name, kind: "supported" as const,
+      algo, comment: null, encrypted: true,
+    });
+    (keysDiscover as Mock).mockResolvedValue([KEY("id_ed25519"), KEY("id_rsa", "RSA-4096")]);
+    render(<HostForm mode="create" onDone={() => {}} onCancel={() => {}} />);
+    await screen.findByRole("button", { name: /密钥文件/ });
+    await user.click(screen.getByRole("button", { name: /密钥文件/ }));
     expect(await screen.findByText(/id_ed25519/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /密钥文件/ })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("defaults to password mode when no keys found", async () => {
@@ -167,23 +182,29 @@ describe("HostForm", () => {
     expect(screen.getByRole("button", { name: /密码/ })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("switches to dropdown picker at five keys", async () => {
+  it("switches to dropdown picker at five keys after switching to key mode", async () => {
+    const user = userEvent.setup();
     const KEY = (name: string) => ({
       path: `C:/Users/x/.ssh/${name}`, fileName: name, kind: "supported" as const,
       algo: "ED25519", comment: null, encrypted: false,
     });
     (keysDiscover as Mock).mockResolvedValue(["a","b","c","d","e"].map((n) => KEY(`key_${n}`)));
     render(<HostForm mode="create" onDone={() => {}} onCancel={() => {}} />);
+    await screen.findByRole("button", { name: /密钥文件/ });
+    await user.click(screen.getByRole("button", { name: /密钥文件/ }));
     // dropdown trigger shows the selected key; key_e is not visible until opened
     expect(await screen.findByRole("button", { name: /key_a/ })).toBeInTheDocument();
     expect(screen.queryByText(/key_e/)).not.toBeInTheDocument();
   });
 
-  it("ppk keys are visible but disabled with conversion hint", async () => {
+  it("ppk keys visible but disabled after switching to key mode", async () => {
+    const user = userEvent.setup();
     (keysDiscover as Mock).mockResolvedValue([
       { path: "C:/u/.ssh/p.ppk", fileName: "p.ppk", kind: "ppk", algo: null, comment: null, encrypted: false },
     ]);
     render(<HostForm mode="create" onDone={() => {}} onCancel={() => {}} />);
+    await screen.findByRole("button", { name: /密钥文件/ });
+    await user.click(screen.getByRole("button", { name: /密钥文件/ }));
     const chip = await screen.findByText(/p\.ppk/);
     expect(chip.closest("[aria-disabled='true']")).not.toBeNull();
   });
