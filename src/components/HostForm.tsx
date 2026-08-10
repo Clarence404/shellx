@@ -54,7 +54,8 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newLocalPort, setNewLocalPort] = useState("");
-  const [newRemote, setNewRemote] = useState("");
+  const [newRemoteHost, setNewRemoteHost] = useState("");
+  const [newRemotePort, setNewRemotePort] = useState("");
 
   // Auth method state
   const [authMode, setAuthMode] = useState<"publickey" | "password">(
@@ -135,16 +136,15 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
 
   async function handleAddRule() {
     const local = parseInt(newLocalPort, 10);
-    const [rhost, rportStr] = newRemote.split(":");
-    const rport = parseInt(rportStr, 10);
+    const rport = parseInt(newRemotePort, 10);
+    const rhost = newRemoteHost.trim();
     if (isNaN(local) || !rhost || isNaN(rport)) return;
     if (!initial?.id) {
-      // Create mode: buffer locally; rules are written to DB after host is saved
       setPendingRules((r) => [...r, {
         id: `pending-${Date.now()}`,
         label: newLabel.trim(),
         local_port: local,
-        remote_host: rhost.trim(),
+        remote_host: rhost,
         remote_port: rport,
       }]);
     } else {
@@ -152,13 +152,18 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
         host_id: initial.id,
         label: newLabel.trim(),
         local_port: local,
-        remote_host: rhost.trim(),
+        remote_host: rhost,
         remote_port: rport,
       });
       setTunnelRules((r) => [...r, rule]);
     }
     setAddRuleOpen(false);
-    setNewLabel(""); setNewLocalPort(""); setNewRemote("");
+    setNewLabel(""); setNewLocalPort(""); setNewRemoteHost(""); setNewRemotePort("");
+  }
+
+  function handleCancelAddRule() {
+    setAddRuleOpen(false);
+    setNewLabel(""); setNewLocalPort(""); setNewRemoteHost(""); setNewRemotePort("");
   }
 
   async function handleDeleteRule(id: string) {
@@ -640,37 +645,74 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontSize: 11, color: "var(--text-2)", fontWeight: 500, textTransform: "uppercase", letterSpacing: ".8px" }}>
                 Port forwarding
+                {(tunnelRules.length + pendingRules.length) > 0 && (
+                  <span style={{ marginLeft: 6, fontWeight: 400, color: "var(--text-3)" }}>
+                    {tunnelRules.length + pendingRules.length} rules
+                  </span>
+                )}
               </span>
-              <button type="button" onClick={() => setAddRuleOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>
-                + Add
-              </button>
+              {!addRuleOpen && (
+                <button type="button" onClick={() => setAddRuleOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>
+                  + Add
+                </button>
+              )}
             </div>
-            {tunnelRules.map((rule) => (
-              <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", borderTop: "1px solid var(--border)" }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: rule.enabled ? "var(--success)" : "var(--text-3)", flexShrink: 0 }} />
-                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0 }}>{rule.label || `Port ${rule.local_port}`}</span>
-                <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {rule.local_port} → {rule.remote_host}:{rule.remote_port}
-                </span>
-                <button type="button" onClick={() => handleDeleteRule(rule.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14 }}>×</button>
+
+            {/* Scrollable rules list */}
+            {(tunnelRules.length + pendingRules.length) > 0 && (
+              <div style={{ maxHeight: 168, overflowY: "auto", borderTop: "1px solid var(--border)" }}>
+                {tunnelRules.map((rule) => (
+                  <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: rule.enabled ? "var(--success)" : "var(--text-3)", flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0 }}>{rule.label || `Port ${rule.local_port}`}</span>
+                    <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {rule.local_port} → {rule.remote_host}:{rule.remote_port}
+                    </span>
+                    <button type="button" onClick={() => handleDeleteRule(rule.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14, flexShrink: 0 }}>×</button>
+                  </div>
+                ))}
+                {pendingRules.map((rule) => (
+                  <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--text-3)", flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0 }}>{rule.label || `Port ${rule.local_port}`}</span>
+                    <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {rule.local_port} → {rule.remote_host}:{rule.remote_port}
+                    </span>
+                    <button type="button" onClick={() => handleDeleteRule(rule.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14, flexShrink: 0 }}>×</button>
+                  </div>
+                ))}
               </div>
-            ))}
-            {pendingRules.map((rule) => (
-              <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", borderTop: "1px solid var(--border)" }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--text-3)", flexShrink: 0 }} />
-                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0 }}>{rule.label || `Port ${rule.local_port}`}</span>
-                <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {rule.local_port} → {rule.remote_host}:{rule.remote_port}
-                </span>
-                <button type="button" onClick={() => handleDeleteRule(rule.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14 }}>×</button>
-              </div>
-            ))}
+            )}
+
+            {/* Two-row add form */}
             {addRuleOpen && (
-              <div style={{ display: "flex", gap: 4, paddingTop: 6, borderTop: "1px solid var(--border)" }}>
-                <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Label" style={{ width: 70, fontSize: 11, padding: "4px 5px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)" }} />
-                <input value={newLocalPort} onChange={(e) => setNewLocalPort(e.target.value)} placeholder="Port" style={{ width: 52, fontSize: 11, padding: "4px 5px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
-                <input value={newRemote} onChange={(e) => setNewRemote(e.target.value)} placeholder="host:port" style={{ flex: 1, fontSize: 11, padding: "4px 5px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
-                <button type="button" onClick={handleAddRule} style={{ padding: "4px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingTop: 8, borderTop: tunnelRules.length + pendingRules.length === 0 ? "1px solid var(--border)" : "none" }}>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    value={newLabel} onChange={(e) => setNewLabel(e.target.value)}
+                    placeholder="Label"
+                    style={{ flex: 1, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)" }}
+                  />
+                  <input
+                    value={newLocalPort} onChange={(e) => setNewLocalPort(e.target.value)}
+                    placeholder="Local port"
+                    style={{ width: 76, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
+                  />
+                </div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input
+                    value={newRemoteHost} onChange={(e) => setNewRemoteHost(e.target.value)}
+                    placeholder="Remote host"
+                    style={{ flex: 1, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
+                  />
+                  <input
+                    value={newRemotePort} onChange={(e) => setNewRemotePort(e.target.value)}
+                    placeholder="Port"
+                    style={{ width: 52, fontSize: 11, padding: "4px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
+                  />
+                  <button type="button" onClick={handleAddRule} style={{ padding: "4px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
+                  <button type="button" onClick={handleCancelAddRule} style={{ padding: "4px 8px", fontSize: 11, background: "none", color: "var(--text-3)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer" }}>✕</button>
+                </div>
               </div>
             )}
           </div>
