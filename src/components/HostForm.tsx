@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useHostsStore } from "../state/hosts";
 import { openConnection } from "../ipc/commands";
 import { keysDiscover } from "../ipc/keys";
+import { listTunnelsForHost, addTunnel, deleteTunnel } from "../ipc/tunnels";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import type { HostInfo } from "../types/host";
 import type { DiscoveredKey } from "../ipc/keys";
+import type { TunnelRule } from "../types/tunnel";
 
 type Mode = "create" | "edit";
 type DoneAction = "connected" | "saved";
@@ -36,6 +38,21 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   const [forgetPassword, setForgetPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Tab state
+  const [tab, setTab] = useState<"basic" | "tunnels">("basic");
+
+  // Connection mode state
+  const [connectionMode, setConnectionMode] = useState<string>(
+    initial?.connection_mode ?? "terminal_only"
+  );
+
+  // Tunnel rules state (edit mode only)
+  const [tunnelRules, setTunnelRules] = useState<TunnelRule[]>([]);
+  const [addRuleOpen, setAddRuleOpen] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newLocalPort, setNewLocalPort] = useState("");
+  const [newRemote, setNewRemote] = useState("");
 
   // Auth method state
   const [authMode, setAuthMode] = useState<"publickey" | "password">(
@@ -84,6 +101,13 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load tunnel rules on mount in edit mode
+  useEffect(() => {
+    if (mode === "edit" && initial?.id) {
+      listTunnelsForHost(initial.id).then(setTunnelRules).catch(() => {});
+    }
+  }, [mode, initial?.id]);
+
   // Click-outside to close key dropdown
   useEffect(() => {
     if (!keyDropdownOpen) return;
@@ -106,6 +130,29 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     if (typeof p === "string") setSelectedKeyPath(p);
   }
 
+  async function handleAddRule() {
+    if (!initial?.id) return; // create mode: defer until after host is saved
+    const local = parseInt(newLocalPort, 10);
+    const [rhost, rportStr] = newRemote.split(":");
+    const rport = parseInt(rportStr, 10);
+    if (!newLabel || isNaN(local) || !rhost || isNaN(rport)) return;
+    const rule = await addTunnel({
+      host_id: initial.id,
+      label: newLabel,
+      local_port: local,
+      remote_host: rhost,
+      remote_port: rport,
+    });
+    setTunnelRules((r) => [...r, rule]);
+    setAddRuleOpen(false);
+    setNewLabel(""); setNewLocalPort(""); setNewRemote("");
+  }
+
+  async function handleDeleteRule(id: string) {
+    await deleteTunnel(id);
+    setTunnelRules((r) => r.filter((x) => x.id !== id));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -119,6 +166,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             auth_method: "publickey",
             key_path: selectedKeyPath,
             passphrase: forgetPassphrase ? null : (passphrase || undefined),
+            connection_mode: connectionMode,
           });
           if (!result.password_stored) {
             setErr("Host saved, but credential storage failed. Try again or connect manually.");
@@ -131,6 +179,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             id: initial.id,
             label, host, port: Number(port), username,
             password: forgetPassword ? null : (password.length > 0 ? password : undefined),
+            connection_mode: connectionMode,
           });
           if (!result.password_stored) {
             setErr("Host saved, but password storage failed. Try again or connect manually.");
@@ -148,6 +197,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               auth_method: "publickey",
               key_path: selectedKeyPath ?? undefined,
               passphrase: passphrase || undefined,
+              connection_mode: connectionMode,
             });
             if (!inserted.password_stored) {
               setErr("Host saved, but credential storage failed. Try again or connect manually.");
@@ -176,6 +226,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             const inserted = await addHost({
               label, host, port: pn, username,
               password: (rememberPassword && canRememberPw) ? password : undefined,
+              connection_mode: connectionMode,
             });
             if (!inserted.password_stored) {
               setErr("Host saved, but password storage failed. Try again or connect manually.");
@@ -390,156 +441,239 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
 
   return (
     <form onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()} style={{
-      background: "var(--panel-2)", padding: 20, borderRadius: 8,
+      background: "var(--panel-2)", borderRadius: 8,
       border: "1px solid var(--border)", width: 340,
-      display: "flex", flexDirection: "column", gap: 10,
+      display: "flex", flexDirection: "column",
     }}>
-      <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-        {mode === "edit" ? "Edit host" : "New SSH connection"}
-      </h3>
-
-      <Field label="Label" value={label} onChange={setLabel} placeholder="auto-fills as user@host" />
-      <Field label="Host" value={host} onChange={setHost} />
-      <Field label="Port" value={port} onChange={setPort} />
-      <Field label="Username" value={username} onChange={setUsername} />
-
-      {/* Auth method segmented switch */}
-      <div style={{ display: "flex", gap: 4 }}>
-        <button
-          type="button"
-          aria-pressed={authMode === "publickey"}
-          onClick={() => setAuthMode("publickey")}
-          style={{
-            flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 4, cursor: "pointer",
-            border: "1px solid var(--border)",
-            background: authMode === "publickey" ? "var(--accent)" : "var(--panel-1)",
-            color: authMode === "publickey" ? "var(--text-on-accent)" : "var(--text-2)",
-            fontWeight: authMode === "publickey" ? 600 : 400,
-          }}
-        >
-          密钥文件
-        </button>
-        <button
-          type="button"
-          aria-pressed={authMode === "password"}
-          onClick={() => setAuthMode("password")}
-          style={{
-            flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 4, cursor: "pointer",
-            border: "1px solid var(--border)",
-            background: authMode === "password" ? "var(--accent)" : "var(--panel-1)",
-            color: authMode === "password" ? "var(--text-on-accent)" : "var(--text-2)",
-            fontWeight: authMode === "password" ? 600 : 400,
-          }}
-        >
-          密码
-        </button>
+      {/* Header */}
+      <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid var(--border)" }}>
+        <h3 style={{ fontSize: 13, fontWeight: 600 }}>
+          {mode === "edit" ? "Edit host" : "New SSH connection"}
+        </h3>
       </div>
 
-      {/* Public-key section */}
-      {authMode === "publickey" && (
-        <>
-          {renderKeyPicker()}
+      {/* Tab bar */}
+      <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
+        {(["basic", "tunnels"] as const).map((t) => (
+          <button key={t} type="button" onClick={() => setTab(t)} style={{
+            flex: 1, padding: "7px 0", fontSize: 11, textAlign: "center",
+            background: "none", border: "none", cursor: "pointer",
+            borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
+            color: tab === t ? "var(--text-1)" : "var(--text-2)",
+            fontWeight: tab === t ? 600 : 400,
+            textTransform: "capitalize",
+          }}>
+            {t}
+          </button>
+        ))}
+      </div>
 
-          <Field
-            label="Passphrase"
-            type="password"
-            value={passphrase}
-            onChange={setPassphrase}
-            placeholder={mode === "edit" ? "留空保持不变" : ""}
-          />
+      {/* Basic tab */}
+      {tab === "basic" && (
+        <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+          <Field label="Label" value={label} onChange={setLabel} placeholder="auto-fills as user@host" />
+          <Field label="Host" value={host} onChange={setHost} />
+          <Field label="Port" value={port} onChange={setPort} />
+          <Field label="Username" value={username} onChange={setUsername} />
 
-          {mode === "edit" && keychainAvailable && (
+          {/* Auth method segmented switch */}
+          <div style={{ display: "flex", gap: 4 }}>
+            <button
+              type="button"
+              aria-pressed={authMode === "publickey"}
+              onClick={() => setAuthMode("publickey")}
+              style={{
+                flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 4, cursor: "pointer",
+                border: "1px solid var(--border)",
+                background: authMode === "publickey" ? "var(--accent)" : "var(--panel-1)",
+                color: authMode === "publickey" ? "var(--text-on-accent)" : "var(--text-2)",
+                fontWeight: authMode === "publickey" ? 600 : 400,
+              }}
+            >
+              密钥文件
+            </button>
+            <button
+              type="button"
+              aria-pressed={authMode === "password"}
+              onClick={() => setAuthMode("password")}
+              style={{
+                flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 4, cursor: "pointer",
+                border: "1px solid var(--border)",
+                background: authMode === "password" ? "var(--accent)" : "var(--panel-1)",
+                color: authMode === "password" ? "var(--text-on-accent)" : "var(--text-2)",
+                fontWeight: authMode === "password" ? 600 : 400,
+              }}
+            >
+              密码
+            </button>
+          </div>
+
+          {/* Public-key section */}
+          {authMode === "publickey" && (
+            <>
+              {renderKeyPicker()}
+
+              <Field
+                label="Passphrase"
+                type="password"
+                value={passphrase}
+                onChange={setPassphrase}
+                placeholder={mode === "edit" ? "留空保持不变" : ""}
+              />
+
+              {mode === "edit" && keychainAvailable && (
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-1)" }}>
+                  <input
+                    type="checkbox"
+                    checked={forgetPassphrase}
+                    onChange={(e) => setForgetPassphrase(e.target.checked)}
+                  />
+                  忘掉已保存的 passphrase
+                </label>
+              )}
+            </>
+          )}
+
+          {/* Password section */}
+          {authMode === "password" && (
+            <>
+              <Field
+                label="Password"
+                type="password"
+                value={password}
+                onChange={setPassword}
+                placeholder={mode === "edit" ? "leave blank to keep current" : ""}
+              />
+
+              {mode === "edit" && keychainAvailable && (
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-1)" }}>
+                  <input
+                    type="checkbox"
+                    checked={forgetPassword}
+                    onChange={(e) => setForgetPassword(e.target.checked)}
+                  />
+                  Forget stored password
+                  <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+                    Removes the saved password. You'll need to type it next connection.
+                  </span>
+                </label>
+              )}
+            </>
+          )}
+
+          {mode === "create" && (
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-1)" }}>
               <input
                 type="checkbox"
-                checked={forgetPassphrase}
-                onChange={(e) => setForgetPassphrase(e.target.checked)}
+                checked={saveHost}
+                onChange={(e) => setSaveHost(e.target.checked)}
               />
-              忘掉已保存的 passphrase
+              Save this host
             </label>
           )}
-        </>
-      )}
 
-      {/* Password section */}
-      {authMode === "password" && (
-        <>
-          <Field
-            label="Password"
-            type="password"
-            value={password}
-            onChange={setPassword}
-            placeholder={mode === "edit" ? "leave blank to keep current" : ""}
-          />
-
-          {mode === "edit" && keychainAvailable && (
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-1)" }}>
+          {mode === "create" && saveHost && authMode === "password" && (
+            <label style={{
+              display: "flex", alignItems: "center", gap: 8, fontSize: 11,
+              color: canRememberPw ? "var(--text-1)" : "var(--text-3)",
+            }}>
               <input
                 type="checkbox"
-                checked={forgetPassword}
-                onChange={(e) => setForgetPassword(e.target.checked)}
+                checked={rememberPassword}
+                disabled={!canRememberPw}
+                onChange={(e) => setRememberPassword(e.target.checked)}
               />
-              Forget stored password
-              <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-                Removes the saved password. You'll need to type it next connection.
+              Remember password
+              {!keychainAvailable && (
+                <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+                  (Password storage unavailable on this system)
+                </span>
+              )}
+            </label>
+          )}
+        </div>
+      )}
+
+      {/* Tunnels tab */}
+      {tab === "tunnels" && (
+        <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Connection mode segmented control */}
+          <div style={{ display: "flex", gap: 4 }}>
+            {(["terminal_only", "term_tunnels", "tunnels_only"] as const).map((m) => (
+              <button key={m} type="button" onClick={() => setConnectionMode(m)} style={{
+                flex: 1, padding: "5px 4px", fontSize: 10, borderRadius: 4, cursor: "pointer",
+                border: "1px solid var(--border)",
+                background: connectionMode === m ? "var(--accent)" : "var(--panel-1)",
+                color: connectionMode === m ? "var(--text-on-accent)" : "var(--text-2)",
+                fontWeight: connectionMode === m ? 600 : 400,
+              }}>
+                {m === "term_tunnels" ? "Term + Tunnels" : m === "tunnels_only" ? "仅 Tunnels" : "仅 Terminal"}
+              </button>
+            ))}
+          </div>
+
+          {/* Port forwarding rules */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 11, color: "var(--text-2)", fontWeight: 500, textTransform: "uppercase", letterSpacing: ".8px" }}>
+                Port forwarding
               </span>
-            </label>
-          )}
-        </>
+              {initial?.id && (
+                <button type="button" onClick={() => setAddRuleOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>
+                  + Add
+                </button>
+              )}
+            </div>
+            {tunnelRules.map((rule) => (
+              <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 0", borderTop: "1px solid var(--border)" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: rule.enabled ? "var(--success)" : "var(--text-3)", flexShrink: 0 }} />
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", width: 60, flexShrink: 0 }}>{rule.label || `Port ${rule.local_port}`}</span>
+                <span style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {rule.local_port} → {rule.remote_host}:{rule.remote_port}
+                </span>
+                <button type="button" onClick={() => handleDeleteRule(rule.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 14 }}>×</button>
+              </div>
+            ))}
+            {!initial?.id && (
+              <div style={{ fontSize: 11, color: "var(--text-3)", padding: "8px 0" }}>
+                Save the host first to add tunnel rules.
+              </div>
+            )}
+            {addRuleOpen && (
+              <div style={{ display: "flex", gap: 4, paddingTop: 6, borderTop: "1px solid var(--border)" }}>
+                <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Label" style={{ width: 70, fontSize: 11, padding: "4px 5px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)" }} />
+                <input value={newLocalPort} onChange={(e) => setNewLocalPort(e.target.value)} placeholder="Port" style={{ width: 52, fontSize: 11, padding: "4px 5px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+                <input value={newRemote} onChange={(e) => setNewRemote(e.target.value)} placeholder="host:port" style={{ flex: 1, fontSize: 11, padding: "4px 5px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)", fontFamily: "var(--font-mono)" }} />
+                <button type="button" onClick={handleAddRule} style={{ padding: "4px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
-      {mode === "create" && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-1)" }}>
-          <input
-            type="checkbox"
-            checked={saveHost}
-            onChange={(e) => setSaveHost(e.target.checked)}
-          />
-          Save this host
-        </label>
-      )}
-
-      {mode === "create" && saveHost && authMode === "password" && (
-        <label style={{
-          display: "flex", alignItems: "center", gap: 8, fontSize: 11,
-          color: canRememberPw ? "var(--text-1)" : "var(--text-3)",
-        }}>
-          <input
-            type="checkbox"
-            checked={rememberPassword}
-            disabled={!canRememberPw}
-            onChange={(e) => setRememberPassword(e.target.checked)}
-          />
-          Remember password
-          {!keychainAvailable && (
-            <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-              (Password storage unavailable on this system)
-            </span>
-          )}
-        </label>
-      )}
-
-      {err && <div style={{ color: "var(--error)", fontSize: 11 }}>{err}</div>}
-
-      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-        <button
-          type="button"
-          onClick={onCancel}
-          style={{ flex: 1, padding: "6px 10px", borderRadius: 5, color: "var(--text-2)" }}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={busy || !host || !username}
-          style={{
-            flex: 1, padding: "6px 10px", borderRadius: 5,
-            background: "var(--accent)", color: "var(--text-on-accent)",
-            fontWeight: 600,
-          }}
-        >
-          {busy ? busyLabel : primaryLabel}
-        </button>
+      {/* Shared footer */}
+      <div style={{ padding: "0 20px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {err && <div style={{ color: "var(--error)", fontSize: 11 }}>{err}</div>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{ flex: 1, padding: "6px 10px", borderRadius: 5, color: "var(--text-2)" }}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={busy || !host || !username}
+            style={{
+              flex: 1, padding: "6px 10px", borderRadius: 5,
+              background: "var(--accent)", color: "var(--text-on-accent)",
+              fontWeight: 600,
+            }}
+          >
+            {busy ? busyLabel : primaryLabel}
+          </button>
+        </div>
       </div>
     </form>
   );
