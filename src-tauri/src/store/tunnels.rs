@@ -120,48 +120,52 @@ impl TunnelStore {
 
     pub async fn update(&self, u: UpdateTunnelRule) -> Result<()> {
         let conn = self.conn.lock().await;
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| Error::Protocol(e.to_string()))?;
         if let Some(v) = u.label {
-            conn.execute(
+            tx.execute(
                 "UPDATE tunnels SET label=?1 WHERE id=?2",
                 params![v, u.id.to_string()],
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
         }
         if let Some(v) = u.local_port {
-            conn.execute(
+            tx.execute(
                 "UPDATE tunnels SET local_port=?1 WHERE id=?2",
                 params![v as i64, u.id.to_string()],
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
         }
         if let Some(v) = u.remote_host {
-            conn.execute(
+            tx.execute(
                 "UPDATE tunnels SET remote_host=?1 WHERE id=?2",
                 params![v, u.id.to_string()],
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
         }
         if let Some(v) = u.remote_port {
-            conn.execute(
+            tx.execute(
                 "UPDATE tunnels SET remote_port=?1 WHERE id=?2",
                 params![v as i64, u.id.to_string()],
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
         }
         if let Some(v) = u.enabled {
-            conn.execute(
+            tx.execute(
                 "UPDATE tunnels SET enabled=?1 WHERE id=?2",
                 params![v as i64, u.id.to_string()],
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
         }
         if let Some(v) = u.sort_order {
-            conn.execute(
+            tx.execute(
                 "UPDATE tunnels SET sort_order=?1 WHERE id=?2",
                 params![v as i64, u.id.to_string()],
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
         }
+        tx.commit().map_err(|e| Error::Protocol(e.to_string()))?;
         Ok(())
     }
 
@@ -206,6 +210,10 @@ mod tests {
         assert!(rule.enabled);
         let list = store.list_for_host(host_id).await.unwrap();
         assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, rule.id);
+        assert_eq!(list[0].host_id, host_id);
+        assert_eq!(list[0].local_port, 15432);
+        assert!(list[0].enabled);
     }
 
     #[tokio::test]
