@@ -10,6 +10,7 @@ pub mod local;
 pub mod settings;
 pub mod sftp;
 pub mod transfer;
+pub mod tunnels;
 
 use crate::error::Result;
 use crate::protocol::{AuthConfig, AuthMethod};

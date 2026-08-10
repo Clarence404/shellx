@@ -5,7 +5,7 @@ use shellx::config_paths::resolve_config_dir;
 use shellx::ipc;
 use shellx::session::manager::SessionManager;
 use shellx::settings::SettingsStore;
-use shellx::store::{HostStore, KeychainStore};
+use shellx::store::{HostStore, KeychainStore, TunnelStore};
 use shellx::transfer::TransferManager;
 
 fn main() {
@@ -15,6 +15,7 @@ fn main() {
     let config_dir = resolve_config_dir();
 
     let host_store = HostStore::open(&config_dir).expect("failed to open hosts.db");
+    let tunnel_store = TunnelStore::new(host_store.conn_arc());
     let keychain = KeychainStore::open();
     let settings_store = SettingsStore::open(&config_dir);
 
@@ -33,6 +34,7 @@ fn main() {
         .manage(SessionManager::new())
         .manage(TransferManager::new())
         .manage(host_store)
+        .manage(tunnel_store)
         .manage(keychain)
         .manage(settings_store)
         .manage(shellx::ipc::config::ConfigDir(config_dir.clone()))
@@ -86,6 +88,10 @@ fn main() {
             ipc::config::get_config_paths,
             ipc::hostkeys::hostkey_respond,
             ipc::hostkeys::hostkeys_list,
+            ipc::tunnels::tunnel_list_for_host,
+            ipc::tunnels::tunnel_add,
+            ipc::tunnels::tunnel_update,
+            ipc::tunnels::tunnel_delete,
         ])
         .run(tauri::generate_context!())
         .expect("shellx failed to start");
