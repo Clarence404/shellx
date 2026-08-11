@@ -38,6 +38,48 @@ impl LocalPtyHandle {
     pub async fn close(&self) {
         let _ = self.writer.send(LocalCmd::Close).await;
     }
+
+    /// Returns a cheap sender clone that can be held without holding the
+    /// `local_sessions` mutex. Used by `SessionManager` so the write/resize/
+    /// close paths can drop the map lock before awaiting the channel send.
+    pub fn writer_clone(&self) -> LocalPtyWriter {
+        LocalPtyWriter(self.writer.clone())
+    }
+}
+
+/// Cheap cloneable handle to the local PTY's command channel. Lets callers
+/// send commands without holding the `local_sessions` mutex across an await.
+pub struct LocalPtyWriter(mpsc::Sender<LocalCmd>);
+
+impl LocalPtyWriter {
+    pub async fn send_bytes(&self, data: &[u8]) -> Result<()> {
+        self.0
+            .send(LocalCmd::Bytes(data.to_vec()))
+            .await
+            .map_err(|_| Error::Closed)
+    }
+
+    pub async fn send_resize(&self, cols: u16, rows: u16) -> Result<()> {
+        self.0
+            .send(LocalCmd::Resize(cols, rows))
+            .await
+            .map_err(|_| Error::Closed)
+    }
+
+    pub async fn send_close(&self) {
+        let _ = self.0.send(LocalCmd::Close).await;
+    }
+}
+
+#[cfg(test)]
+impl LocalPtyHandle {
+    /// Creates a dummy `LocalPtyHandle` without spawning a real PTY process.
+    /// Useful in unit tests that only need to verify map insertion / removal
+    /// logic without a real shell or a Tauri `AppHandle`.
+    pub fn new_for_test(info: ConnectionInfo) -> Self {
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        Self { info, writer: tx }
+    }
 }
 
 /// Spawns a local PTY process running `shell` and returns a `LocalPtyHandle`
