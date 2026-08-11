@@ -5,7 +5,7 @@ import { HostContextMenu } from "./HostContextMenu";
 import { useHostsStore } from "../state/hosts";
 import type { HostInfo } from "../types/host";
 
-export type Tab = { id: string; title: string; state?: "active" | "closed" };
+export type Tab = { id: string; title: string; state?: "active" | "closed"; kind?: "ssh" | "local" };
 
 interface Props {
   tabs: Tab[];
@@ -15,6 +15,7 @@ interface Props {
   onCloseTabs?: (ids: string[]) => void;
   onNewConnection?: () => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
+  onNewLocalTerminal?: () => void;
 }
 
 // v0.6.3: cap the quick-connect list so a large saved-hosts inventory
@@ -23,7 +24,7 @@ interface Props {
 const QUICK_CONNECT_LIMIT = 6;
 
 export function TabBar({
-  tabs, activeTabId, onSelect, onClose, onCloseTabs, onNewConnection, onConnectHost,
+  tabs, activeTabId, onSelect, onClose, onCloseTabs, onNewConnection, onConnectHost, onNewLocalTerminal,
 }: Props) {
   const savedHosts = useHostsStore((s) => s.hosts);
   const stripRef = useRef<HTMLDivElement | null>(null);
@@ -207,6 +208,8 @@ export function TabBar({
             }}>
             <span style={{
               width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+              // Green = live session, regardless of kind (ssh / local);
+              // grey = closed. Connection state reads at a glance.
               background: t.state === "closed" ? "var(--text-3)" : "var(--success)",
               opacity: t.state === "closed" ? 0.4 : 1,
             }} />
@@ -323,6 +326,7 @@ export function TabBar({
           savedHosts={savedHosts}
           onNewConnection={() => { setPlusOpen(false); onNewConnection?.(); }}
           onQuickConnect={(host) => { setPlusOpen(false); onConnectHost?.(host); }}
+          onNewLocalTerminal={() => { setPlusOpen(false); onNewLocalTerminal?.(); }}
         />
       )}
 
@@ -350,13 +354,14 @@ export function TabBar({
  * uses `position: fixed` so it isn't clipped by TabBar's overflow.
  */
 function PlusMenu({
-  popRef, anchor, savedHosts, onNewConnection, onQuickConnect,
+  popRef, anchor, savedHosts, onNewConnection, onQuickConnect, onNewLocalTerminal,
 }: {
   popRef: React.RefObject<HTMLDivElement>;
   anchor: HTMLButtonElement | null;
   savedHosts: HostInfo[];
   onNewConnection: () => void;
   onQuickConnect: (host: HostInfo) => void;
+  onNewLocalTerminal: () => void;
 }) {
   const rect = anchor?.getBoundingClientRect();
   const top = (rect?.bottom ?? 32) + 2;
@@ -378,8 +383,7 @@ function PlusMenu({
       <MenuItem
         icon={<TerminalSquare size={14} />}
         label="New local terminal"
-        disabled
-        badge="Soon"
+        onClick={onNewLocalTerminal}
       />
       {quick.length > 0 && (
         <>

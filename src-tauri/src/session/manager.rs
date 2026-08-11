@@ -14,6 +14,7 @@
 //! put-back pattern that the earlier design used.
 
 use crate::error::{Error, Result};
+use crate::protocol::local_pty::LocalPtyHandle;
 use crate::protocol::sftp_types::{Entry, EntryKind};
 use crate::protocol::{AuthConfig, Connection, HostKeyPolicy, RusshHandle, ShellHandle, SftpHandle, SshProtocol};
 use crate::session::tunnel::TunnelHandle;
@@ -77,6 +78,10 @@ pub struct SessionManager {
     // single consumer per connection is supported (see driver_loop invariant
     // carried over from v0.1/v0.2).
     subs: Arc<Mutex<HashMap<ConnectionId, mpsc::Sender<Vec<u8>>>>>,
+    /// Local PTY sessions (no SSH transport). The driver task spawned by
+    /// `open_local_session` removes its own entry on exit, so callers should
+    /// not assume a handle is still present after `close()` returns.
+    pub(crate) local_sessions: Arc<Mutex<HashMap<Uuid, LocalPtyHandle>>>,
 }
 
 impl SessionManager {
@@ -84,6 +89,7 @@ impl SessionManager {
         Self {
             inner: Arc::new(Mutex::new(HashMap::new())),
             subs: Arc::new(Mutex::new(HashMap::new())),
+            local_sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -159,22 +165,63 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Spawns a local PTY running `shell`, registers the resulting handle in
+    /// `local_sessions`, and returns the `ConnectionInfo` for the new session.
+    /// The IPC layer is responsible for calling `subscribe()` and wiring the
+    /// subscriber to Tauri event emission (same pattern as SSH sessions).
+    pub async fn open_local_session(
+        &self,
+        shell: &str,
+        label: String,
+        app: AppHandle,
+    ) -> Result<ConnectionInfo> {
+        let session_id = Uuid::new_v4();
+        let handle = crate::protocol::local_pty::spawn_local_pty(
+            shell,
+            session_id,
+            label,
+            app,
+            self.subs.clone(),
+            self.local_sessions.clone(),
+        )
+        .await?;
+        let info = handle.info.clone();
+        self.local_sessions.lock().await.insert(session_id, handle);
+        Ok(info)
+    }
+
     pub async fn write(&self, id: ConnectionId, data: &[u8]) -> Result<()> {
-        let writer = self.shell_writer(id).await?;
-        writer
-            .send(ShellCmd::Bytes(data.to_vec()))
-            .await
-            .map_err(|_| Error::Closed)?;
-        Ok(())
+        // SSH path: check presence without holding the lock across the send.
+        if self.inner.lock().await.contains_key(&id) {
+            let writer = self.shell_writer(id).await?;
+            return writer
+                .send(ShellCmd::Bytes(data.to_vec()))
+                .await
+                .map_err(|_| Error::Closed);
+        }
+        // Local PTY path: clone the writer so the lock is released before send.
+        let writer = {
+            let local = self.local_sessions.lock().await;
+            local.get(&id).ok_or(Error::Closed)?.writer_clone()
+        };
+        writer.send_bytes(data).await
     }
 
     pub async fn resize(&self, id: ConnectionId, cols: u16, rows: u16) -> Result<()> {
-        let writer = self.shell_writer(id).await?;
-        writer
-            .send(ShellCmd::Resize(cols, rows))
-            .await
-            .map_err(|_| Error::Closed)?;
-        Ok(())
+        // SSH path.
+        if self.inner.lock().await.contains_key(&id) {
+            let writer = self.shell_writer(id).await?;
+            return writer
+                .send(ShellCmd::Resize(cols, rows))
+                .await
+                .map_err(|_| Error::Closed);
+        }
+        // Local PTY path.
+        let writer = {
+            let local = self.local_sessions.lock().await;
+            local.get(&id).ok_or(Error::Closed)?.writer_clone()
+        };
+        writer.send_resize(cols, rows).await
     }
 
     async fn shell_writer(&self, id: ConnectionId) -> Result<mpsc::Sender<ShellCmd>> {
@@ -185,10 +232,11 @@ impl SessionManager {
     }
 
     pub async fn subscribe(&self, id: ConnectionId) -> Result<mpsc::Receiver<Vec<u8>>> {
-        // Just check presence without holding the per-connection mutex.
+        // Check presence in either SSH or local session maps.
         {
-            let map = self.inner.lock().await;
-            if !map.contains_key(&id) {
+            let ssh = self.inner.lock().await;
+            let local = self.local_sessions.lock().await;
+            if !ssh.contains_key(&id) && !local.contains_key(&id) {
                 return Err(Error::Closed);
             }
         }
@@ -198,15 +246,29 @@ impl SessionManager {
     }
 
     pub async fn close(&self, id: ConnectionId) -> Result<()> {
-        // Abort all active tunnels before removing the connection.
-        self.close_all_tunnels(id).await;
-        let removed = self.inner.lock().await.remove(&id);
-        if let Some(live_arc) = removed {
-            let mut live = live_arc.lock().await;
-            if let Some(shell) = live.shell.take() {
-                let _ = shell.writer.send(ShellCmd::Close).await;
+        // SSH path: check before attempting SSH-specific teardown.
+        if self.inner.lock().await.contains_key(&id) {
+            self.close_all_tunnels(id).await;
+            let removed = self.inner.lock().await.remove(&id);
+            if let Some(live_arc) = removed {
+                let mut live = live_arc.lock().await;
+                if let Some(shell) = live.shell.take() {
+                    let _ = shell.writer.send(ShellCmd::Close).await;
+                }
+                let _ = live.conn.disconnect().await;
             }
-            let _ = live.conn.disconnect().await;
+            self.subs.lock().await.remove(&id);
+            return Ok(());
+        }
+        // Local PTY path: remove the handle and send Close so the driver
+        // exits. If the driver already exited it removed the handle itself,
+        // so `remove` here is safe (idempotent).
+        let maybe_writer = {
+            let mut local = self.local_sessions.lock().await;
+            local.remove(&id).map(|h| h.writer_clone())
+        };
+        if let Some(w) = maybe_writer {
+            w.send_close().await;
         }
         self.subs.lock().await.remove(&id);
         Ok(())
@@ -271,6 +333,9 @@ impl SessionManager {
         let mut result = Vec::with_capacity(arcs.len());
         for a in arcs {
             result.push(a.lock().await.info.clone());
+        }
+        for handle in self.local_sessions.lock().await.values() {
+            result.push(handle.info.clone());
         }
         result
     }
@@ -608,6 +673,33 @@ mod tests {
             mgr.list().await.is_empty(),
             "list should be empty after driver_loop cleans up inner"
         );
+    }
+
+    #[tokio::test]
+    async fn local_session_appears_in_list_and_closes() {
+        // We can't spawn a real PTY in unit tests without a Tauri AppHandle,
+        // so insert a fake LocalPtyHandle directly.
+        use crate::protocol::local_pty::LocalPtyHandle;
+
+        let mgr = SessionManager::new();
+        let id = uuid::Uuid::new_v4();
+        let fake_info = ConnectionInfo {
+            id,
+            label: "local-test".into(),
+            kind: ConnectionKind::Local,
+            host_id: None,
+            state: ConnectionState::Active,
+        };
+        let handle = LocalPtyHandle::new_for_test(fake_info.clone());
+        mgr.local_sessions.lock().await.insert(id, handle);
+
+        let list = mgr.list().await;
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, id);
+        assert!(matches!(list[0].kind, ConnectionKind::Local));
+
+        mgr.close(id).await.unwrap();
+        assert!(mgr.list().await.is_empty());
     }
 
     struct ShellRejectingConnection;

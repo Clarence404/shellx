@@ -19,6 +19,7 @@ import { useFilesStore } from "./state/files";
 import { SYSTEM_FONT_MAP } from "./types/settings";
 import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
+import { openLocalTerminal } from "./ipc/local_pty";
 import { getHostPassword, getHostPassphrase, setHostPassphrase } from "./ipc/hosts";
 import { onConnectionClosed } from "./ipc/events";
 import { onHostkeyChallenge } from "./ipc/hostkeys";
@@ -70,8 +71,11 @@ export function App() {
   const mode = activeHost?.connection_mode ?? "terminal_only";
 
   // Build the tab list based on connection_mode.
+  // Local sessions only get a Terminal tab — no SSH Files or Tunnels available.
   const availableTabs: { id: ActivityKind; label: string }[] =
-    mode === "tunnels_only"
+    activeSession?.kind === "local"
+      ? [{ id: "terminal", label: "Terminal" }]
+      : mode === "tunnels_only"
       ? [{ id: "tunnel", label: "Tunnels" }]
       : mode === "term_tunnels"
       ? [
@@ -446,7 +450,17 @@ export function App() {
     }
   }
 
-  const tabs = sessions.map((s) => ({ id: s.id, title: s.label, state: s.state }));
+  const tabs = sessions.map((s) => ({ id: s.id, title: s.label, state: s.state, kind: s.kind }));
+
+  async function handleNewLocalTerminal() {
+    try {
+      const info = await openLocalTerminal();
+      addSession(info);
+      setActivity(info.id, "terminal");
+    } catch (e) {
+      setErrorMsg(`Failed to open local terminal: ${e}`);
+    }
+  }
 
   return (
     <>
@@ -463,6 +477,7 @@ export function App() {
           ids.forEach((id) => { void closeSession(id); removeSession(id); });
         }}
         onNewConnection={() => setDialog({ mode: "create" })}
+        onNewLocalTerminal={() => void handleNewLocalTerminal()}
         onEditHost={(host) => setDialog({ mode: "edit", initial: host })}
         onConnectHost={(host, forceNew) => void handleConnectSavedHost(host, forceNew)}
       >
@@ -477,11 +492,13 @@ export function App() {
             display: (railView === "hosts" && !pendingConnectHostId) ? "flex" : "none",
             flexDirection: "column", height: "100%", minHeight: 0,
           }}>
-            <ActivityToolbar
-              activity={effectiveActivity}
-              onChange={(a) => setActivity(activeId, a)}
-              tabs={availableTabs}
-            />
+            {activeSession?.kind !== "local" && (
+              <ActivityToolbar
+                activity={effectiveActivity}
+                onChange={(a) => setActivity(activeId, a)}
+                tabs={availableTabs}
+              />
+            )}
             <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
               {/* One TerminalView + FileBrowserView per session, always
                   mounted, toggled via display. Rendering only the active

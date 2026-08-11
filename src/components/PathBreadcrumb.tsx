@@ -31,9 +31,14 @@ export function PathBreadcrumb({ path, onNavigate, onListDisks }: Props) {
   // keep the leading "/" — that's what users expect for "/etc" over "etc".
   const isWinDrive = parts.length > 0 && /^[A-Za-z]:$/.test(parts[0]);
 
+  // POSIX absolute paths get a standalone root segment so "/" itself is a
+  // click target (jump to root). Windows keeps the `C:` chip as the root.
+  const hasPosixRoot = !isWinDrive;
+
   if (parts.length === 0) {
     paths.push({ label: "/", target: "/" });
   } else {
+    if (hasPosixRoot) paths.push({ label: "/", target: "/" });
     let acc = "";
     for (let i = 0; i < parts.length; i++) {
       // Windows: acc grows as `C:`, `C:/Users`, `C:/Users/chen` (no leading /)
@@ -41,11 +46,6 @@ export function PathBreadcrumb({ path, onNavigate, onListDisks }: Props) {
       acc = i === 0
         ? (isWinDrive ? parts[i] : "/" + parts[i])
         : acc + "/" + parts[i];
-      // First segment renders with the same prefix so users see "/etc" not
-      // "etc" on POSIX, and "C:" (no slash) on Windows.
-      const label = i === 0
-        ? (isWinDrive ? parts[i] : "/" + parts[i])
-        : parts[i];
       // Target special case: a bare "C:" is NOT the drive root on Windows —
       // Rust's canonicalize resolves it to the process cwd (whatever
       // shellx.exe was launched from), so clicking the drive-letter chip
@@ -53,7 +53,7 @@ export function PathBreadcrumb({ path, onNavigate, onListDisks }: Props) {
       // click lands on the actual drive root. Mirrors parentPath's fix in
       // LocalPane.tsx.
       const target = (i === 0 && isWinDrive) ? acc + "/" : acc;
-      paths.push({ label, target });
+      paths.push({ label: parts[i], target });
     }
   }
 
@@ -189,7 +189,8 @@ export function PathBreadcrumb({ path, onNavigate, onListDisks }: Props) {
           <div key={p.target} style={{
             display: "flex", alignItems: "center", gap: 4, flexShrink: 0,
           }}>
-            {i > 0 && <span style={{ color: "var(--text-3)" }}>/</span>}
+            {/* No separator right after the POSIX root chip — it IS the slash. */}
+            {i > 0 && !(hasPosixRoot && i === 1) && <span style={{ color: "var(--text-3)" }}>/</span>}
             <button
               onClick={(e) => {
                 // Prevent the container's onClick (which starts edit

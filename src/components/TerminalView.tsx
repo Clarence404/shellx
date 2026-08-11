@@ -93,17 +93,22 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     //   user switches to the Hosts view).
     let firstFitDone = false;
     const pendingBytes: Uint8Array[] = [];
+    const doFit = () => {
+      if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
+      fit.fit();
+    };
     const tryInitialFit = () => {
       if (firstFitDone) return;
       if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
-      fit.fit();
+      doFit();
       firstFitDone = true;
       for (const chunk of pendingBytes) term.write(chunk);
       pendingBytes.length = 0;
     };
-    // Attempt an immediate fit — covers the normal case where the tab
-    // body is visible on mount (user connects from the Hosts view).
-    tryInitialFit();
+    // Defer one rAF so xterm's own renderer rAF-init completes first;
+    // otherwise fit() can fire before _dimensions is set up, throwing
+    // "Cannot read properties of undefined (read 'dimensions')".
+    requestAnimationFrame(tryInitialFit);
 
     // Send user input to backend as bytes.
     const dataDisp = term.onData((s) => {
@@ -125,7 +130,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     const ro = new ResizeObserver(() => {
       if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
       if (!firstFitDone) tryInitialFit();
-      else fit.fit();
+      else doFit();
     });
     ro.observe(hostRef.current);
 
@@ -183,7 +188,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     termRef.current.options.fontSize = terminal.fontSize;
     termRef.current.options.cursorStyle = terminal.cursorStyle;
     if (hostRef.current && hostRef.current.offsetHeight > 0) {
-      fitRef.current.fit();
+      try { fitRef.current.fit(); } catch { /* renderer not ready */ }
     }
   }, [terminal.fontFamily, terminal.fontSize, terminal.cursorStyle]);
 

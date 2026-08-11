@@ -8,6 +8,9 @@ interface Props {
   host: HostInfo;
   isConnected: boolean;
   isConnecting?: boolean;
+  /** True when the currently active tab belongs to this host — the row
+   *  keeps a hover-like highlight so users see which host they're on. */
+  isActive?: boolean;
   onConnect: () => void;
   /** Fires on double-click. Opens a NEW session to the same host,
    *  bypassing the single-click dedup that switches to an existing tab.
@@ -24,7 +27,7 @@ interface Props {
 
 const DOUBLE_CLICK_MS = 250;
 
-export function HostRow({ host, isConnected, isConnecting, onConnect, onOpenNewShell, onDisconnect, onEdit, onDuplicate, onDelete }: Props) {
+export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, onOpenNewShell, onDisconnect, onEdit, onDuplicate, onDelete }: Props) {
   const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [hovered, setHovered] = useState(false);
@@ -92,7 +95,7 @@ export function HostRow({ host, isConnected, isConnecting, onConnect, onOpenNewS
         style={{
           width: "100%", borderRadius: 5,
           display: "flex", alignItems: "center", gap: 4,
-          background: hovered ? "var(--border)" : "transparent",
+          background: (hovered || isActive) ? "var(--border)" : "transparent",
         }}>
         <button
           aria-label={host.label}
@@ -114,7 +117,9 @@ export function HostRow({ host, isConnected, isConnecting, onConnect, onOpenNewS
             data-connecting={String(!!isConnecting)}
             style={{
               width: 6, height: 6, borderRadius: "50%",
-              background: "var(--accent)",
+              // Green = connected; accent purple while connecting (pulse);
+              // dim accent when idle.
+              background: isConnected && !isConnecting ? "var(--success)" : "var(--accent)",
               opacity: isConnected ? 1 : (isConnecting ? 1 : 0.3),
               animation: isConnecting ? "hostrow-pulse 900ms ease-in-out infinite" : undefined,
               boxShadow: isConnecting ? "0 0 0 0 var(--accent-shadow)" : undefined,

@@ -22,6 +22,7 @@ export function AppearancePanel() {
   const systemFontSize = useSettingsStore((s) => s.systemFontSize);
   const filesFontSize = useSettingsStore((s) => s.filesFontSize);
   const terminal = useSettingsStore((s) => s.terminal);
+  const localShell = useSettingsStore((s) => s.localShell);
 
   const setTheme = (id: Settings["themeId"]) => useSettingsStore.getState().setTheme(id);
   const setDensity = (id: Settings["density"]) => useSettingsStore.getState().setDensity(id);
@@ -34,6 +35,7 @@ export function AppearancePanel() {
   const setFontSize = (n: number) => useSettingsStore.getState().setTerminalFontSize(n);
   const setCursorStyle = (s: Settings["terminal"]["cursorStyle"]) =>
     useSettingsStore.getState().setTerminalCursorStyle(s);
+  const setLocalShell = (v: string) => useSettingsStore.getState().setLocalShell(v);
 
   return (
     <div style={{ padding: "20px 24px", overflowY: "auto", color: "var(--text-1)", flex: 1 }}>
@@ -181,6 +183,70 @@ export function AppearancePanel() {
           cursorStyle={terminal.cursorStyle}
         />
       </TwoColField>
+
+      <SectionHeader>Local terminal</SectionHeader>
+
+      <TwoColField label="Shell">
+        <LocalShellPicker value={localShell} onChange={setLocalShell} />
+      </TwoColField>
+    </div>
+  );
+}
+
+const SHELL_PRESETS = [
+  { label: "Default (system shell)", value: "" },
+  { label: "Command Prompt (cmd.exe)", value: "cmd.exe" },
+  { label: "PowerShell 5 (powershell.exe)", value: "powershell.exe" },
+  { label: "PowerShell 7 (pwsh.exe)", value: "pwsh.exe" },
+  { label: "WSL (wsl.exe)", value: "wsl.exe" },
+  { label: "Bash", value: "bash" },
+  { label: "Zsh", value: "zsh" },
+  { label: "Fish", value: "fish" },
+  { label: "Custom path…", value: "__custom__" },
+];
+
+function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const isPreset = SHELL_PRESETS.some((p) => p.value === value);
+  const selectValue = isPreset ? value : "__custom__";
+  const isCustom = selectValue === "__custom__";
+
+  const inputStyle = {
+    width: "100%", padding: "4px 8px",
+    background: "var(--panel-3, var(--panel-2))",
+    border: "0.5px solid var(--border)",
+    borderRadius: 4, color: "var(--text-1)",
+    fontSize: "var(--font-ui-size)",
+    fontFamily: "var(--font-ui)",
+  } as const;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <select
+        value={selectValue}
+        onChange={(e) => {
+          if (e.target.value !== "__custom__") onChange(e.target.value);
+          else onChange(value && !isPreset ? value : "");
+        }}
+        style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}
+      >
+        {SHELL_PRESETS.map((p) => (
+          <option key={p.value} value={p.value}>{p.label}</option>
+        ))}
+      </select>
+      {isCustom && (
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="/usr/bin/zsh or C:\path\to\shell.exe"
+          style={inputStyle}
+        />
+      )}
+      <div style={{ fontSize: FS_META, color: "var(--text-3)" }}>
+        {isCustom
+          ? "Enter the full path to your shell executable."
+          : "Applies to all new local terminal tabs."}
+      </div>
     </div>
   );
 }

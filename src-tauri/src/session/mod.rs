@@ -18,6 +18,7 @@ pub type SessionId = ConnectionId;
 #[serde(rename_all = "lowercase")]
 pub enum ConnectionKind {
     Ssh,
+    Local,
 }
 /// Backwards-compat alias.
 pub type SessionKind = ConnectionKind;

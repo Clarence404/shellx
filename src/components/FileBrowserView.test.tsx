@@ -53,9 +53,10 @@ describe("FileBrowserView", () => {
 
   it("renders the breadcrumb path segments", () => {
     render(<FileBrowserView connectionId="c1" />);
-    // First segment carries the leading "/" so users see an absolute path;
-    // subsequent segments are bare labels.
-    expect(screen.getByText("/home")).toBeInTheDocument();
+    // POSIX paths get a standalone root "/" chip (click target for jumping
+    // to root), followed by bare directory labels.
+    expect(screen.getByRole("button", { name: "/" })).toBeInTheDocument();
+    expect(screen.getByText("home")).toBeInTheDocument();
     expect(screen.getByText("chen")).toBeInTheDocument();
   });
 });

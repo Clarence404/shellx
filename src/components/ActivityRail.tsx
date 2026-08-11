@@ -44,7 +44,14 @@ function RailButton({ item, active, onClick }: {
   // tint) rather than --accent so only ONE button reads as "selected" at a
   // time.
   const bg = active ? "var(--accent)" : (hover ? "var(--border)" : "transparent");
-  const fg = active ? "var(--text-on-accent)" : "var(--text-2)";
+  // Idle labels render at (ui - 2px) — too small to carry plain --text-2
+  // legibly, so mix toward --text-1 while staying dimmer than the active
+  // button. Hover goes full --text-1.
+  const fg = active
+    ? "var(--text-on-accent)"
+    : hover
+    ? "var(--text-1)"
+    : "color-mix(in srgb, var(--text-1) 60%, var(--text-2))";
   return (
     <button
       aria-label={label}

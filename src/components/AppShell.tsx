@@ -13,6 +13,7 @@ interface Props {
   onTabClose?: (id: string) => void;
   onTabsClose?: (ids: string[]) => void;
   onNewConnection?: () => void;
+  onNewLocalTerminal?: () => void;
   onEditHost?: (host: HostInfo) => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
   children?: ReactNode;
@@ -30,6 +31,7 @@ export function AppShell({
   onTabClose = () => {},
   onTabsClose,
   onNewConnection,
+  onNewLocalTerminal,
   onEditHost,
   onConnectHost,
   children,
@@ -42,6 +44,7 @@ export function AppShell({
         onTabSelect={onTabSelect} onTabClose={onTabClose}
         onTabsClose={onTabsClose}
         onNewConnection={onNewConnection}
+        onNewLocalTerminal={onNewLocalTerminal}
         onConnectHost={onConnectHost}
       />
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>

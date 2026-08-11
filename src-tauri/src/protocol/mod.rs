@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod sftp_types;
 pub mod ssh;
+pub mod local_pty;
 
 use crate::error::Result;
 pub use ssh::{RusshHandle, ShellHandle, SftpHandle, SshConnection, SshProtocol};

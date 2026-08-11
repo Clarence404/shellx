@@ -14,7 +14,9 @@ export function SectionHeader({ label, action }: Props) {
     }}>
       <span style={{
         fontSize: 10, letterSpacing: 1, textTransform: "uppercase",
-        color: "var(--text-2)", fontWeight: 500,
+        // 10px small-caps needs a step brighter than plain --text-2 to stay
+        // legible; still dimmer than --text-1 so it reads as a label.
+        color: "color-mix(in srgb, var(--text-1) 60%, var(--text-2))", fontWeight: 600,
       }}>{label}</span>
       {action}
     </div>

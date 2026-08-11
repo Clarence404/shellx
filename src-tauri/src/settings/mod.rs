@@ -20,6 +20,10 @@ pub struct Settings {
     #[serde(default = "default_files_font_size")]
     pub files_font_size: u32,
     pub terminal: TerminalSettings,
+    /// Path or command for the local terminal shell.
+    /// None → use platform default (cmd.exe on Windows, $SHELL on Unix).
+    #[serde(default)]
+    pub local_shell: Option<String>,
     pub schema_version: u32,
 }
 
@@ -95,6 +99,7 @@ mod tests {
                 font_size: 14,
                 cursor_style: "underline".into(),
             },
+            local_shell: None,
             schema_version: 1,
         }
     }
@@ -148,5 +153,16 @@ mod tests {
         let store = SettingsStore::open(td.path());
         std::fs::write(td.path().join("settings.json"), "{ not valid json").unwrap();
         assert!(store.load().unwrap().is_none()); // graceful fallback, not an error
+    }
+
+    #[test]
+    fn load_old_settings_without_local_shell_uses_default() {
+        let td = TempDir::new().unwrap();
+        let store = SettingsStore::open(td.path());
+        // Pre-local-pty settings.json has no localShell field.
+        let legacy = r#"{"themeId":"warm-minimal","density":"comfortable","systemFont":"system-default","systemFontSize":13,"filesFontSize":13,"terminal":{"fontFamily":"jetbrains-mono","fontSize":13,"cursorStyle":"block"},"schemaVersion":1}"#;
+        std::fs::write(td.path().join("settings.json"), legacy).unwrap();
+        let got = store.load().unwrap().unwrap();
+        assert_eq!(got.local_shell, None);
     }
 }

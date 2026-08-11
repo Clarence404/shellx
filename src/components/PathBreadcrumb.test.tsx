@@ -3,9 +3,10 @@ import { describe, it, expect, vi } from "vitest";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 
 describe("PathBreadcrumb", () => {
-  it("splits /home/chen/apps into 3 clickable segments; first segment carries leading '/'", () => {
+  it("splits /home/chen/apps into a root '/' chip plus 3 clickable segments", () => {
     render(<PathBreadcrumb path="/home/chen/apps" onNavigate={() => {}} />);
-    expect(screen.getByText("/home")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "/" })).toBeInTheDocument();
+    expect(screen.getByText("home")).toBeInTheDocument();
     expect(screen.getByText("chen")).toBeInTheDocument();
     expect(screen.getByText("apps")).toBeInTheDocument();
   });
@@ -15,6 +16,13 @@ describe("PathBreadcrumb", () => {
     render(<PathBreadcrumb path="/home/chen/apps" onNavigate={onNavigate} />);
     fireEvent.click(screen.getByText("chen"));
     expect(onNavigate).toHaveBeenCalledWith("/home/chen");
+  });
+
+  it("clicking the root '/' chip navigates to /", () => {
+    const onNavigate = vi.fn();
+    render(<PathBreadcrumb path="/home/chen/apps" onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByRole("button", { name: "/" }));
+    expect(onNavigate).toHaveBeenCalledWith("/");
   });
 
   it("root path shows single '/' segment", () => {
