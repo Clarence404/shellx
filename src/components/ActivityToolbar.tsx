@@ -1,5 +1,6 @@
 import { Monitor, Folder, Network } from "lucide-react";
 import type { ActivityKind } from "../types/connection";
+import { useT } from "../i18n";
 
 const ACTIVITY_ICONS: Record<ActivityKind, React.ReactNode> = {
   terminal: <Monitor size={12} />,
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function ActivityToolbar({ activity, onChange, tabs = DEFAULT_TABS }: Props) {
+  const t = useT();
   return (
     <div style={{
       height: 32, padding: "0 10px", display: "flex", alignItems: "center",
@@ -32,7 +34,7 @@ export function ActivityToolbar({ activity, onChange, tabs = DEFAULT_TABS }: Pro
           <SegButton
             key={tab.id}
             icon={ACTIVITY_ICONS[tab.id]}
-            label={tab.label}
+            label={t(tab.label)}
             active={activity === tab.id}
             onClick={() => onChange(tab.id)}
           />

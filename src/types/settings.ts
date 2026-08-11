@@ -10,6 +10,7 @@ export interface Settings {
     cursorStyle: "block" | "underline" | "bar";
   };
   localShell?: string;
+  language: "en" | "zh";
   schemaVersion: 1;
 }
 
@@ -24,8 +25,14 @@ export const DEFAULT_SETTINGS: Settings = {
     fontSize: 13,
     cursorStyle: "block",
   },
+  language: "en",
   schemaVersion: 1,
 };
+
+export const LANGUAGE_META: Array<{ id: Settings["language"]; label: string }> = [
+  { id: "en", label: "English" },
+  { id: "zh", label: "中文" },
+];
 
 // Unified range across every "size" slider in Appearance so identical
 // values (e.g. 13 px on both System and Files) put the thumbs at the same

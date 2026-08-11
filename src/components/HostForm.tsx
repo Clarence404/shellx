@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
+import { useT } from "../i18n";
 import { useHostsStore } from "../state/hosts";
 import { useSessions } from "../state/sessions";
 import { openConnection } from "../ipc/commands";
@@ -27,6 +28,7 @@ interface Props {
 
 export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   const keychainAvailable = useHostsStore((s) => s.keychainAvailable);
+  const t = useT();
   const addHost = useHostsStore((s) => s.addHost);
   const updateHostById = useHostsStore((s) => s.updateHostById);
   const bumpRulesVersion = useSessions((s) => s.bumpRulesVersion);
@@ -414,10 +416,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   }
 
   const primaryLabel = mode === "edit"
-    ? "Save"
-    : (saveHost ? "Save & Connect" : "Connect");
+    ? t("Save")
+    : (saveHost ? t("Save & Connect") : t("Connect"));
 
-  const busyLabel = mode === "edit" ? "Saving…" : "Connecting…";
+  const busyLabel = mode === "edit" ? t("Saving…") : t("Connecting…");
 
   // Render the key picker (chips or dropdown)
   function renderKeyPicker() {
@@ -473,7 +475,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 type="text"
                 value={keyFilter}
                 onChange={(e) => setKeyFilter(e.target.value)}
-                placeholder="Filter…"
+                placeholder={t("Filter…")}
                 style={{
                   width: "100%", padding: "6px 8px", fontSize: 12,
                   background: "var(--panel-1)", border: "none",
@@ -514,7 +516,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                     background: "transparent", color: "var(--text-2)",
                   }}
                 >
-                  浏览…
+                  {t("Browse…")}
                 </button>
               </div>
             </div>
@@ -594,7 +596,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             color: "var(--text-2)",
           }}
         >
-          浏览…
+          {t("Browse…")}
         </button>
       </div>
     );
@@ -609,22 +611,21 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       {/* Header */}
       <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid var(--border)" }}>
         <h3 style={{ fontSize: 13, fontWeight: 600 }}>
-          {mode === "edit" ? "Edit host" : "New SSH connection"}
+          {mode === "edit" ? t("Edit host") : t("New SSH connection")}
         </h3>
       </div>
 
       {/* Tab bar */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
-        {(["basic", "tunnels"] as const).map((t) => (
-          <button key={t} type="button" onClick={() => setTab(t)} style={{
+        {(["basic", "tunnels"] as const).map((tb) => (
+          <button key={tb} type="button" onClick={() => setTab(tb)} style={{
             flex: 1, padding: "7px 0", fontSize: 11, textAlign: "center",
             background: "none", border: "none", cursor: "pointer",
-            borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
-            color: tab === t ? "var(--text-1)" : "var(--text-2)",
-            fontWeight: tab === t ? 600 : 400,
-            textTransform: "capitalize",
+            borderBottom: tab === tb ? "2px solid var(--accent)" : "2px solid transparent",
+            color: tab === tb ? "var(--text-1)" : "var(--text-2)",
+            fontWeight: tab === tb ? 600 : 400,
           }}>
-            {t}
+            {tb === "basic" ? t("Basic") : t("Tunnels")}
           </button>
         ))}
       </div>
@@ -632,10 +633,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       {/* Basic tab */}
       {tab === "basic" && (
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Field label="Label" value={label} onChange={setLabel} placeholder="auto-fills as user@host" />
-          <Field label="Host" value={host} onChange={setHost} />
-          <Field label="Port" value={port} onChange={setPort} />
-          <Field label="Username" value={username} onChange={setUsername} />
+          <Field label={t("Label")} value={label} onChange={setLabel} placeholder={t("auto-fills as user@host")} maxLength={60} />
+          <Field label={t("Host")} value={host} onChange={setHost} placeholder="192.168.1.10 / example.com" />
+          <Field label={t("Port")} value={port} onChange={setPort} placeholder="22" />
+          <Field label={t("Username")} value={username} onChange={setUsername} placeholder="root" />
 
           {/* Auth method segmented switch */}
           <div style={{ display: "flex", gap: 4 }}>
@@ -651,7 +652,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 fontWeight: authMode === "password" ? 600 : 400,
               }}
             >
-              密码
+              {t("Password")}
             </button>
             <button
               type="button"
@@ -665,7 +666,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 fontWeight: authMode === "publickey" ? 600 : 400,
               }}
             >
-              密钥文件
+              {t("Key file")}
             </button>
           </div>
 
@@ -675,11 +676,11 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               {renderKeyPicker()}
 
               <Field
-                label="Passphrase"
+                label={t("Passphrase")}
                 type="password"
                 value={passphrase}
                 onChange={setPassphrase}
-                placeholder={mode === "edit" ? "留空保持不变" : ""}
+                placeholder={mode === "edit" ? t("leave blank to keep current") : t("Key passphrase (optional)")}
               />
 
               {mode === "edit" && keychainAvailable && (
@@ -689,7 +690,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                     checked={forgetPassphrase}
                     onChange={(e) => setForgetPassphrase(e.target.checked)}
                   />
-                  忘掉已保存的 passphrase
+                  {t("Forget stored passphrase")}
                 </label>
               )}
             </>
@@ -699,11 +700,11 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
           {authMode === "password" && (
             <>
               <Field
-                label="Password"
+                label={t("Password")}
                 type="password"
                 value={password}
                 onChange={setPassword}
-                placeholder={mode === "edit" ? "leave blank to keep current" : ""}
+                placeholder={mode === "edit" ? t("leave blank to keep current") : t("SSH login password")}
               />
 
               {mode === "edit" && keychainAvailable && (
@@ -713,9 +714,9 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                     checked={forgetPassword}
                     onChange={(e) => setForgetPassword(e.target.checked)}
                   />
-                  Forget stored password
+                  {t("Forget stored password")}
                   <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-                    Removes the saved password. You'll need to type it next connection.
+                    {t("Removes the saved password. You'll need to type it next connection.")}
                   </span>
                 </label>
               )}
@@ -729,7 +730,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 checked={saveHost}
                 onChange={(e) => setSaveHost(e.target.checked)}
               />
-              Save this host
+              {t("Save this host")}
             </label>
           )}
 
@@ -744,10 +745,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 disabled={!canRememberPw}
                 onChange={(e) => setRememberPassword(e.target.checked)}
               />
-              Remember password
+              {t("Remember password")}
               {!keychainAvailable && (
                 <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-                  (Password storage unavailable on this system)
+                  {t("(Password storage unavailable on this system)")}
                 </span>
               )}
             </label>
@@ -761,20 +762,22 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
 
           {/* Connection mode segmented control */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".7px", marginBottom: 8 }}>
-              Connection mode
+            {/* Same label style as the Basic tab's Field headings */}
+            <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
+              {t("Connection mode")}
             </div>
             <div style={{ display: "flex", gap: 4 }}>
               {(["terminal_only", "term_tunnels", "tunnels_only"] as const).map((m) => (
                 <button key={m} type="button" onClick={() => setConnectionMode(m)} style={{
-                  flex: 1, padding: "8px 6px", fontSize: 12, borderRadius: 6, cursor: "pointer",
+                  flex: 1, padding: "8px 2px", fontSize: 12, borderRadius: 6, cursor: "pointer",
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   border: "1px solid var(--border)",
                   background: connectionMode === m ? "var(--accent)" : "var(--panel-1)",
                   color: connectionMode === m ? "var(--text-on-accent)" : "var(--text-2)",
                   fontWeight: connectionMode === m ? 600 : 400,
                   transition: "background .15s, color .15s",
                 }}>
-                  {m === "term_tunnels" ? "Term + Tunnels" : m === "tunnels_only" ? "仅 Tunnels" : "仅 Terminal"}
+                  {m === "term_tunnels" ? t("Term + Tunnels") : m === "tunnels_only" ? t("Tunnels only") : t("Terminal only")}
                 </button>
               ))}
             </div>
@@ -785,19 +788,19 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             {/* Section header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".7px" }}>
-                  Port forwarding
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", textTransform: "uppercase", letterSpacing: 0.8 }}>
+                  {t("Port forwarding")}
                 </span>
                 {(tunnelRules.length + pendingRules.length) > 0 && (
                   <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-3)" }}>
-                    {tunnelRules.length + pendingRules.length} rules
+                    {tunnelRules.length + pendingRules.length} {t("rules")}
                   </span>
                 )}
               </div>
               {!addRuleOpen && (
                 <button type="button" onClick={() => setAddRuleOpen(true)}
                   style={{ fontSize: 12, fontWeight: 500, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                  + Add
+                  + {t("Add")}
                 </button>
               )}
             </div>
@@ -810,7 +813,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 value={importCmd}
                 onChange={(e) => { setImportCmd(e.target.value); setImportParsed(null); }}
                 onKeyDown={(e) => { if (e.key === "Enter") handleParseImport(); }}
-                placeholder="Paste SSH command to import rules…"
+                placeholder={t("Paste SSH command to import rules…")}
                 style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 12, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
               />
               {importCmd.trim() && (
@@ -870,7 +873,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                         <button type="button"
                           onClick={(e) => { e.stopPropagation(); armDeleteRule(rule.id); }}
                           onMouseLeave={() => { if (confirmDeleteId === rule.id) disarmDeleteRule(); }}
-                          title={confirmDeleteId === rule.id ? "再次点击确认删除" : "Delete"}
+                          title={confirmDeleteId === rule.id ? t("Click again to confirm delete") : t("Delete")}
                           style={{
                             background: confirmDeleteId === rule.id ? "rgba(243,139,168,.12)" : "none",
                             border: "none", cursor: "pointer",
@@ -878,29 +881,32 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                             flexShrink: 0, padding: "2px 3px", borderRadius: 3,
                             display: "flex", alignItems: "center", gap: 4,
                           }}>
-                          {confirmDeleteId === rule.id && <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1 }}>确认?</span>}
+                          {confirmDeleteId === rule.id && <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1 }}>{t("Confirm?")}</span>}
                           <Trash2 size={14} />
                         </button>
                       </div>
 
-                      {/* Edit form */}
+                      {/* Edit form — buttons on their own row so nothing
+                          overflows the 340px dialog */}
                       {isEditing && (
                         <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 12px 10px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <input value={editRuleLabel} onChange={(e) => setEditRuleLabel(e.target.value)} placeholder="Label"
-                              style={{ flex: 1, fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", outline: "none" }} />
-                            <input value={editRuleLocalPort} onChange={(e) => setEditRuleLocalPort(e.target.value)} placeholder="Local port"
-                              style={{ width: 80, fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
+                            <input value={editRuleLabel} onChange={(e) => setEditRuleLabel(e.target.value)} placeholder={t("Label")}
+                              style={{ flex: 1, minWidth: 0, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", outline: "none" }} />
+                            <input value={editRuleLocalPort} onChange={(e) => setEditRuleLocalPort(e.target.value)} placeholder={t("Local port")}
+                              style={{ width: 80, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
                           </div>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <input value={editRuleRemoteHost} onChange={(e) => setEditRuleRemoteHost(e.target.value)} placeholder="Remote host"
-                              style={{ flex: 1, fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
-                            <input value={editRuleRemotePort} onChange={(e) => setEditRuleRemotePort(e.target.value)} placeholder="Port"
-                              style={{ width: 56, fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
-                            <button type="button" onClick={handleSaveEditRule}
-                              style={{ padding: "5px 10px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 5, cursor: "pointer", fontWeight: 600 }}>✓</button>
+                            <input value={editRuleRemoteHost} onChange={(e) => setEditRuleRemoteHost(e.target.value)} placeholder={t("Remote host")}
+                              style={{ flex: 1, minWidth: 0, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
+                            <input value={editRuleRemotePort} onChange={(e) => setEditRuleRemotePort(e.target.value)} placeholder={t("Port")}
+                              style={{ width: 80, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
                             <button type="button" onClick={() => setEditingRuleId(null)}
-                              style={{ padding: "5px 8px", fontSize: 12, background: "none", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
+                              style={{ padding: "5px 12px", fontSize: 12, background: "none", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer", color: "var(--text-2)" }}>{t("Cancel")}</button>
+                            <button type="button" onClick={handleSaveEditRule}
+                              style={{ padding: "5px 14px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 5, cursor: "pointer", fontWeight: 600 }}>{t("Save")}</button>
                           </div>
                         </div>
                       )}
@@ -910,7 +916,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                         <div
                           ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })}
                           style={{ padding: "0 12px 10px", borderTop: "1px solid var(--border)", background: "rgba(0,0,0,.15)" }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", padding: "9px 0 6px" }}>SSH command</div>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", padding: "9px 0 6px" }}>{t("SSH command")}</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, padding: "8px 10px" }}>
                             <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-2)", lineHeight: 1.55, whiteSpace: "nowrap", overflowX: "auto" }}>{sshCmd}</span>
                             <button type="button" onClick={() => handleCopySshCmd(rule.id, sshCmd)}
@@ -919,10 +925,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                                 border: `1px solid ${copiedRuleId === rule.id ? "var(--success)" : "var(--border)"}`,
                                 color: copiedRuleId === rule.id ? "var(--success)" : "var(--text-2)",
                                 transition: "color .15s, border-color .15s",
-                              }}>{copiedRuleId === rule.id ? "Copied" : "Copy"}</button>
+                              }}>{copiedRuleId === rule.id ? t("Copied") : t("Copy")}</button>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-                            <span style={{ fontSize: 12, color: "var(--text-2)" }}>局域网共享 (0.0.0.0)</span>
+                            <span style={{ fontSize: 12, color: "var(--text-2)" }}>{t("LAN sharing (0.0.0.0)")}</span>
                             <div
                               onClick={() => handleToggleBindAllRule(rule)}
                               role="switch" aria-checked={rule.bind_all}
@@ -939,29 +945,34 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               </div>
             )}
 
-            {/* Add rule form */}
+            {/* Add rule form — buttons on their own row so nothing
+                overflows the 340px dialog */}
             {addRuleOpen && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8, padding: 12, background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 6 }}>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Label"
-                    style={{ flex: 1, fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", outline: "none" }} />
-                  <input value={newLocalPort} onChange={(e) => setNewLocalPort(e.target.value)} placeholder="Local port"
-                    style={{ width: 80, fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
+                  <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder={t("Label")}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", outline: "none" }} />
+                  <input value={newLocalPort} onChange={(e) => setNewLocalPort(e.target.value)} placeholder={t("Local port")}
+                    style={{ width: 80, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <input value={newRemoteHost} onChange={(e) => setNewRemoteHost(e.target.value)} placeholder="Remote host"
-                    style={{ flex: 1, fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
-                  <input value={newRemotePort} onChange={(e) => setNewRemotePort(e.target.value)} placeholder="Port"
-                    style={{ width: 56, fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
-                  <button type="button" onClick={handleAddRule}
-                    style={{ padding: "5px 10px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 5, cursor: "pointer", fontWeight: 600 }}>✓</button>
-                  <button type="button" onClick={handleCancelAddRule}
-                    style={{ padding: "5px 8px", fontSize: 12, background: "none", color: "var(--text-3)", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer" }}>✕</button>
+                  <input value={newRemoteHost} onChange={(e) => setNewRemoteHost(e.target.value)} placeholder={t("Remote host")}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
+                  <input value={newRemotePort} onChange={(e) => setNewRemotePort(e.target.value)} placeholder={t("Port")}
+                    style={{ width: 80, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
                 </div>
-                <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "var(--text-2)", cursor: "pointer" }}>
-                  <input type="checkbox" checked={newBindAll} onChange={(e) => setNewBindAll(e.target.checked)} />
-                  局域网共享 (0.0.0.0)
-                </label>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "var(--text-2)", cursor: "pointer" }}>
+                    <input type="checkbox" checked={newBindAll} onChange={(e) => setNewBindAll(e.target.checked)} />
+                    {t("LAN sharing (0.0.0.0)")}
+                  </label>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button type="button" onClick={handleCancelAddRule}
+                      style={{ padding: "5px 12px", fontSize: 12, background: "none", color: "var(--text-2)", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer" }}>{t("Cancel")}</button>
+                    <button type="button" onClick={handleAddRule}
+                      style={{ padding: "5px 14px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 5, cursor: "pointer", fontWeight: 600 }}>{t("Add rule")}</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -977,7 +988,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             onClick={onCancel}
             style={{ flex: 1, padding: "6px 10px", borderRadius: 5, color: "var(--text-2)" }}
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             type="submit"
@@ -997,10 +1008,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
 }
 
 function Field({
-  label, value, onChange, type = "text", placeholder,
+  label, value, onChange, type = "text", placeholder, maxLength,
 }: {
   label: string; value: string; onChange: (v: string) => void;
-  type?: string; placeholder?: string;
+  type?: string; placeholder?: string; maxLength?: number;
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -1013,6 +1024,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        maxLength={maxLength}
         style={{
           background: "var(--panel-1)", border: "1px solid var(--border)",
           borderRadius: 4, padding: "6px 8px", fontSize: 12,

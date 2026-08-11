@@ -2,11 +2,12 @@ import type { ReactNode } from "react";
 import { Folder, File as FileIcon, FileCode, FileJson } from "lucide-react";
 import { useSettingsStore } from "../../state/settings";
 import {
-  THEME_META, DENSITY_META, FONT_MAP, SYSTEM_FONT_META,
+  THEME_META, DENSITY_META, FONT_MAP, SYSTEM_FONT_META, LANGUAGE_META,
   SYSTEM_FONT_SIZE_MIN, SYSTEM_FONT_SIZE_MAX,
   FILES_FONT_SIZE_MIN, FILES_FONT_SIZE_MAX,
 } from "../../types/settings";
 import type { Settings } from "../../types/settings";
+import { useT } from "../../i18n";
 
 // v0.5.4: every visible text size in this panel is derived from
 // var(--font-ui-size) so the System-font-size slider scales the whole
@@ -16,6 +17,8 @@ const FS_BODY    = "var(--font-ui-size)";              // labels, controls
 const FS_META    = "calc(var(--font-ui-size) - 2px)";  // hints, section markers, subtitle
 
 export function AppearancePanel() {
+  const t = useT();
+  const language = useSettingsStore((s) => s.language);
   const themeId = useSettingsStore((s) => s.themeId);
   const density = useSettingsStore((s) => s.density);
   const systemFont = useSettingsStore((s) => s.systemFont);
@@ -36,61 +39,72 @@ export function AppearancePanel() {
   const setCursorStyle = (s: Settings["terminal"]["cursorStyle"]) =>
     useSettingsStore.getState().setTerminalCursorStyle(s);
   const setLocalShell = (v: string) => useSettingsStore.getState().setLocalShell(v);
+  const setLanguage = (v: Settings["language"]) => useSettingsStore.getState().setLanguage(v);
 
   return (
     <div style={{ padding: "20px 24px", overflowY: "auto", color: "var(--text-1)", flex: 1 }}>
-      <h3 style={{ fontSize: FS_HEADING, fontWeight: 500, margin: "0 0 6px" }}>Appearance</h3>
+      <h3 style={{ fontSize: FS_HEADING, fontWeight: 500, margin: "0 0 6px" }}>{t("Appearance")}</h3>
       <div style={{ fontSize: FS_META, color: "var(--text-3)", marginBottom: 18 }}>
-        Changes apply live · saved to settings.json in your config directory
+        {t("Changes apply live · saved to settings.json in your config directory")}
       </div>
 
-      <SectionHeader>Interface</SectionHeader>
+      <SectionHeader>{t("Language")}</SectionHeader>
 
-      <TwoColField label="Theme">
+      <TwoColField label={t("UI language")}>
+        <Segmented
+          options={LANGUAGE_META.map((l) => ({ id: l.id, label: l.label }))}
+          value={language}
+          onChange={(id) => setLanguage(id as Settings["language"])}
+        />
+      </TwoColField>
+
+      <SectionHeader>{t("Interface")}</SectionHeader>
+
+      <TwoColField label={t("Theme")}>
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
           gap: 8, maxWidth: 420,
         }}>
-          {THEME_META.map((t) => (
+          {THEME_META.map((th) => (
             <div
-              key={t.id}
+              key={th.id}
               role="button"
-              aria-pressed={themeId === t.id}
-              onClick={() => setTheme(t.id)}
+              aria-pressed={themeId === th.id}
+              onClick={() => setTheme(th.id)}
               style={{
                 padding: "8px 8px", cursor: "pointer",
-                border: themeId === t.id
+                border: themeId === th.id
                   ? "1px solid var(--accent)" : "1px solid var(--border)",
-                boxShadow: themeId === t.id
+                boxShadow: themeId === th.id
                   ? "0 0 0 2px var(--accent-fade)" : undefined,
                 borderRadius: 5, background: "var(--panel-1)",
               }}
             >
               <div style={{ display: "flex", gap: 3, marginBottom: 6, height: 10 }}>
-                {t.swatch.map((c, i) => (
+                {th.swatch.map((c, i) => (
                   <span key={i} style={{ flex: 1, borderRadius: 2, background: c }} />
                 ))}
               </div>
-              <div style={{ fontSize: FS_META, color: "var(--text-1)" }}>{t.label}</div>
+              <div style={{ fontSize: FS_META, color: "var(--text-1)", textAlign: "center" }}>{t(th.label)}</div>
             </div>
           ))}
         </div>
       </TwoColField>
 
-      <TwoColField label="Density">
+      <TwoColField label={t("Density")}>
         <Segmented
-          options={DENSITY_META.map((d) => ({ id: d.id, label: d.label }))}
+          options={DENSITY_META.map((d) => ({ id: d.id, label: t(d.label) }))}
           value={density}
           onChange={(id) => setDensity(id as Settings["density"])}
         />
       </TwoColField>
 
-      <SectionHeader>System font</SectionHeader>
+      <SectionHeader>{t("System font")}</SectionHeader>
 
       <TwoColField
-        label="Family"
-        hint="Sans UI — tabs, buttons, section headers."
+        label={t("Family")}
+        hint={t("Sans UI — tabs, buttons, section headers.")}
       >
         <select
           value={systemFont}
@@ -103,12 +117,12 @@ export function AppearancePanel() {
           }}
         >
           {SYSTEM_FONT_META.map((f) => (
-            <option key={f.id} value={f.id}>{f.label}</option>
+            <option key={f.id} value={f.id}>{t(f.label)}</option>
           ))}
         </select>
       </TwoColField>
 
-      <TwoColField label="Size">
+      <TwoColField label={t("Size")}>
         <SizeSlider
           aria-label="System font size"
           min={SYSTEM_FONT_SIZE_MIN} max={SYSTEM_FONT_SIZE_MAX}
@@ -117,11 +131,11 @@ export function AppearancePanel() {
         />
       </TwoColField>
 
-      <SectionHeader>Files</SectionHeader>
+      <SectionHeader>{t("Files")}</SectionHeader>
 
       <TwoColField
-        label="Size"
-        hint="Filename + meta text in the Files panes. Independent of System font."
+        label={t("Size")}
+        hint={t("Filename + meta text in the Files panes. Independent of System font.")}
       >
         <SizeSlider
           aria-label="Files font size"
@@ -131,13 +145,13 @@ export function AppearancePanel() {
         />
       </TwoColField>
 
-      <TwoColField label="Preview">
+      <TwoColField label={t("Preview")}>
         <FilesPreview fontSize={filesFontSize} />
       </TwoColField>
 
-      <SectionHeader>Terminal</SectionHeader>
+      <SectionHeader>{t("Terminal")}</SectionHeader>
 
-      <TwoColField label="Family">
+      <TwoColField label={t("Family")}>
         <select
           value={terminal.fontFamily}
           onChange={(e) => setFontFamily(e.target.value as Settings["terminal"]["fontFamily"])}
@@ -155,7 +169,7 @@ export function AppearancePanel() {
         </select>
       </TwoColField>
 
-      <TwoColField label="Size">
+      <TwoColField label={t("Size")}>
         <SizeSlider
           aria-label="Terminal font size"
           min={10} max={20}
@@ -164,19 +178,19 @@ export function AppearancePanel() {
         />
       </TwoColField>
 
-      <TwoColField label="Cursor">
+      <TwoColField label={t("Cursor")}>
         <Segmented
           options={[
-            { id: "block", label: "Block" },
-            { id: "underline", label: "Underline" },
-            { id: "bar", label: "Bar" },
+            { id: "block", label: t("Block") },
+            { id: "underline", label: t("Underline") },
+            { id: "bar", label: t("Bar") },
           ]}
           value={terminal.cursorStyle}
           onChange={(id) => setCursorStyle(id as Settings["terminal"]["cursorStyle"])}
         />
       </TwoColField>
 
-      <TwoColField label="Preview">
+      <TwoColField label={t("Preview")}>
         <TerminalPreview
           fontFamily={terminal.fontFamily}
           fontSize={terminal.fontSize}
@@ -184,9 +198,9 @@ export function AppearancePanel() {
         />
       </TwoColField>
 
-      <SectionHeader>Local terminal</SectionHeader>
+      <SectionHeader>{t("Local terminal")}</SectionHeader>
 
-      <TwoColField label="Shell">
+      <TwoColField label={t("Shell")}>
         <LocalShellPicker value={localShell} onChange={setLocalShell} />
       </TwoColField>
     </div>
@@ -206,6 +220,7 @@ const SHELL_PRESETS = [
 ];
 
 function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useT();
   const isPreset = SHELL_PRESETS.some((p) => p.value === value);
   const selectValue = isPreset ? value : "__custom__";
   const isCustom = selectValue === "__custom__";
@@ -230,7 +245,7 @@ function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: st
         style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}
       >
         {SHELL_PRESETS.map((p) => (
-          <option key={p.value} value={p.value}>{p.label}</option>
+          <option key={p.value} value={p.value}>{t(p.label)}</option>
         ))}
       </select>
       {isCustom && (
@@ -244,8 +259,8 @@ function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: st
       )}
       <div style={{ fontSize: FS_META, color: "var(--text-3)" }}>
         {isCustom
-          ? "Enter the full path to your shell executable."
-          : "Applies to all new local terminal tabs."}
+          ? t("Enter the full path to your shell executable.")
+          : t("Applies to all new local terminal tabs.")}
       </div>
     </div>
   );

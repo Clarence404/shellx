@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { HostContextMenu } from "./HostContextMenu";
 import { useIconSizes } from "../state/settings";
 import type { HostInfo } from "../types/host";
+import { useT } from "../i18n";
 
 interface Props {
   host: HostInfo;
@@ -28,6 +29,7 @@ interface Props {
 const DOUBLE_CLICK_MS = 250;
 
 export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, onOpenNewShell, onDisconnect, onEdit, onDuplicate, onDelete }: Props) {
+  const t = useT();
   const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [hovered, setHovered] = useState(false);
@@ -60,12 +62,12 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
   // actions (Edit / Duplicate / Delete). Delete stays danger-red at the
   // bottom to keep destructive actions where the eye expects them.
   const items = [
-    { label: "Connect", onClick: onConnect },
-    ...(onDisconnect ? [{ label: "Disconnect", onClick: onDisconnect }] : []),
+    { label: t("Connect"), onClick: onConnect },
+    ...(onDisconnect ? [{ label: t("Disconnect"), onClick: onDisconnect }] : []),
     { kind: "separator" as const },
-    { label: "Edit", onClick: onEdit },
-    { label: "Duplicate", onClick: onDuplicate },
-    { label: "Delete", onClick: onDelete, variant: "danger" as const },
+    { label: t("Edit"), onClick: onEdit },
+    { label: t("Duplicate"), onClick: onDuplicate },
+    { label: t("Delete"), onClick: onDelete, variant: "danger" as const },
   ];
 
   function handleContextMenu(e: React.MouseEvent) {

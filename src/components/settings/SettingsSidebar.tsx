@@ -1,6 +1,7 @@
 import { Palette, Info, Wrench, Shield, type LucideIcon } from "lucide-react";
 import { useSettingsStore, useIconSizes } from "../../state/settings";
 import { SectionHeader } from "../SectionHeader";
+import { useT } from "../../i18n";
 
 type Section = "appearance" | "about" | "trusted-servers";
 
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function SettingsSidebar({ active, onSelect }: Props) {
+  const t = useT();
   const iconSizes = useIconSizes();
   const reset = () => useSettingsStore.getState().reset();
 
@@ -31,29 +33,30 @@ export function SettingsSidebar({ active, onSelect }: Props) {
           opacity: dim ? 0.4 : 1,
         }}
       >
-        <Icon size={iconSizes.md} strokeWidth={1.8} />{label}
+        <Icon size={iconSizes.md} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
       </div>
     );
   }
 
   return (
     <div style={{
-      width: 150, background: "var(--panel-1)",
+      width: 172, background: "var(--panel-1)",
       borderRight: "1px solid var(--border)", padding: "12px 8px",
       display: "flex", flexDirection: "column",
     }}>
-      <SectionHeader label="Settings" />
-      <Row id="appearance" label="Appearance" Icon={Palette}
+      <SectionHeader label={t("Settings")} />
+      <Row id="appearance" label={t("Appearance")} Icon={Palette}
         onClick={() => onSelect("appearance")} />
-      <Row id="about" label="About" Icon={Info}
+      <Row id="about" label={t("About")} Icon={Info}
         onClick={() => onSelect("about")} />
-      <Row id="trusted-servers" label="已信任的服务器" Icon={Shield}
+      <Row id="trusted-servers" label={t("Trusted servers")} Icon={Shield}
         onClick={() => onSelect("trusted-servers")} />
-      <Row id="advanced" label="Advanced" Icon={Wrench} dim />
+      <Row id="advanced" label={t("Advanced")} Icon={Wrench} dim />
       <div style={{ flex: 1 }} />
       <button
         onClick={() => {
-          if (confirm("Reset all settings to defaults?")) reset();
+          if (confirm(t("Reset all settings to defaults?"))) reset();
         }}
         style={{
           margin: 4, padding: "6px 8px",
@@ -61,7 +64,7 @@ export function SettingsSidebar({ active, onSelect }: Props) {
           border: "1px solid var(--border-hi)", borderRadius: 5,
           fontSize: "var(--font-ui-size)", cursor: "pointer",
         }}
-      >Reset to defaults</button>
+      >{t("Reset to defaults")}</button>
     </div>
   );
 }

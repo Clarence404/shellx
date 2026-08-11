@@ -4,6 +4,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { HostContextMenu } from "./HostContextMenu";
 import { useHostsStore } from "../state/hosts";
 import type { HostInfo } from "../types/host";
+import { useT } from "../i18n";
 
 export type Tab = { id: string; title: string; state?: "active" | "closed"; kind?: "ssh" | "local" };
 
@@ -26,6 +27,7 @@ const QUICK_CONNECT_LIMIT = 6;
 export function TabBar({
   tabs, activeTabId, onSelect, onClose, onCloseTabs, onNewConnection, onConnectHost, onNewLocalTerminal,
 }: Props) {
+  const t = useT();
   const savedHosts = useHostsStore((s) => s.hosts);
   const stripRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef<HTMLDivElement | null>(null);
@@ -125,9 +127,9 @@ export function TabBar({
     const leftIds = idx > 0 ? tabs.slice(0, idx).map((t) => t.id) : [];
     const rightIds = idx >= 0 ? tabs.slice(idx + 1).map((t) => t.id) : [];
     const items: Array<{ label: string; onClick: () => void; variant?: "danger" }> = [];
-    if (leftIds.length > 0) items.push({ label: `Close ${leftIds.length} to the left`, onClick: () => closeMany(leftIds) });
-    if (rightIds.length > 0) items.push({ label: `Close ${rightIds.length} to the right`, onClick: () => closeMany(rightIds) });
-    items.push({ label: "Close all", onClick: () => closeMany(tabs.map((t) => t.id)), variant: "danger" });
+    if (leftIds.length > 0) items.push({ label: `${t("Close")} ${leftIds.length} ${t("to the left")}`, onClick: () => closeMany(leftIds) });
+    if (rightIds.length > 0) items.push({ label: `${t("Close")} ${rightIds.length} ${t("to the right")}`, onClick: () => closeMany(rightIds) });
+    items.push({ label: t("Close all"), onClick: () => closeMany(tabs.map((tab) => tab.id)), variant: "danger" });
     return items;
   }
 
@@ -188,6 +190,7 @@ export function TabBar({
         {tabs.map((t) => (
           <div key={t.id} role="tab" aria-selected={t.id === activeTabId}
             ref={t.id === activeTabId ? activeRef : undefined}
+            title={t.title}
             onClick={() => onSelect(t.id)}
             onContextMenu={(e) => {
               e.preventDefault();
@@ -213,11 +216,15 @@ export function TabBar({
               background: t.state === "closed" ? "var(--text-3)" : "var(--success)",
               opacity: t.state === "closed" ? 0.4 : 1,
             }} />
-            {t.title}
+            {/* Cap tab width so one long host label can't monopolize the
+                strip; full name lives in the tooltip. The × never shrinks. */}
+            <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
+              {t.title}
+            </span>
             <span
               onClick={(e) => { e.stopPropagation(); onClose(t.id); }}
               aria-label={`close ${t.title}`}
-              style={{ opacity: 0.6, fontSize: 12 }}>×</span>
+              style={{ opacity: 0.6, fontSize: 12, flexShrink: 0 }}>×</span>
           </div>
         ))}
         {onNewConnection && (
@@ -363,6 +370,7 @@ function PlusMenu({
   onQuickConnect: (host: HostInfo) => void;
   onNewLocalTerminal: () => void;
 }) {
+  const t = useT();
   const rect = anchor?.getBoundingClientRect();
   const top = (rect?.bottom ?? 32) + 2;
   const left = rect?.left ?? 0;
@@ -382,13 +390,13 @@ function PlusMenu({
       }}>
       <MenuItem
         icon={<TerminalSquare size={14} />}
-        label="New local terminal"
+        label={t("New local terminal")}
         onClick={onNewLocalTerminal}
       />
       {quick.length > 0 && (
         <>
           <MenuDivider />
-          <MenuHeading>Quick connect</MenuHeading>
+          <MenuHeading>{t("Quick connect")}</MenuHeading>
           {quick.map((h) => (
             <MenuItem
               key={h.id}
@@ -405,7 +413,7 @@ function PlusMenu({
       <MenuDivider />
       <MenuItem
         icon={<Plug size={14} />}
-        label="New SSH connection…"
+        label={t("New SSH connection…")}
         onClick={onNewConnection}
       />
     </div>

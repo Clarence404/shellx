@@ -55,8 +55,17 @@ export function ConnectingPanel({ hostLabel, title, subtitle, onCancel }: Props)
             style={{ animation: "shellx-plug-right 1.6s ease-in-out infinite" }} />
         </span>
       </div>
-      <div>
-        <div style={{ color: "var(--text-1)", fontSize: 13, marginBottom: 4 }}>
+      <div style={{ maxWidth: "100%" }}>
+        {/* One line, ellipsized — a pathological host label must not wrap
+            the panel across several lines. Full text in the tooltip. */}
+        <div
+          title={title ?? `Connecting to ${hostLabel}…`}
+          style={{
+            color: "var(--text-1)", fontSize: 13, marginBottom: 4,
+            maxWidth: 420, whiteSpace: "nowrap",
+            overflow: "hidden", textOverflow: "ellipsis",
+            marginLeft: "auto", marginRight: "auto",
+          }}>
           {title ?? `Connecting to ${hostLabel}…`}
         </div>
         <div style={{ color: "var(--text-3)", fontSize: 11 }}>

@@ -20,6 +20,7 @@ interface State extends Settings {
   setTerminalCursorStyle(style: Settings["terminal"]["cursorStyle"]): void;
   localShell: string;
   setLocalShell(v: string): void;
+  setLanguage(v: Settings["language"]): void;
   reset(): void;
 }
 
@@ -35,6 +36,7 @@ function snapshotForSave(s: State): Settings {
     filesFontSize: s.filesFontSize,
     terminal: s.terminal,
     localShell: s.localShell || undefined,
+    language: s.language,
     schemaVersion: s.schemaVersion,
   };
 }
@@ -113,6 +115,11 @@ export const useSettingsStore = create<State>((set, get) => ({
 
   setLocalShell(v) {
     set({ localShell: v });
+    immediateSave(get);
+  },
+
+  setLanguage(v) {
+    set({ language: v });
     immediateSave(get);
   },
 

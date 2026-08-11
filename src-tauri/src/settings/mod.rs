@@ -24,12 +24,17 @@ pub struct Settings {
     /// None → use platform default (cmd.exe on Windows, $SHELL on Unix).
     #[serde(default)]
     pub local_shell: Option<String>,
+    /// UI language ("en" | "zh"). Missing on old settings.json files —
+    /// serde default resolves to "en".
+    #[serde(default = "default_language")]
+    pub language: String,
     pub schema_version: u32,
 }
 
 fn default_system_font() -> String { "system-default".into() }
 fn default_system_font_size() -> u32 { 13 }
 fn default_files_font_size() -> u32 { 13 }
+fn default_language() -> String { "en".into() }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -100,6 +105,7 @@ mod tests {
                 cursor_style: "underline".into(),
             },
             local_shell: None,
+            language: "en".into(),
             schema_version: 1,
         }
     }
@@ -153,6 +159,17 @@ mod tests {
         let store = SettingsStore::open(td.path());
         std::fs::write(td.path().join("settings.json"), "{ not valid json").unwrap();
         assert!(store.load().unwrap().is_none()); // graceful fallback, not an error
+    }
+
+    #[test]
+    fn load_old_settings_without_language_uses_default() {
+        let td = TempDir::new().unwrap();
+        let store = SettingsStore::open(td.path());
+        // Pre-i18n settings.json has no language field.
+        let legacy = r#"{"themeId":"warm-minimal","density":"comfortable","systemFont":"system-default","systemFontSize":13,"filesFontSize":13,"terminal":{"fontFamily":"jetbrains-mono","fontSize":13,"cursorStyle":"block"},"schemaVersion":1}"#;
+        std::fs::write(td.path().join("settings.json"), legacy).unwrap();
+        let got = store.load().unwrap().unwrap();
+        assert_eq!(got.language, "en");
     }
 
     #[test]

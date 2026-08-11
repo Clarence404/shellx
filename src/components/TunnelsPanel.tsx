@@ -7,6 +7,7 @@ import {
   addTunnel, deleteTunnel, reorderTunnels,
 } from "../ipc/tunnels";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
+import { useT } from "../i18n";
 
 const EMPTY_STATUSES: TunnelStatus[] = [];
 
@@ -27,6 +28,7 @@ function parseSSHImport(cmd: string): Array<{ local_port: number; remote_host: s
 }
 
 export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMode }: Props) {
+  const t = useT();
   const tunnelStatuses = useSessions((s) => s.tunnelStatuses[sessionId] ?? EMPTY_STATUSES);
   const rulesVersion = useSessions((s) => hostId ? (s.rulesVersion[hostId] ?? 0) : 0);
   const hostInfo = useHostsStore((s) => hostId ? (s.hosts.find((h) => h.id === hostId) ?? null) : null);
@@ -351,7 +353,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
             value={importCmd}
             onChange={(e) => { setImportCmd(e.target.value); setImportParsed(null); }}
             onKeyDown={(e) => { if (e.key === "Enter") handleParseImport(); }}
-            placeholder="Paste SSH command to import rules…"
+            placeholder={t("Paste SSH command to import rules…")}
             style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 11, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
           />
           {importCmd.trim() && (
@@ -363,11 +365,11 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
             <span style={{ fontSize: 10, color: importParsed.length > 0 ? "var(--success)" : "var(--error)", flex: 1, fontFamily: "var(--font-mono)" }}>
               {importParsed.length > 0
                 ? importParsed.map((p) => `${p.local_port}→${p.remote_host}:${p.remote_port}`).join(", ")
-                : "No -L rules found"}
+                : t("No -L rules found")}
             </span>
             {importParsed.length > 0 && (
               <button onClick={handleImportAdd} style={{ background: "none", border: "1px solid var(--success)", borderRadius: 3, color: "var(--success)", fontSize: 10, padding: "2px 8px", cursor: "pointer", fontWeight: 500 }}>
-                Add {importParsed.length > 1 ? `${importParsed.length} rules` : "rule"}
+                {t("Add")} {importParsed.length > 1 ? `${importParsed.length} ${t("rules")}` : t("rule")}
               </button>
             )}
           </div>
@@ -377,19 +379,19 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, color: "var(--text-2)" }}>{rules.length} rules</span>
+          <span style={{ fontSize: 11, color: "var(--text-2)" }}>{rules.length} {t("rules")}</span>
           {activeCount > 0 && (
             <>
               <span style={{ width: 1, height: 10, background: "var(--border-hi)" }} />
               <span style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4, color: "var(--success)" }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--success)", display: "inline-block" }} />
-                {activeCount} active
+                {activeCount} {t("active")}
               </span>
             </>
           )}
         </div>
         {!addOpen && (
-          <button onClick={() => setAddOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>+ Add</button>
+          <button onClick={() => setAddOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>+ {t("Add")}</button>
         )}
       </div>
 
@@ -402,32 +404,32 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
             {addErr && <div style={{ fontSize: 11, color: "var(--error)" }}>{addErr}</div>}
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
-                <span style={fieldLabel}>Label</span>
+                <span style={fieldLabel}>{t("Label")}</span>
                 <input value={addLabel} onChange={(e) => setAddLabel(e.target.value)} placeholder="e.g. Postgres" style={field} />
               </div>
               <div style={{ width: 96, display: "flex", flexDirection: "column", gap: 3 }}>
-                <span style={fieldLabel}>Local port</span>
+                <span style={fieldLabel}>{t("Local port")}</span>
                 <input value={addLocalPort} onChange={(e) => setAddLocalPort(e.target.value)} placeholder="15432" style={{ ...field, fontFamily: "var(--font-mono)" }} />
               </div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
-                <span style={fieldLabel}>Remote host</span>
+                <span style={fieldLabel}>{t("Remote host")}</span>
                 <input value={addRemoteHost} onChange={(e) => setAddRemoteHost(e.target.value)} placeholder="db.internal" style={{ ...field, fontFamily: "var(--font-mono)" }} />
               </div>
               <div style={{ width: 96, display: "flex", flexDirection: "column", gap: 3 }}>
-                <span style={fieldLabel}>Remote port</span>
+                <span style={fieldLabel}>{t("Remote port")}</span>
                 <input value={addRemotePort} onChange={(e) => setAddRemotePort(e.target.value)} placeholder="5432" style={{ ...field, fontFamily: "var(--font-mono)" }} />
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-2)", cursor: "pointer" }}>
                 <input type="checkbox" checked={addBindAll} onChange={(e) => setAddBindAll(e.target.checked)} />
-                LAN sharing (0.0.0.0)
+                {t("LAN sharing (0.0.0.0)")}
               </label>
               <div style={{ display: "flex", gap: 6 }}>
-                <button onClick={handleCancelAdd} style={{ padding: "5px 12px", fontSize: 12, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>Cancel</button>
-                <button onClick={handleAdd} style={{ padding: "5px 14px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>Add rule</button>
+                <button onClick={handleCancelAdd} style={{ padding: "5px 12px", fontSize: 12, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>{t("Cancel")}</button>
+                <button onClick={handleAdd} style={{ padding: "5px 14px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>{t("Add rule")}</button>
               </div>
             </div>
           </div>
@@ -477,7 +479,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                 <div
                   onPointerDown={(e) => onGripPointerDown(e, rule.id)}
                   style={{ width: 22, alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", cursor: draggingId ? "grabbing" : "grab", color: "var(--text-3)", flexShrink: 0, opacity: 0.35, touchAction: "none" }}
-                  title="Drag to reorder"
+                  title={t("Drag to reorder")}
                 >
                   <GripVertical size={13} />
                 </div>
@@ -501,7 +503,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                       border: `0.5px solid ${active ? "rgba(var(--success-rgb,166,227,161),.3)" : "var(--border)"}`,
                       color: active ? "var(--success)" : "var(--text-3)",
                     }}>
-                      {active ? "Active" : "Inactive"}
+                      {active ? t("Active") : t("Inactive")}
                     </span>
                     {isExpanded && (
                       <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--accent)" }}>›</span>
@@ -522,7 +524,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                 <div style={{ display: "flex", alignItems: "center", gap: 2, paddingRight: 10, flexShrink: 0 }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); isEditing ? setEditingId(null) : startEdit(rule); }}
-                    title="Edit"
+                    title={t("Edit")}
                     style={{ background: "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 4, color: isEditing ? "var(--accent)" : "var(--text-2)", display: "flex", alignItems: "center" }}
                   >
                     <Pencil size={14} />
@@ -530,7 +532,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                   <button
                     onClick={(e) => { e.stopPropagation(); armDelete(rule); }}
                     onMouseLeave={() => { if (confirmDeleteId === rule.id) disarmDelete(); }}
-                    title={confirmDeleteId === rule.id ? "再次点击确认删除" : "Delete"}
+                    title={confirmDeleteId === rule.id ? t("Click again to confirm delete") : t("Delete")}
                     style={{
                       background: confirmDeleteId === rule.id ? "rgba(243,139,168,.12)" : "none",
                       border: "none", cursor: "pointer", padding: 5, borderRadius: 4,
@@ -538,7 +540,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                       display: "flex", alignItems: "center", gap: 4,
                     }}
                   >
-                    {confirmDeleteId === rule.id && <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1 }}>确认?</span>}
+                    {confirmDeleteId === rule.id && <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1 }}>{t("Confirm?")}</span>}
                     <Trash2 size={14} />
                   </button>
                   {/* Toggle */}
@@ -559,27 +561,27 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                   {editErr && <div style={{ fontSize: 11, color: "var(--error)" }}>{editErr}</div>}
                   <div style={{ display: "flex", gap: 8 }}>
                     <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
-                      <span style={fieldLabel}>Label</span>
+                      <span style={fieldLabel}>{t("Label")}</span>
                       <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} placeholder="e.g. Postgres" style={field} />
                     </div>
                     <div style={{ width: 96, display: "flex", flexDirection: "column", gap: 3 }}>
-                      <span style={fieldLabel}>Local port</span>
+                      <span style={fieldLabel}>{t("Local port")}</span>
                       <input value={editLocalPort} onChange={(e) => setEditLocalPort(e.target.value)} placeholder="15432" style={{ ...field, fontFamily: "var(--font-mono)" }} />
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
-                      <span style={fieldLabel}>Remote host</span>
+                      <span style={fieldLabel}>{t("Remote host")}</span>
                       <input value={editRemoteHost} onChange={(e) => setEditRemoteHost(e.target.value)} placeholder="db.internal" style={{ ...field, fontFamily: "var(--font-mono)" }} />
                     </div>
                     <div style={{ width: 96, display: "flex", flexDirection: "column", gap: 3 }}>
-                      <span style={fieldLabel}>Remote port</span>
+                      <span style={fieldLabel}>{t("Remote port")}</span>
                       <input value={editRemotePort} onChange={(e) => setEditRemotePort(e.target.value)} placeholder="5432" style={{ ...field, fontFamily: "var(--font-mono)" }} />
                     </div>
                   </div>
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
-                    <button onClick={() => setEditingId(null)} style={{ padding: "5px 12px", fontSize: 12, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>Cancel</button>
-                    <button onClick={handleSaveEdit} style={{ padding: "5px 14px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>Save</button>
+                    <button onClick={() => setEditingId(null)} style={{ padding: "5px 12px", fontSize: 12, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>{t("Cancel")}</button>
+                    <button onClick={handleSaveEdit} style={{ padding: "5px 14px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>{t("Save")}</button>
                   </div>
                 </div>
               )}
@@ -588,7 +590,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
               {isExpanded && (
                 <div style={{ padding: "0 12px 10px 12px", borderTop: "1px solid var(--border)", background: "var(--panel-1)" }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", paddingTop: 9, marginBottom: 6 }}>
-                    SSH command
+                    {t("SSH command")}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 4, padding: "8px 10px" }}>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-2)", lineHeight: 1.6, whiteSpace: "nowrap", overflowX: "auto" }}>
@@ -603,13 +605,13 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                         transition: "color .15s, border-color .15s",
                       }}
                     >
-                      {copiedId === rule.id ? "Copied" : "Copy"}
+                      {copiedId === rule.id ? t("Copied") : t("Copy")}
                     </button>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 9 }}>
                     <div>
-                      <div style={{ fontSize: 12, color: "var(--text-1)", fontWeight: 500 }}>LAN sharing</div>
-                      <div style={{ fontSize: 11, color: "var(--text-3)" }}>Bind to 0.0.0.0 — accessible from local network</div>
+                      <div style={{ fontSize: 12, color: "var(--text-1)", fontWeight: 500 }}>{t("LAN sharing")}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-3)" }}>{t("Bind to 0.0.0.0 — accessible from local network")}</div>
                     </div>
                     <div
                       onClick={() => void handleToggleBindAll(rule)}

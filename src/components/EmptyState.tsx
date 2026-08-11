@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import { Wordmark } from "./Wordmark";
 import { useHostsStore } from "../state/hosts";
+import { useT } from "../i18n";
 
 const kbdStyle = {
   background: "var(--border)", padding: "2px 6px",
@@ -9,6 +10,7 @@ const kbdStyle = {
 } as const;
 
 export function EmptyState({ onNewConnection }: { onNewConnection?: () => void }) {
+  const t = useT();
   const hasHosts = useHostsStore((s) => s.hosts.length > 0);
 
   return (
@@ -18,15 +20,15 @@ export function EmptyState({ onNewConnection }: { onNewConnection?: () => void }
     }}>
       <Wordmark size="lg" />
       <div style={{ fontSize: 12, color: "var(--text-2)" }}>
-        A tiny, pretty terminal client.
+        {t("A tiny, pretty terminal client.")}
       </div>
       {hasHosts ? (
         <div style={{
           fontSize: 12, color: "var(--text-3)",
           marginTop: 8, textAlign: "center", lineHeight: 1.7,
         }}>
-          Pick a host from the sidebar,<br />
-          or press <kbd style={kbdStyle}>⌘K</kbd> to search.
+          {t("Pick a host from the sidebar,")}<br />
+          {t("or press")} <kbd style={kbdStyle}>⌘K</kbd> {t("to search.")}
         </div>
       ) : (
         <>
@@ -42,10 +44,10 @@ export function EmptyState({ onNewConnection }: { onNewConnection?: () => void }
               boxShadow: "0 4px 14px rgba(124, 92, 255, 0.35)",
             }}>
             <Plus size={12} strokeWidth={2.5} />
-            New connection
+            {t("New connection")}
           </button>
           <div style={{ fontSize: 11, color: "var(--text-3)" }}>
-            or press <kbd style={kbdStyle}>⌘K</kbd> to open a saved host
+            {t("or press")} <kbd style={kbdStyle}>⌘K</kbd> {t("to open a saved host")}
           </div>
         </>
       )}
