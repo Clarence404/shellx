@@ -11,6 +11,7 @@ interface Props {
   onTabClose: (id: string) => void;
   onTabsClose?: (ids: string[]) => void;
   onNewConnection?: () => void;
+  onNewLocalTerminal?: () => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
 }
 
@@ -24,7 +25,7 @@ interface Props {
  * the window by any non-interactive area; TabBar / logo / controls are
  * interactive and NOT drag regions.
  */
-export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection, onConnectHost }: Props) {
+export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection, onNewLocalTerminal, onConnectHost }: Props) {
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -81,6 +82,7 @@ export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClo
           onSelect={onTabSelect} onClose={onTabClose}
           onCloseTabs={onTabsClose}
           onNewConnection={onNewConnection}
+          onNewLocalTerminal={onNewLocalTerminal}
           onConnectHost={onConnectHost}
         />
       </div>
