@@ -97,6 +97,7 @@ fn main() {
             ipc::tunnels::tunnel_open,
             ipc::tunnels::tunnel_close,
             ipc::tunnels::tunnel_add_session,
+            ipc::tunnels::tunnel_reorder,
         ])
         .run(tauri::generate_context!())
         .expect("shellx failed to start");

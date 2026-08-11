@@ -192,6 +192,25 @@ impl TunnelStore {
         .map_err(|e| Error::Protocol(e.to_string()))?;
         Ok(())
     }
+
+    /// Assigns contiguous sort_order values (0, 1, 2, …) to the given rules
+    /// in the order supplied.  Only rules belonging to `host_id` are touched;
+    /// any extra IDs in `rule_ids` that don't match are silently ignored.
+    pub async fn reorder(&self, host_id: Uuid, rule_ids: &[Uuid]) -> Result<()> {
+        let conn = self.conn.lock().await;
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| Error::Protocol(e.to_string()))?;
+        for (i, id) in rule_ids.iter().enumerate() {
+            tx.execute(
+                "UPDATE tunnels SET sort_order=?1 WHERE id=?2 AND host_id=?3",
+                params![i as i64, id.to_string(), host_id.to_string()],
+            )
+            .map_err(|e| Error::Protocol(e.to_string()))?;
+        }
+        tx.commit().map_err(|e| Error::Protocol(e.to_string()))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

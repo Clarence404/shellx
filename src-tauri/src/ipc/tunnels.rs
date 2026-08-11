@@ -88,6 +88,20 @@ pub async fn tunnel_close(
     mgr.close_tunnel(args.session_id, &args.rule_id).await
 }
 
+#[derive(Deserialize)]
+pub struct ReorderArgs {
+    pub host_id: Uuid,
+    pub rule_ids: Vec<Uuid>,
+}
+
+#[tauri::command]
+pub async fn tunnel_reorder(
+    args: ReorderArgs,
+    store: State<'_, TunnelStore>,
+) -> Result<()> {
+    store.reorder(args.host_id, &args.rule_ids).await
+}
+
 /// Add a session-only tunnel (not persisted to DB).
 /// Opens the tunnel immediately and returns its ephemeral rule_id.
 #[derive(Deserialize)]

@@ -61,5 +61,9 @@ export async function addSessionTunnel(args: {
   return invoke("tunnel_add_session", { args });
 }
 
+export async function reorderTunnels(host_id: Uuid, rule_ids: Uuid[]): Promise<void> {
+  return invoke("tunnel_reorder", { args: { host_id, rule_ids } });
+}
+
 export const onTunnelStatus = (h: (s: TunnelStatus) => void): Promise<UnlistenFn> =>
   listen<TunnelStatus>("tunnel:status", (ev) => h(ev.payload));

@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { GripVertical, Pencil, Trash2 } from "lucide-react";
 import { useSessions } from "../state/sessions";
 import { useHostsStore } from "../state/hosts";
-import { listTunnelsForHost, openTunnel, closeTunnel, updateTunnel, addTunnel, deleteTunnel } from "../ipc/tunnels";
+import {
+  listTunnelsForHost, openTunnel, closeTunnel, updateTunnel,
+  addTunnel, deleteTunnel, reorderTunnels,
+} from "../ipc/tunnels";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
 
 const EMPTY_STATUSES: TunnelStatus[] = [];
@@ -28,6 +32,10 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   const hostInfo = useHostsStore((s) => hostId ? (s.hosts.find((h) => h.id === hostId) ?? null) : null);
   const [rules, setRules] = useState<TunnelRule[]>([]);
 
+  // Keep a ref so DnD end-handler always reads the committed order.
+  const rulesRef = useRef<TunnelRule[]>([]);
+  rulesRef.current = rules;
+
   // Add form state
   const [addOpen, setAddOpen] = useState(false);
   const [addLabel, setAddLabel] = useState("");
@@ -45,7 +53,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   const [editRemotePort, setEditRemotePort] = useState("");
   const [editErr, setEditErr] = useState<string | null>(null);
 
-  // Expand (detail / export) state
+  // Expand state
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Toggle error state
@@ -56,6 +64,11 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   const [importCmd, setImportCmd] = useState("");
   const [importParsed, setImportParsed] = useState<Array<{ local_port: number; remote_host: string; remote_port: number }> | null>(null);
 
+  // DnD state
+  const dragSrcId = useRef<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
   useEffect(() => {
     if (hostId) {
       listTunnelsForHost(hostId).then(setRules).catch(() => {});
@@ -65,6 +78,8 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   function statusFor(ruleId: string) {
     return tunnelStatuses.find((s) => s.rule_id === ruleId);
   }
+
+  // ---- Toggle ---------------------------------------------------------------
 
   async function handleToggle(rule: TunnelRule) {
     setToggleErrId(null);
@@ -86,6 +101,8 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       setToggleErrMsg(String(e));
     }
   }
+
+  // ---- Add ------------------------------------------------------------------
 
   async function handleAdd() {
     setAddErr(null);
@@ -110,6 +127,8 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
     setAddErr(null);
     setAddLabel(""); setAddLocalPort(""); setAddRemoteHost(""); setAddRemotePort(""); setAddBindAll(false);
   }
+
+  // ---- Edit -----------------------------------------------------------------
 
   function startEdit(rule: TunnelRule) {
     setEditingId(rule.id);
@@ -138,6 +157,8 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
     }
   }
 
+  // ---- Delete ---------------------------------------------------------------
+
   async function handleDelete(rule: TunnelRule) {
     try {
       const s = statusFor(rule.id);
@@ -151,11 +172,15 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
     }
   }
 
+  // ---- Bind-all toggle in expand pane ---------------------------------------
+
   async function handleToggleBindAll(rule: TunnelRule) {
     const newVal = !rule.bind_all;
     await updateTunnel({ id: rule.id, bind_all: newVal });
     setRules((r) => r.map((x) => x.id === rule.id ? { ...x, bind_all: newVal } : x));
   }
+
+  // ---- Import ---------------------------------------------------------------
 
   function handleParseImport() {
     const parsed = parseSSHImport(importCmd);
@@ -175,20 +200,65 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
     setImportParsed(null);
   }
 
+  // ---- SSH cmd helper -------------------------------------------------------
+
   function buildSSHCmd(rule: TunnelRule) {
     const userHost = hostInfo ? `${hostInfo.username}@${hostInfo.host}` : "<user@host>";
     return `ssh -L ${rule.local_port}:${rule.remote_host}:${rule.remote_port} ${userHost}`;
   }
 
+  // ---- Drag-and-drop --------------------------------------------------------
+
+  function onDragStart(e: React.DragEvent, id: string) {
+    dragSrcId.current = id;
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function onDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault();
+    const src = dragSrcId.current;
+    if (!src || src === id) { setDragOverId(id); return; }
+    setDragOverId(id);
+    // Optimistically reorder in state so the list tracks the dragged item.
+    setRules((prev) => {
+      const srcIdx = prev.findIndex((r) => r.id === src);
+      const tgtIdx = prev.findIndex((r) => r.id === id);
+      if (srcIdx === -1 || tgtIdx === -1) return prev;
+      const next = [...prev];
+      const [item] = next.splice(srcIdx, 1);
+      next.splice(tgtIdx, 0, item);
+      return next;
+    });
+  }
+
+  async function onDragEnd() {
+    dragSrcId.current = null;
+    setDraggingId(null);
+    setDragOverId(null);
+    if (!hostId) return;
+    try {
+      await reorderTunnels(hostId, rulesRef.current.map((r) => r.id));
+    } catch { /* non-fatal — order reverts on next load */ }
+  }
+
+  // ---- Render ---------------------------------------------------------------
+
   const activeCount = tunnelStatuses.filter((s) => s.status === "active").length;
-  const fieldStyle: React.CSSProperties = { fontSize: 11, padding: "3px 6px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-1)" };
+
+  const field: React.CSSProperties = {
+    fontSize: 11, padding: "4px 7px",
+    background: "var(--panel-1)", border: "1px solid var(--border)",
+    borderRadius: 4, color: "var(--text-1)",
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+
       {/* Import bar */}
       <div style={{ borderBottom: "1px solid var(--border)", padding: "7px 12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, padding: "0 8px", height: 28 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--text-3)", flexShrink: 0 }}><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--text-3)", flexShrink: 0 }}><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
           <input
             value={importCmd}
             onChange={(e) => { setImportCmd(e.target.value); setImportParsed(null); }}
@@ -197,9 +267,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
             style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 11, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
           />
           {importCmd.trim() && (
-            <button onClick={handleParseImport} style={{ background: "none", border: "none", fontSize: 10, color: "var(--accent)", cursor: "pointer", padding: 0, whiteSpace: "nowrap", fontWeight: 500 }}>
-              Parse
-            </button>
+            <button onClick={handleParseImport} style={{ background: "none", border: "none", fontSize: 10, color: "var(--accent)", cursor: "pointer", padding: 0, whiteSpace: "nowrap", fontWeight: 500 }}>Parse</button>
           )}
         </div>
         {importParsed !== null && (
@@ -219,87 +287,172 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       </div>
 
       {/* Header */}
-      <div style={{ borderBottom: "1px solid var(--border)" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px" }}>
-          <span style={{ fontSize: 11, color: "var(--text-2)" }}>
-            {rules.length} rules · {activeCount} active
-          </span>
-          {!addOpen && (
-            <button onClick={() => setAddOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>
-              + Add
-            </button>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--text-2)" }}>{rules.length} rules</span>
+          {activeCount > 0 && (
+            <>
+              <span style={{ width: 1, height: 10, background: "var(--border-hi)" }} />
+              <span style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4, color: "var(--success)" }}>
+                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--success)", display: "inline-block" }} />
+                {activeCount} active
+              </span>
+            </>
           )}
         </div>
+        {!addOpen && (
+          <button onClick={() => setAddOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>+ Add</button>
+        )}
       </div>
 
-      {/* Rule list */}
+      {/* Scrollable list */}
       <div style={{ flex: 1, overflowY: "auto" }}>
+
+        {/* Add form */}
+        {addOpen && (
+          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 4, background: "rgba(124,92,255,0.03)" }}>
+            {addErr && <div style={{ fontSize: 10, color: "var(--error)" }}>{addErr}</div>}
+            <div style={{ display: "flex", gap: 4 }}>
+              <input value={addLabel} onChange={(e) => setAddLabel(e.target.value)} placeholder="Label" style={{ ...field, flex: 1 }} />
+              <input value={addLocalPort} onChange={(e) => setAddLocalPort(e.target.value)} placeholder="Local port" style={{ ...field, width: 76, fontFamily: "var(--font-mono)" }} />
+            </div>
+            <div style={{ display: "flex", gap: 4 }}>
+              <input value={addRemoteHost} onChange={(e) => setAddRemoteHost(e.target.value)} placeholder="Remote host" style={{ ...field, flex: 1, fontFamily: "var(--font-mono)" }} />
+              <input value={addRemotePort} onChange={(e) => setAddRemotePort(e.target.value)} placeholder="Port" style={{ ...field, width: 52, fontFamily: "var(--font-mono)" }} />
+              <button onClick={handleAdd} style={{ padding: "3px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
+              <button onClick={handleCancelAdd} style={{ padding: "3px 6px", fontSize: 11, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-2)", cursor: "pointer" }}>
+              <input type="checkbox" checked={addBindAll} onChange={(e) => setAddBindAll(e.target.checked)} />
+              LAN sharing (0.0.0.0)
+            </label>
+          </div>
+        )}
+
+        {/* Rules */}
         {rules.map((rule) => {
           const s = statusFor(rule.id);
           const active = s?.status === "active";
           const hasError = s?.status === "error" || toggleErrId === rule.id;
           const errMsg = toggleErrId === rule.id ? toggleErrMsg : (s?.error ?? null);
-          const dotColor = hasError ? "var(--error)" : active ? "var(--success)" : "var(--text-3)";
           const isEditing = editingId === rule.id;
           const isExpanded = expandedId === rule.id && !isEditing;
+          const isDragging = draggingId === rule.id;
+          const isDragOver = dragOverId === rule.id && draggingId !== rule.id;
+
+          const statusBarColor = hasError
+            ? "var(--error)"
+            : active
+            ? "var(--success)"
+            : "var(--border-hi)";
 
           return (
-            <div key={rule.id} style={{ borderBottom: "1px solid var(--border)" }}>
+            <div
+              key={rule.id}
+              draggable
+              onDragStart={(e) => onDragStart(e, rule.id)}
+              onDragOver={(e) => onDragOver(e, rule.id)}
+              onDragEnd={onDragEnd}
+              style={{
+                borderBottom: "1px solid var(--border)",
+                opacity: isDragging ? 0.4 : 1,
+                background: isDragOver ? "rgba(124,92,255,0.05)" : undefined,
+                borderTop: isDragOver ? "2px solid rgba(124,92,255,0.4)" : undefined,
+                transition: "opacity .1s, background .1s",
+              }}
+            >
               {/* Main row */}
-              <div
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", cursor: "pointer" }}
-                onClick={() => {
-                  if (isEditing) return;
-                  setExpandedId(isExpanded ? null : rule.id);
-                }}
-              >
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>{rule.label || `Port ${rule.local_port}`}</div>
-                  <div style={{ fontSize: 10, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
-                    {rule.bind_all ? "0.0.0.0" : "localhost"}:{rule.local_port} → {rule.remote_host}:{rule.remote_port}
+              <div style={{ display: "flex", alignItems: "center" }}>
+                {/* Grip */}
+                <div
+                  style={{ width: 24, alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "var(--text-3)", flexShrink: 0, opacity: 0.5 }}
+                  title="Drag to reorder"
+                >
+                  <GripVertical size={13} />
+                </div>
+
+                {/* Status bar */}
+                <div style={{ width: 3, alignSelf: "stretch", background: statusBarColor, flexShrink: 0, borderRadius: 0 }} />
+
+                {/* Content */}
+                <div
+                  style={{ flex: 1, minWidth: 0, padding: "9px 10px", cursor: "pointer" }}
+                  onClick={() => { if (!isEditing) setExpandedId(isExpanded ? null : rule.id); }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>
+                      {rule.label || `Port ${rule.local_port}`}
+                    </span>
+                    <span style={{
+                      fontSize: 9, fontWeight: 600, letterSpacing: ".4px", textTransform: "uppercase",
+                      borderRadius: 3, padding: "1px 5px",
+                      background: active ? "rgba(var(--success-rgb,166,227,161),.12)" : "rgba(255,255,255,0.05)",
+                      border: `0.5px solid ${active ? "rgba(var(--success-rgb,166,227,161),.3)" : "var(--border)"}`,
+                      color: active ? "var(--success)" : "var(--text-3)",
+                    }}>
+                      {active ? "Active" : "Inactive"}
+                    </span>
+                    {isExpanded && (
+                      <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--accent)" }}>›</span>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontFamily: "var(--font-mono)", overflow: "hidden" }}>
+                    <span style={{ color: "var(--text-2)", flexShrink: 0 }}>
+                      {rule.bind_all ? "0.0.0.0" : "localhost"}:{rule.local_port}
+                    </span>
+                    <span style={{ color: "var(--text-3)", flexShrink: 0 }}>→</span>
+                    <span style={{ color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {rule.remote_host}:{rule.remote_port}
+                    </span>
                   </div>
                 </div>
-                {/* chevron */}
-                <span style={{ fontSize: 11, color: isExpanded ? "var(--accent)" : "var(--text-3)", transition: "transform .15s", display: "inline-block", transform: isExpanded ? "rotate(90deg)" : "none", flexShrink: 0 }}>›</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); isEditing ? setEditingId(null) : startEdit(rule); }}
-                  title="Edit"
-                  style={{ fontSize: 13, color: isEditing ? "var(--accent)" : "var(--text-2)", background: "none", border: "none", cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
-                >✎</button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDelete(rule); }}
-                  title="Delete"
-                  style={{ fontSize: 14, color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", padding: "0 2px", flexShrink: 0 }}
-                >×</button>
-                <div
-                  onClick={(e) => { e.stopPropagation(); handleToggle(rule); }}
-                  role="switch"
-                  aria-checked={active}
-                  style={{ width: 28, height: 16, borderRadius: 8, background: active ? "var(--accent)" : "var(--text-3)", position: "relative", cursor: "pointer", flexShrink: 0, transition: "background .15s" }}
-                >
-                  <span style={{ position: "absolute", top: 2, ...(active ? { right: 2 } : { left: 2 }), width: 12, height: 12, borderRadius: "50%", background: "var(--text-on-accent)", transition: "left .15s, right .15s" }} />
+
+                {/* Actions */}
+                <div style={{ display: "flex", alignItems: "center", gap: 2, paddingRight: 10, flexShrink: 0 }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); isEditing ? setEditingId(null) : startEdit(rule); }}
+                    title="Edit"
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 4, color: isEditing ? "var(--accent)" : "var(--text-3)", display: "flex", alignItems: "center" }}
+                  >
+                    <Pencil size={13} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); void handleDelete(rule); }}
+                    title="Delete"
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 4, color: "var(--text-3)", display: "flex", alignItems: "center" }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                  {/* Toggle */}
+                  <div
+                    onClick={(e) => { e.stopPropagation(); void handleToggle(rule); }}
+                    role="switch"
+                    aria-checked={active}
+                    style={{ width: 30, height: 17, borderRadius: 9, background: active ? "var(--accent)" : "var(--text-3)", position: "relative", cursor: "pointer", flexShrink: 0, transition: "background .15s", marginLeft: 4 }}
+                  >
+                    <span style={{ position: "absolute", top: 2, ...(active ? { right: 2 } : { left: 2 }), width: 13, height: 13, borderRadius: "50%", background: "var(--text-on-accent)", transition: "left .15s, right .15s" }} />
+                  </div>
                 </div>
               </div>
 
               {/* Edit form */}
               {isEditing && (
-                <div style={{ padding: "0 12px 8px 27px", display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ padding: "0 12px 8px 39px", display: "flex", flexDirection: "column", gap: 4 }}>
                   {editErr && <div style={{ fontSize: 10, color: "var(--error)" }}>{editErr}</div>}
                   <div style={{ display: "flex", gap: 4 }}>
-                    <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} placeholder="Label" style={{ ...fieldStyle, flex: 1 }} />
-                    <input value={editLocalPort} onChange={(e) => setEditLocalPort(e.target.value)} placeholder="Local port" style={{ ...fieldStyle, width: 76, fontFamily: "var(--font-mono)" }} />
+                    <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} placeholder="Label" style={{ ...field, flex: 1 }} />
+                    <input value={editLocalPort} onChange={(e) => setEditLocalPort(e.target.value)} placeholder="Local port" style={{ ...field, width: 76, fontFamily: "var(--font-mono)" }} />
                   </div>
                   <div style={{ display: "flex", gap: 4 }}>
-                    <input value={editRemoteHost} onChange={(e) => setEditRemoteHost(e.target.value)} placeholder="Remote host" style={{ ...fieldStyle, flex: 1, fontFamily: "var(--font-mono)" }} />
-                    <input value={editRemotePort} onChange={(e) => setEditRemotePort(e.target.value)} placeholder="Port" style={{ ...fieldStyle, width: 52, fontFamily: "var(--font-mono)" }} />
+                    <input value={editRemoteHost} onChange={(e) => setEditRemoteHost(e.target.value)} placeholder="Remote host" style={{ ...field, flex: 1, fontFamily: "var(--font-mono)" }} />
+                    <input value={editRemotePort} onChange={(e) => setEditRemotePort(e.target.value)} placeholder="Port" style={{ ...field, width: 52, fontFamily: "var(--font-mono)" }} />
                     <button onClick={handleSaveEdit} style={{ padding: "3px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
                     <button onClick={() => setEditingId(null)} style={{ padding: "3px 6px", fontSize: 11, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
                   </div>
                 </div>
               )}
 
-              {/* Expanded detail: SSH command + LAN toggle */}
+              {/* Expanded detail */}
               {isExpanded && (
                 <div style={{ padding: "0 12px 10px 12px", borderTop: "1px solid var(--border)", background: "var(--panel-1)" }}>
                   <div style={{ fontSize: 9.5, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", paddingTop: 8, marginBottom: 5 }}>
@@ -316,19 +469,18 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                       Copy
                     </button>
                   </div>
-                  {/* LAN toggle */}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
                     <div>
-                      <div style={{ fontSize: 11, color: "var(--text-1)", fontWeight: 500 }}>局域网共享</div>
-                      <div style={{ fontSize: 10, color: "var(--text-3)" }}>绑定 0.0.0.0，局域网设备可访问</div>
+                      <div style={{ fontSize: 11, color: "var(--text-1)", fontWeight: 500 }}>LAN sharing</div>
+                      <div style={{ fontSize: 10, color: "var(--text-3)" }}>Bind to 0.0.0.0 — accessible from local network</div>
                     </div>
                     <div
-                      onClick={() => handleToggleBindAll(rule)}
+                      onClick={() => void handleToggleBindAll(rule)}
                       role="switch"
                       aria-checked={rule.bind_all}
-                      style={{ width: 28, height: 16, borderRadius: 8, background: rule.bind_all ? "var(--accent)" : "var(--text-3)", position: "relative", cursor: "pointer", flexShrink: 0, transition: "background .15s" }}
+                      style={{ width: 30, height: 17, borderRadius: 9, background: rule.bind_all ? "var(--accent)" : "var(--text-3)", position: "relative", cursor: "pointer", flexShrink: 0, transition: "background .15s" }}
                     >
-                      <span style={{ position: "absolute", top: 2, ...(rule.bind_all ? { right: 2 } : { left: 2 }), width: 12, height: 12, borderRadius: "50%", background: "var(--text-on-accent)", transition: "left .15s, right .15s" }} />
+                      <span style={{ position: "absolute", top: 2, ...(rule.bind_all ? { right: 2 } : { left: 2 }), width: 13, height: 13, borderRadius: "50%", background: "var(--text-on-accent)", transition: "left .15s, right .15s" }} />
                     </div>
                   </div>
                 </div>
@@ -336,34 +488,11 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
 
               {/* Inline toggle error */}
               {!isEditing && !isExpanded && hasError && errMsg && (
-                <div style={{ fontSize: 10, color: "var(--error)", padding: "0 12px 6px 27px", wordBreak: "break-all" }}>
-                  {errMsg}
-                </div>
+                <div style={{ fontSize: 10, color: "var(--error)", padding: "0 12px 6px 39px", wordBreak: "break-all" }}>{errMsg}</div>
               )}
             </div>
           );
         })}
-
-        {/* Add form */}
-        {addOpen && (
-          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 4 }}>
-            {addErr && <div style={{ fontSize: 10, color: "var(--error)" }}>{addErr}</div>}
-            <div style={{ display: "flex", gap: 4 }}>
-              <input value={addLabel} onChange={(e) => setAddLabel(e.target.value)} placeholder="Label" style={{ ...fieldStyle, flex: 1 }} />
-              <input value={addLocalPort} onChange={(e) => setAddLocalPort(e.target.value)} placeholder="Local port" style={{ ...fieldStyle, width: 76, fontFamily: "var(--font-mono)" }} />
-            </div>
-            <div style={{ display: "flex", gap: 4 }}>
-              <input value={addRemoteHost} onChange={(e) => setAddRemoteHost(e.target.value)} placeholder="Remote host" style={{ ...fieldStyle, flex: 1, fontFamily: "var(--font-mono)" }} />
-              <input value={addRemotePort} onChange={(e) => setAddRemotePort(e.target.value)} placeholder="Port" style={{ ...fieldStyle, width: 52, fontFamily: "var(--font-mono)" }} />
-              <button onClick={handleAdd} style={{ padding: "3px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
-              <button onClick={handleCancelAdd} style={{ padding: "3px 6px", fontSize: 11, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
-            </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-2)", cursor: "pointer" }}>
-              <input type="checkbox" checked={addBindAll} onChange={(e) => setAddBindAll(e.target.checked)} />
-              局域网共享 (0.0.0.0)
-            </label>
-          </div>
-        )}
       </div>
     </div>
   );
