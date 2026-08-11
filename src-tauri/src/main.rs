@@ -46,6 +46,8 @@ fn main() {
             ipc::resize_session,
             ipc::close_connection,
             ipc::list_sessions,
+            ipc::local_pty::open_local_terminal,
+            ipc::local_pty::close_local_terminal,
             ipc::hosts::list_hosts,
             ipc::hosts::save_host,
             ipc::hosts::update_host,
