@@ -211,12 +211,9 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
 
   function onDragStart(e: React.DragEvent, id: string) {
     dragSrcId.current = id;
+    setDraggingId(id);
     e.dataTransfer.effectAllowed = "move";
-    // WebView2 requires at least one setData call for a drag to initiate.
     e.dataTransfer.setData("text/plain", id);
-    // Defer the opacity change to the next frame so the browser captures
-    // the drag ghost at full opacity before React re-renders the element.
-    requestAnimationFrame(() => setDraggingId(id));
   }
 
   function onDragOver(e: React.DragEvent, id: string) {
@@ -237,15 +234,11 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   }
 
   function onListDragOver(e: React.DragEvent) {
-    // Must be unconditional — a conditional ref check races with the drag
-    // engine and causes the "no-drop" cursor when the check fails.
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
   }
 
   function onItemDrop(e: React.DragEvent) {
-    // Reorder already happened live in onDragOver; just suppress the
-    // browser's default drop action (e.g. opening the text as a URL).
     e.preventDefault();
   }
 
