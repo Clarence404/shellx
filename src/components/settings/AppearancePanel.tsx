@@ -86,7 +86,7 @@ export function AppearancePanel() {
                   <span key={i} style={{ flex: 1, borderRadius: 2, background: c }} />
                 ))}
               </div>
-              <div style={{ fontSize: FS_META, color: "var(--text-1)" }}>{t(th.label)}</div>
+              <div style={{ fontSize: FS_META, color: "var(--text-1)", textAlign: "center" }}>{t(th.label)}</div>
             </div>
           ))}
         </div>
