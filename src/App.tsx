@@ -492,7 +492,7 @@ export function App() {
             display: (railView === "hosts" && !pendingConnectHostId) ? "flex" : "none",
             flexDirection: "column", height: "100%", minHeight: 0,
           }}>
-            {availableTabs.length > 1 && (
+            {activeSession?.kind !== "local" && (
               <ActivityToolbar
                 activity={effectiveActivity}
                 onChange={(a) => setActivity(activeId, a)}
