@@ -4,7 +4,7 @@
 
 一个小巧、精致的终端 + 文件传输客户端 —— 跨平台（Windows / macOS / Linux），开源，基于 Tauri + Rust + React。
 
-当前版本：**v0.7.0** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
+当前版本：**v0.10.0** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
 
 ---
 
@@ -13,6 +13,8 @@
 shellx 是一个桌面应用，提供：
 
 - **SSH 终端**（多 tab）—— 连接 Linux / BSD / macOS 服务器，主题、字体、光标样式全可定制；支持公钥（Ed25519/RSA/ECDSA）或密码认证，连接时对照 `~/.ssh/known_hosts` 验证 host key
+- **本地终端** —— 在 SSH 会话旁边直接打开本机 shell（Windows 默认 PowerShell，可在设置里换任意 shell）
+- **SSH 隧道（端口转发）** —— 按主机保存 `-L` 转发规则，实时开关、拖拽排序、局域网共享（绑定 0.0.0.0），还能粘贴 `ssh -L` 命令一键导入
 - **SFTP 文件浏览器** —— WinSCP 风格的双面板（本地 ↔ 远程），支持拖拽上传下载、目录传输、暂停/继续/取消
 - **保存主机 + 系统密钥链** —— 存一次主机信息，从侧边栏或 `+` 菜单一键连接；密码存在 OS 的 keychain 里，不会明文写配置
 
