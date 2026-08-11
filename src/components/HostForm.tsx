@@ -69,9 +69,23 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   // Delete two-click confirm state
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const confirmTimer = useRef<number | null>(null);
+  // Copy feedback state
+  const [copiedRuleId, setCopiedRuleId] = useState<string | null>(null);
+  const copiedTimer = useRef<number | null>(null);
   useEffect(() => () => {
     if (confirmTimer.current !== null) window.clearTimeout(confirmTimer.current);
+    if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
   }, []);
+
+  function handleCopySshCmd(ruleId: string, cmd: string) {
+    void navigator.clipboard.writeText(cmd);
+    setCopiedRuleId(ruleId);
+    if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
+    copiedTimer.current = window.setTimeout(() => {
+      setCopiedRuleId(null);
+      copiedTimer.current = null;
+    }, 1500);
+  }
   const [importCmd, setImportCmd] = useState("");
   const [importParsed, setImportParsed] = useState<Array<{ local_port: number; remote_host: string; remote_port: number }> | null>(null);
 
@@ -851,7 +865,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                         {/* Edit button */}
                         <button type="button"
                           onClick={(e) => { e.stopPropagation(); isEditing ? setEditingRuleId(null) : startEditRule(rule); setExpandedRuleId(null); }}
-                          style={{ background: "none", border: "none", cursor: "pointer", color: isEditing ? "var(--accent)" : "var(--text-3)", flexShrink: 0, padding: "2px 3px", borderRadius: 3, display: "flex", alignItems: "center" }}><Pencil size={13} /></button>
+                          style={{ background: "none", border: "none", cursor: "pointer", color: isEditing ? "var(--accent)" : "var(--text-2)", flexShrink: 0, padding: "2px 3px", borderRadius: 3, display: "flex", alignItems: "center" }}><Pencil size={14} /></button>
                         {/* Delete button — two-click confirm */}
                         <button type="button"
                           onClick={(e) => { e.stopPropagation(); armDeleteRule(rule.id); }}
@@ -860,12 +874,12 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                           style={{
                             background: confirmDeleteId === rule.id ? "rgba(243,139,168,.12)" : "none",
                             border: "none", cursor: "pointer",
-                            color: confirmDeleteId === rule.id ? "var(--error)" : "var(--text-3)",
+                            color: confirmDeleteId === rule.id ? "var(--error)" : "var(--text-2)",
                             flexShrink: 0, padding: "2px 3px", borderRadius: 3,
                             display: "flex", alignItems: "center", gap: 4,
                           }}>
                           {confirmDeleteId === rule.id && <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1 }}>确认?</span>}
-                          <Trash2 size={13} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
 
@@ -896,11 +910,16 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                         <div
                           ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })}
                           style={{ padding: "0 12px 10px", borderTop: "1px solid var(--border)", background: "rgba(0,0,0,.15)" }}>
-                          <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", padding: "8px 0 5px" }}>SSH command</div>
-                          <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, padding: "7px 9px" }}>
-                            <span style={{ flex: 1, fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-2)", lineHeight: 1.55, wordBreak: "break-all" }}>{sshCmd}</span>
-                            <button type="button" onClick={() => navigator.clipboard.writeText(sshCmd)}
-                              style={{ flexShrink: 0, background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-3)", fontSize: 10, padding: "3px 8px", cursor: "pointer" }}>Copy</button>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", padding: "9px 0 6px" }}>SSH command</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, padding: "8px 10px" }}>
+                            <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-2)", lineHeight: 1.55, whiteSpace: "nowrap", overflowX: "auto" }}>{sshCmd}</span>
+                            <button type="button" onClick={() => handleCopySshCmd(rule.id, sshCmd)}
+                              style={{
+                                flexShrink: 0, background: "none", borderRadius: 4, fontSize: 11, padding: "4px 9px", cursor: "pointer",
+                                border: `1px solid ${copiedRuleId === rule.id ? "var(--success)" : "var(--border)"}`,
+                                color: copiedRuleId === rule.id ? "var(--success)" : "var(--text-2)",
+                                transition: "color .15s, border-color .15s",
+                              }}>{copiedRuleId === rule.id ? "Copied" : "Copy"}</button>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
                             <span style={{ fontSize: 12, color: "var(--text-2)" }}>局域网共享 (0.0.0.0)</span>

@@ -208,9 +208,9 @@ export function TabBar({
             }}>
             <span style={{
               width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
-              background: t.state === "closed"
-                ? "var(--text-3)"
-                : t.kind === "local" ? "#8B5CF6" : "var(--success)",
+              // Green = live session, regardless of kind (ssh / local);
+              // grey = closed. Connection state reads at a glance.
+              background: t.state === "closed" ? "var(--text-3)" : "var(--success)",
               opacity: t.state === "closed" ? 0.4 : 1,
             }} />
             {t.title}

@@ -63,9 +63,23 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   // Delete two-click confirm state
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const confirmTimer = useRef<number | null>(null);
+  // Copy feedback state
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copiedTimer = useRef<number | null>(null);
   useEffect(() => () => {
     if (confirmTimer.current !== null) window.clearTimeout(confirmTimer.current);
+    if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
   }, []);
+
+  function handleCopy(rule: TunnelRule) {
+    void navigator.clipboard.writeText(buildSSHCmd(rule));
+    setCopiedId(rule.id);
+    if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
+    copiedTimer.current = window.setTimeout(() => {
+      setCopiedId(null);
+      copiedTimer.current = null;
+    }, 1500);
+  }
 
   // Import state
   const [importCmd, setImportCmd] = useState("");
@@ -315,9 +329,15 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   const activeCount = tunnelStatuses.filter((s) => s.status === "active").length;
 
   const field: React.CSSProperties = {
-    fontSize: 11, padding: "4px 7px",
+    fontSize: 12, padding: "5px 8px",
     background: "var(--panel-1)", border: "1px solid var(--border)",
     borderRadius: 4, color: "var(--text-1)",
+    width: "100%", boxSizing: "border-box",
+  };
+
+  const fieldLabel: React.CSSProperties = {
+    fontSize: 10, fontWeight: 600, letterSpacing: ".5px",
+    textTransform: "uppercase", color: "var(--text-3)",
   };
 
   return (
@@ -378,22 +398,38 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
 
         {/* Add form */}
         {addOpen && (
-          <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 4, background: "rgba(124,92,255,0.03)" }}>
-            {addErr && <div style={{ fontSize: 10, color: "var(--error)" }}>{addErr}</div>}
-            <div style={{ display: "flex", gap: 4 }}>
-              <input value={addLabel} onChange={(e) => setAddLabel(e.target.value)} placeholder="Label" style={{ ...field, flex: 1 }} />
-              <input value={addLocalPort} onChange={(e) => setAddLocalPort(e.target.value)} placeholder="Local port" style={{ ...field, width: 76, fontFamily: "var(--font-mono)" }} />
+          <div style={{ padding: "10px 12px 12px", borderBottom: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 8, background: "rgba(124,92,255,0.03)" }}>
+            {addErr && <div style={{ fontSize: 11, color: "var(--error)" }}>{addErr}</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+                <span style={fieldLabel}>Label</span>
+                <input value={addLabel} onChange={(e) => setAddLabel(e.target.value)} placeholder="e.g. Postgres" style={field} />
+              </div>
+              <div style={{ width: 96, display: "flex", flexDirection: "column", gap: 3 }}>
+                <span style={fieldLabel}>Local port</span>
+                <input value={addLocalPort} onChange={(e) => setAddLocalPort(e.target.value)} placeholder="15432" style={{ ...field, fontFamily: "var(--font-mono)" }} />
+              </div>
             </div>
-            <div style={{ display: "flex", gap: 4 }}>
-              <input value={addRemoteHost} onChange={(e) => setAddRemoteHost(e.target.value)} placeholder="Remote host" style={{ ...field, flex: 1, fontFamily: "var(--font-mono)" }} />
-              <input value={addRemotePort} onChange={(e) => setAddRemotePort(e.target.value)} placeholder="Port" style={{ ...field, width: 52, fontFamily: "var(--font-mono)" }} />
-              <button onClick={handleAdd} style={{ padding: "3px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
-              <button onClick={handleCancelAdd} style={{ padding: "3px 6px", fontSize: 11, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+                <span style={fieldLabel}>Remote host</span>
+                <input value={addRemoteHost} onChange={(e) => setAddRemoteHost(e.target.value)} placeholder="db.internal" style={{ ...field, fontFamily: "var(--font-mono)" }} />
+              </div>
+              <div style={{ width: 96, display: "flex", flexDirection: "column", gap: 3 }}>
+                <span style={fieldLabel}>Remote port</span>
+                <input value={addRemotePort} onChange={(e) => setAddRemotePort(e.target.value)} placeholder="5432" style={{ ...field, fontFamily: "var(--font-mono)" }} />
+              </div>
             </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-2)", cursor: "pointer" }}>
-              <input type="checkbox" checked={addBindAll} onChange={(e) => setAddBindAll(e.target.checked)} />
-              LAN sharing (0.0.0.0)
-            </label>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-2)", cursor: "pointer" }}>
+                <input type="checkbox" checked={addBindAll} onChange={(e) => setAddBindAll(e.target.checked)} />
+                LAN sharing (0.0.0.0)
+              </label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={handleCancelAdd} style={{ padding: "5px 12px", fontSize: 12, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>Cancel</button>
+                <button onClick={handleAdd} style={{ padding: "5px 14px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>Add rule</button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -455,11 +491,11 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                   onClick={() => { if (!isEditing) setExpandedId(isExpanded ? null : rule.id); }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                    <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-1)" }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>
                       {rule.label || `Port ${rule.local_port}`}
                     </span>
                     <span style={{
-                      fontSize: 9, fontWeight: 600, letterSpacing: ".4px", textTransform: "uppercase",
+                      fontSize: 10, fontWeight: 600, letterSpacing: ".4px", textTransform: "uppercase",
                       borderRadius: 3, padding: "1px 5px",
                       background: active ? "rgba(var(--success-rgb,166,227,161),.12)" : "rgba(255,255,255,0.05)",
                       border: `0.5px solid ${active ? "rgba(var(--success-rgb,166,227,161),.3)" : "var(--border)"}`,
@@ -471,7 +507,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                       <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--accent)" }}>›</span>
                     )}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontFamily: "var(--font-mono)", overflow: "hidden" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontFamily: "var(--font-mono)", overflow: "hidden" }}>
                     <span style={{ color: "var(--text-2)", flexShrink: 0 }}>
                       {rule.bind_all ? "0.0.0.0" : "localhost"}:{rule.local_port}
                     </span>
@@ -487,9 +523,9 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                   <button
                     onClick={(e) => { e.stopPropagation(); isEditing ? setEditingId(null) : startEdit(rule); }}
                     title="Edit"
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 4, color: isEditing ? "var(--accent)" : "var(--text-3)", display: "flex", alignItems: "center" }}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 4, color: isEditing ? "var(--accent)" : "var(--text-2)", display: "flex", alignItems: "center" }}
                   >
-                    <Pencil size={13} />
+                    <Pencil size={14} />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); armDelete(rule); }}
@@ -498,12 +534,12 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                     style={{
                       background: confirmDeleteId === rule.id ? "rgba(243,139,168,.12)" : "none",
                       border: "none", cursor: "pointer", padding: 5, borderRadius: 4,
-                      color: confirmDeleteId === rule.id ? "var(--error)" : "var(--text-3)",
+                      color: confirmDeleteId === rule.id ? "var(--error)" : "var(--text-2)",
                       display: "flex", alignItems: "center", gap: 4,
                     }}
                   >
                     {confirmDeleteId === rule.id && <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1 }}>确认?</span>}
-                    <Trash2 size={13} />
+                    <Trash2 size={14} />
                   </button>
                   {/* Toggle */}
                   <div
@@ -519,17 +555,31 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
 
               {/* Edit form */}
               {isEditing && (
-                <div style={{ padding: "0 12px 8px 31px", display: "flex", flexDirection: "column", gap: 4 }}>
-                  {editErr && <div style={{ fontSize: 10, color: "var(--error)" }}>{editErr}</div>}
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} placeholder="Label" style={{ ...field, flex: 1 }} />
-                    <input value={editLocalPort} onChange={(e) => setEditLocalPort(e.target.value)} placeholder="Local port" style={{ ...field, width: 76, fontFamily: "var(--font-mono)" }} />
+                <div style={{ padding: "0 12px 10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  {editErr && <div style={{ fontSize: 11, color: "var(--error)" }}>{editErr}</div>}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+                      <span style={fieldLabel}>Label</span>
+                      <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} placeholder="e.g. Postgres" style={field} />
+                    </div>
+                    <div style={{ width: 96, display: "flex", flexDirection: "column", gap: 3 }}>
+                      <span style={fieldLabel}>Local port</span>
+                      <input value={editLocalPort} onChange={(e) => setEditLocalPort(e.target.value)} placeholder="15432" style={{ ...field, fontFamily: "var(--font-mono)" }} />
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: 4 }}>
-                    <input value={editRemoteHost} onChange={(e) => setEditRemoteHost(e.target.value)} placeholder="Remote host" style={{ ...field, flex: 1, fontFamily: "var(--font-mono)" }} />
-                    <input value={editRemotePort} onChange={(e) => setEditRemotePort(e.target.value)} placeholder="Port" style={{ ...field, width: 52, fontFamily: "var(--font-mono)" }} />
-                    <button onClick={handleSaveEdit} style={{ padding: "3px 8px", fontSize: 11, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>✓</button>
-                    <button onClick={() => setEditingId(null)} style={{ padding: "3px 6px", fontSize: 11, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+                      <span style={fieldLabel}>Remote host</span>
+                      <input value={editRemoteHost} onChange={(e) => setEditRemoteHost(e.target.value)} placeholder="db.internal" style={{ ...field, fontFamily: "var(--font-mono)" }} />
+                    </div>
+                    <div style={{ width: 96, display: "flex", flexDirection: "column", gap: 3 }}>
+                      <span style={fieldLabel}>Remote port</span>
+                      <input value={editRemotePort} onChange={(e) => setEditRemotePort(e.target.value)} placeholder="5432" style={{ ...field, fontFamily: "var(--font-mono)" }} />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
+                    <button onClick={() => setEditingId(null)} style={{ padding: "5px 12px", fontSize: 12, background: "none", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--text-2)" }}>Cancel</button>
+                    <button onClick={handleSaveEdit} style={{ padding: "5px 14px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>Save</button>
                   </div>
                 </div>
               )}
@@ -537,24 +587,29 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
               {/* Expanded detail */}
               {isExpanded && (
                 <div style={{ padding: "0 12px 10px 12px", borderTop: "1px solid var(--border)", background: "var(--panel-1)" }}>
-                  <div style={{ fontSize: 9.5, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", paddingTop: 8, marginBottom: 5 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", paddingTop: 9, marginBottom: 6 }}>
                     SSH command
                   </div>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 8, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 4, padding: "7px 9px" }}>
-                    <span style={{ flex: 1, fontSize: 10.5, fontFamily: "var(--font-mono)", color: "var(--text-2)", lineHeight: 1.6, wordBreak: "break-all" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 4, padding: "8px 10px" }}>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-2)", lineHeight: 1.6, whiteSpace: "nowrap", overflowX: "auto" }}>
                       {buildSSHCmd(rule)}
                     </span>
                     <button
-                      onClick={() => navigator.clipboard.writeText(buildSSHCmd(rule))}
-                      style={{ flexShrink: 0, background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-3)", fontSize: 10, padding: "3px 7px", cursor: "pointer" }}
+                      onClick={() => handleCopy(rule)}
+                      style={{
+                        flexShrink: 0, background: "none", borderRadius: 4, fontSize: 11, padding: "4px 9px", cursor: "pointer",
+                        border: `1px solid ${copiedId === rule.id ? "var(--success)" : "var(--border)"}`,
+                        color: copiedId === rule.id ? "var(--success)" : "var(--text-2)",
+                        transition: "color .15s, border-color .15s",
+                      }}
                     >
-                      Copy
+                      {copiedId === rule.id ? "Copied" : "Copy"}
                     </button>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 9 }}>
                     <div>
-                      <div style={{ fontSize: 11, color: "var(--text-1)", fontWeight: 500 }}>LAN sharing</div>
-                      <div style={{ fontSize: 10, color: "var(--text-3)" }}>Bind to 0.0.0.0 — accessible from local network</div>
+                      <div style={{ fontSize: 12, color: "var(--text-1)", fontWeight: 500 }}>LAN sharing</div>
+                      <div style={{ fontSize: 11, color: "var(--text-3)" }}>Bind to 0.0.0.0 — accessible from local network</div>
                     </div>
                     <div
                       onClick={() => void handleToggleBindAll(rule)}

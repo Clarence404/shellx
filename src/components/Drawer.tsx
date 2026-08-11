@@ -21,6 +21,9 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
   const addHost = useHostsStore((s) => s.addHost);
   const hostIsConnected = useSessions((s) => s.hostIsConnected);
   const connecting = useSessions((s) => s.connecting);
+  // Host of the currently active tab — its row keeps a highlight so the
+  // drawer always shows which host the foreground tab belongs to.
+  const activeHostId = useSessions((s) => s.sessions.find((x) => x.id === s.activeId)?.host_id ?? null);
   const drawerCollapsed = useSessions((s) => s.drawerCollapsed);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
 
@@ -119,6 +122,7 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
               host={h}
               isConnected={connected}
               isConnecting={!!connecting[h.id]}
+              isActive={h.id === activeHostId}
               onConnect={() => onConnectHost?.(h)}
               onOpenNewShell={() => onConnectHost?.(h, true)}
               // Disconnect only surfaces when at least one live session
