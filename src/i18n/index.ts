@@ -56,6 +56,11 @@ const zh: Record<string, string> = {
   "leave blank to keep current": "留空保持不变",
   "Forget stored passphrase": "忘掉已保存的 passphrase",
   "Forget stored password": "忘掉已保存的密码",
+  "Remember password": "记住密码",
+  "SSH login password": "SSH 登录密码",
+  "Removes the saved password. You'll need to type it next connection.":
+    "删除已保存的密码，下次连接需要重新输入。",
+  "(Password storage unavailable on this system)": "（当前系统不支持密码存储）",
   "Browse…": "浏览…",
   "Filter…": "筛选…",
   "Save this host": "保存此主机",

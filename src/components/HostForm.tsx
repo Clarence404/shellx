@@ -704,7 +704,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 type="password"
                 value={password}
                 onChange={setPassword}
-                placeholder={mode === "edit" ? t("leave blank to keep current") : ""}
+                placeholder={mode === "edit" ? t("leave blank to keep current") : t("SSH login password")}
               />
 
               {mode === "edit" && keychainAvailable && (
@@ -714,9 +714,9 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                     checked={forgetPassword}
                     onChange={(e) => setForgetPassword(e.target.checked)}
                   />
-                  Forget stored password
+                  {t("Forget stored password")}
                   <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-                    Removes the saved password. You'll need to type it next connection.
+                    {t("Removes the saved password. You'll need to type it next connection.")}
                   </span>
                 </label>
               )}
@@ -745,10 +745,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 disabled={!canRememberPw}
                 onChange={(e) => setRememberPassword(e.target.checked)}
               />
-              Remember password
+              {t("Remember password")}
               {!keychainAvailable && (
                 <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-                  (Password storage unavailable on this system)
+                  {t("(Password storage unavailable on this system)")}
                 </span>
               )}
             </label>
@@ -812,7 +812,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 value={importCmd}
                 onChange={(e) => { setImportCmd(e.target.value); setImportParsed(null); }}
                 onKeyDown={(e) => { if (e.key === "Enter") handleParseImport(); }}
-                placeholder="Paste SSH command to import rules…"
+                placeholder={t("Paste SSH command to import rules…")}
                 style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 12, color: "var(--text-1)", fontFamily: "var(--font-mono)" }}
               />
               {importCmd.trim() && (
@@ -885,24 +885,27 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                         </button>
                       </div>
 
-                      {/* Edit form */}
+                      {/* Edit form — buttons on their own row so nothing
+                          overflows the 340px dialog */}
                       {isEditing && (
                         <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 12px 10px" }}>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <input value={editRuleLabel} onChange={(e) => setEditRuleLabel(e.target.value)} placeholder="Label"
-                              style={{ flex: 1, fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", outline: "none" }} />
-                            <input value={editRuleLocalPort} onChange={(e) => setEditRuleLocalPort(e.target.value)} placeholder="Local port"
-                              style={{ width: 80, fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
+                            <input value={editRuleLabel} onChange={(e) => setEditRuleLabel(e.target.value)} placeholder={t("Label")}
+                              style={{ flex: 1, minWidth: 0, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", outline: "none" }} />
+                            <input value={editRuleLocalPort} onChange={(e) => setEditRuleLocalPort(e.target.value)} placeholder={t("Local port")}
+                              style={{ width: 80, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
                           </div>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <input value={editRuleRemoteHost} onChange={(e) => setEditRuleRemoteHost(e.target.value)} placeholder="Remote host"
-                              style={{ flex: 1, fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
-                            <input value={editRuleRemotePort} onChange={(e) => setEditRuleRemotePort(e.target.value)} placeholder="Port"
-                              style={{ width: 56, fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
-                            <button type="button" onClick={handleSaveEditRule}
-                              style={{ padding: "5px 10px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 5, cursor: "pointer", fontWeight: 600 }}>✓</button>
+                            <input value={editRuleRemoteHost} onChange={(e) => setEditRuleRemoteHost(e.target.value)} placeholder={t("Remote host")}
+                              style={{ flex: 1, minWidth: 0, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
+                            <input value={editRuleRemotePort} onChange={(e) => setEditRuleRemotePort(e.target.value)} placeholder={t("Port")}
+                              style={{ width: 80, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "flex-end", gap: 6 }}>
                             <button type="button" onClick={() => setEditingRuleId(null)}
-                              style={{ padding: "5px 8px", fontSize: 12, background: "none", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer", color: "var(--text-2)" }}>✕</button>
+                              style={{ padding: "5px 12px", fontSize: 12, background: "none", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer", color: "var(--text-2)" }}>{t("Cancel")}</button>
+                            <button type="button" onClick={handleSaveEditRule}
+                              style={{ padding: "5px 14px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 5, cursor: "pointer", fontWeight: 600 }}>{t("Save")}</button>
                           </div>
                         </div>
                       )}
@@ -921,7 +924,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                                 border: `1px solid ${copiedRuleId === rule.id ? "var(--success)" : "var(--border)"}`,
                                 color: copiedRuleId === rule.id ? "var(--success)" : "var(--text-2)",
                                 transition: "color .15s, border-color .15s",
-                              }}>{copiedRuleId === rule.id ? "Copied" : "Copy"}</button>
+                              }}>{copiedRuleId === rule.id ? t("Copied") : t("Copy")}</button>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
                             <span style={{ fontSize: 12, color: "var(--text-2)" }}>{t("LAN sharing (0.0.0.0)")}</span>
@@ -941,29 +944,34 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               </div>
             )}
 
-            {/* Add rule form */}
+            {/* Add rule form — buttons on their own row so nothing
+                overflows the 340px dialog */}
             {addRuleOpen && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8, padding: 12, background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 6 }}>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="Label"
-                    style={{ flex: 1, fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", outline: "none" }} />
-                  <input value={newLocalPort} onChange={(e) => setNewLocalPort(e.target.value)} placeholder="Local port"
-                    style={{ width: 80, fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
+                  <input value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder={t("Label")}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", outline: "none" }} />
+                  <input value={newLocalPort} onChange={(e) => setNewLocalPort(e.target.value)} placeholder={t("Local port")}
+                    style={{ width: 80, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
                 </div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  <input value={newRemoteHost} onChange={(e) => setNewRemoteHost(e.target.value)} placeholder="Remote host"
-                    style={{ flex: 1, fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
-                  <input value={newRemotePort} onChange={(e) => setNewRemotePort(e.target.value)} placeholder="Port"
-                    style={{ width: 56, fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
-                  <button type="button" onClick={handleAddRule}
-                    style={{ padding: "5px 10px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 5, cursor: "pointer", fontWeight: 600 }}>✓</button>
-                  <button type="button" onClick={handleCancelAddRule}
-                    style={{ padding: "5px 8px", fontSize: 12, background: "none", color: "var(--text-3)", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer" }}>✕</button>
+                  <input value={newRemoteHost} onChange={(e) => setNewRemoteHost(e.target.value)} placeholder={t("Remote host")}
+                    style={{ flex: 1, minWidth: 0, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
+                  <input value={newRemotePort} onChange={(e) => setNewRemotePort(e.target.value)} placeholder={t("Port")}
+                    style={{ width: 80, boxSizing: "border-box", fontSize: 12, padding: "5px 8px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-1)", fontFamily: "var(--font-mono)", outline: "none" }} />
                 </div>
-                <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "var(--text-2)", cursor: "pointer" }}>
-                  <input type="checkbox" checked={newBindAll} onChange={(e) => setNewBindAll(e.target.checked)} />
-                  {t("LAN sharing (0.0.0.0)")}
-                </label>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "var(--text-2)", cursor: "pointer" }}>
+                    <input type="checkbox" checked={newBindAll} onChange={(e) => setNewBindAll(e.target.checked)} />
+                    {t("LAN sharing (0.0.0.0)")}
+                  </label>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button type="button" onClick={handleCancelAddRule}
+                      style={{ padding: "5px 12px", fontSize: 12, background: "none", color: "var(--text-2)", border: "1px solid var(--border)", borderRadius: 5, cursor: "pointer" }}>{t("Cancel")}</button>
+                    <button type="button" onClick={handleAddRule}
+                      style={{ padding: "5px 14px", fontSize: 12, background: "var(--accent)", color: "var(--text-on-accent)", border: "none", borderRadius: 5, cursor: "pointer", fontWeight: 600 }}>{t("Add rule")}</button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
