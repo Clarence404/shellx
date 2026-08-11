@@ -211,44 +211,42 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
 
   function onDragStart(e: React.DragEvent, id: string) {
     dragSrcId.current = id;
-    setDraggingId(id);
     e.dataTransfer.effectAllowed = "move";
+    // WebView2 requires at least one setData call for a drag to initiate.
     e.dataTransfer.setData("text/plain", id);
+    // Defer the opacity change to the next frame so the browser captures
+    // the drag ghost at full opacity before React re-renders the element.
+    requestAnimationFrame(() => setDraggingId(id));
   }
 
   function onDragOver(e: React.DragEvent, id: string) {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    // Only update the visual indicator — do NOT call setRules here.
-    // Reordering the list mid-drag causes React to reconcile the DOM
-    // while the drag engine still holds a reference to the old node,
-    // which makes WebView2 briefly lose the drop target and show the
-    // "no-drop" cursor even though preventDefault() was called.
-    if (dragSrcId.current && dragSrcId.current !== id) {
-      setDragOverId(id);
-    }
-  }
-
-  function onListDragOver(e: React.DragEvent) {
-    if (dragSrcId.current) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-    }
-  }
-
-  function onItemDrop(e: React.DragEvent, targetId: string) {
-    e.preventDefault();
     const src = dragSrcId.current;
-    if (!src || src === targetId) return;
+    if (!src || src === id) { setDragOverId(id); return; }
+    setDragOverId(id);
     setRules((prev) => {
       const srcIdx = prev.findIndex((r) => r.id === src);
-      const tgtIdx = prev.findIndex((r) => r.id === targetId);
+      const tgtIdx = prev.findIndex((r) => r.id === id);
       if (srcIdx === -1 || tgtIdx === -1) return prev;
       const next = [...prev];
       const [item] = next.splice(srcIdx, 1);
       next.splice(tgtIdx, 0, item);
       return next;
     });
+  }
+
+  function onListDragOver(e: React.DragEvent) {
+    // Must be unconditional — a conditional ref check races with the drag
+    // engine and causes the "no-drop" cursor when the check fails.
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }
+
+  function onItemDrop(e: React.DragEvent) {
+    // Reorder already happened live in onDragOver; just suppress the
+    // browser's default drop action (e.g. opening the text as a URL).
+    e.preventDefault();
   }
 
   async function onDragEnd() {
@@ -371,7 +369,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
               draggable
               onDragStart={(e) => onDragStart(e, rule.id)}
               onDragOver={(e) => onDragOver(e, rule.id)}
-              onDrop={(e) => onItemDrop(e, rule.id)}
+              onDrop={onItemDrop}
               onDragEnd={onDragEnd}
               style={{
                 borderBottom: "1px solid var(--border)",
