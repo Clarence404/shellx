@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.10.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.11.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -17,6 +17,7 @@ shellx is a desktop app that gives you:
 - **SSH tunnels (port forwarding)** — save `-L` forwarding rules per host, toggle them live, reorder by drag, share on the LAN (bind 0.0.0.0), or paste an `ssh -L` command to import rules
 - **SFTP file browser** — WinSCP-style dual-pane (local ↔ remote) with drag-and-drop upload / download, folder transfers, pause / resume / cancel
 - **Saved hosts + keychain** — store your servers once, quick-connect from the sidebar or the `+` menu; passwords live in the OS keychain, not a plaintext config
+- **Bilingual interface** — switch the whole UI between English and Chinese in Settings, applied live
 
 It's a single ~7 MB installer with no runtime dependencies (Tauri bundles a small Rust binary and reuses the OS-native webview instead of shipping Chromium — that's why it's small).
 
