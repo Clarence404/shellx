@@ -492,11 +492,13 @@ export function App() {
             display: (railView === "hosts" && !pendingConnectHostId) ? "flex" : "none",
             flexDirection: "column", height: "100%", minHeight: 0,
           }}>
-            <ActivityToolbar
-              activity={effectiveActivity}
-              onChange={(a) => setActivity(activeId, a)}
-              tabs={availableTabs}
-            />
+            {availableTabs.length > 1 && (
+              <ActivityToolbar
+                activity={effectiveActivity}
+                onChange={(a) => setActivity(activeId, a)}
+                tabs={availableTabs}
+              />
+            )}
             <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
               {/* One TerminalView + FileBrowserView per session, always
                   mounted, toggled via display. Rendering only the active
