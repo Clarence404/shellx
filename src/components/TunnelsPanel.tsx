@@ -60,6 +60,13 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   const [toggleErrId, setToggleErrId] = useState<string | null>(null);
   const [toggleErrMsg, setToggleErrMsg] = useState<string | null>(null);
 
+  // Delete two-click confirm state
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const confirmTimer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (confirmTimer.current !== null) window.clearTimeout(confirmTimer.current);
+  }, []);
+
   // Import state
   const [importCmd, setImportCmd] = useState("");
   const [importParsed, setImportParsed] = useState<Array<{ local_port: number; remote_host: string; remote_port: number }> | null>(null);
@@ -178,6 +185,32 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   }
 
   // ---- Delete ---------------------------------------------------------------
+
+  // Two-click confirm: first click arms the button, second click deletes.
+  function armDelete(rule: TunnelRule) {
+    if (confirmTimer.current !== null) {
+      window.clearTimeout(confirmTimer.current);
+      confirmTimer.current = null;
+    }
+    if (confirmDeleteId === rule.id) {
+      setConfirmDeleteId(null);
+      void handleDelete(rule);
+      return;
+    }
+    setConfirmDeleteId(rule.id);
+    confirmTimer.current = window.setTimeout(() => {
+      setConfirmDeleteId(null);
+      confirmTimer.current = null;
+    }, 3000);
+  }
+
+  function disarmDelete() {
+    if (confirmTimer.current !== null) {
+      window.clearTimeout(confirmTimer.current);
+      confirmTimer.current = null;
+    }
+    setConfirmDeleteId(null);
+  }
 
   async function handleDelete(rule: TunnelRule) {
     try {
@@ -459,10 +492,17 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                     <Pencil size={13} />
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); void handleDelete(rule); }}
-                    title="Delete"
-                    style={{ background: "none", border: "none", cursor: "pointer", padding: 5, borderRadius: 4, color: "var(--text-3)", display: "flex", alignItems: "center" }}
+                    onClick={(e) => { e.stopPropagation(); armDelete(rule); }}
+                    onMouseLeave={() => { if (confirmDeleteId === rule.id) disarmDelete(); }}
+                    title={confirmDeleteId === rule.id ? "再次点击确认删除" : "Delete"}
+                    style={{
+                      background: confirmDeleteId === rule.id ? "rgba(243,139,168,.12)" : "none",
+                      border: "none", cursor: "pointer", padding: 5, borderRadius: 4,
+                      color: confirmDeleteId === rule.id ? "var(--error)" : "var(--text-3)",
+                      display: "flex", alignItems: "center", gap: 4,
+                    }}
                   >
+                    {confirmDeleteId === rule.id && <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1 }}>确认?</span>}
                     <Trash2 size={13} />
                   </button>
                   {/* Toggle */}
