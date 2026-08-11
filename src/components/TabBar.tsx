@@ -205,6 +205,11 @@ export function TabBar({
               transition: "opacity 300ms, filter 300ms",
               pointerEvents: t.state === "closed" ? "none" : "auto",
             }}>
+            <span style={{
+              width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+              background: t.state === "closed" ? "var(--text-3)" : "var(--success)",
+              opacity: t.state === "closed" ? 0.4 : 1,
+            }} />
             {t.title}
             <span
               onClick={(e) => { e.stopPropagation(); onClose(t.id); }}
