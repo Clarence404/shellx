@@ -22,6 +22,7 @@ export function AppearancePanel() {
   const systemFontSize = useSettingsStore((s) => s.systemFontSize);
   const filesFontSize = useSettingsStore((s) => s.filesFontSize);
   const terminal = useSettingsStore((s) => s.terminal);
+  const localShell = useSettingsStore((s) => s.localShell);
 
   const setTheme = (id: Settings["themeId"]) => useSettingsStore.getState().setTheme(id);
   const setDensity = (id: Settings["density"]) => useSettingsStore.getState().setDensity(id);
@@ -34,6 +35,7 @@ export function AppearancePanel() {
   const setFontSize = (n: number) => useSettingsStore.getState().setTerminalFontSize(n);
   const setCursorStyle = (s: Settings["terminal"]["cursorStyle"]) =>
     useSettingsStore.getState().setTerminalCursorStyle(s);
+  const setLocalShell = (v: string) => useSettingsStore.getState().setLocalShell(v);
 
   return (
     <div style={{ padding: "20px 24px", overflowY: "auto", color: "var(--text-1)", flex: 1 }}>
@@ -180,6 +182,29 @@ export function AppearancePanel() {
           fontSize={terminal.fontSize}
           cursorStyle={terminal.cursorStyle}
         />
+      </TwoColField>
+
+      <SectionHeader>Local terminal</SectionHeader>
+
+      <TwoColField label="Shell">
+        <input
+          type="text"
+          value={localShell}
+          onChange={(e) => setLocalShell(e.target.value)}
+          placeholder="Default (system shell)"
+          style={{
+            width: "100%", padding: "4px 8px",
+            background: "var(--panel-3, var(--panel-2))",
+            border: "0.5px solid var(--border)",
+            borderRadius: 4, color: "var(--text-1)",
+            fontSize: "var(--font-ui-size)",
+            fontFamily: "var(--font-ui)",
+          }}
+        />
+        <div style={{ fontSize: FS_META, color: "var(--text-3)", marginTop: 4 }}>
+          Leave blank to use the system default (cmd.exe on Windows, $SHELL on macOS/Linux).
+          Example: <code>C:\Windows\System32\PowerShell\v1.0\powershell.exe</code>
+        </div>
       </TwoColField>
     </div>
   );
