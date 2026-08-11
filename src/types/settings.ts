@@ -9,6 +9,7 @@ export interface Settings {
     fontSize: number;
     cursorStyle: "block" | "underline" | "bar";
   };
+  localShell?: string;
   schemaVersion: 1;
 }
 

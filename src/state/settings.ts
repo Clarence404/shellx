@@ -18,6 +18,8 @@ interface State extends Settings {
   setTerminalFontFamily(id: Settings["terminal"]["fontFamily"]): void;
   setTerminalFontSize(size: number): void;
   setTerminalCursorStyle(style: Settings["terminal"]["cursorStyle"]): void;
+  localShell: string;
+  setLocalShell(v: string): void;
   reset(): void;
 }
 
@@ -32,6 +34,7 @@ function snapshotForSave(s: State): Settings {
     systemFontSize: s.systemFontSize,
     filesFontSize: s.filesFontSize,
     terminal: s.terminal,
+    localShell: s.localShell || undefined,
     schemaVersion: s.schemaVersion,
   };
 }
@@ -54,6 +57,7 @@ function immediateSave(getState: () => State) {
 
 export const useSettingsStore = create<State>((set, get) => ({
   ...DEFAULT_SETTINGS,
+  localShell: "",
 
   async load() {
     const loaded = await loadSettings().catch(() => null);
@@ -66,7 +70,7 @@ export const useSettingsStore = create<State>((set, get) => ({
       if (!(VALID_THEMES as ReadonlyArray<string>).includes(loaded.themeId)) {
         loaded.themeId = DEFAULT_SETTINGS.themeId;
       }
-      set({ ...loaded });
+      set({ ...loaded, localShell: loaded.localShell ?? "" });
     }
     // If null (missing / malformed), keep DEFAULT_SETTINGS as-is.
   },
@@ -104,6 +108,11 @@ export const useSettingsStore = create<State>((set, get) => ({
   },
   setTerminalCursorStyle(style) {
     set((st) => ({ terminal: { ...st.terminal, cursorStyle: style } }));
+    scheduleSave(get);
+  },
+
+  setLocalShell(v) {
+    set({ localShell: v });
     scheduleSave(get);
   },
 
