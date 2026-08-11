@@ -113,7 +113,7 @@ export const useSettingsStore = create<State>((set, get) => ({
 
   setLocalShell(v) {
     set({ localShell: v });
-    scheduleSave(get);
+    immediateSave(get);
   },
 
   reset() {
