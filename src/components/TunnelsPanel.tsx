@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { GripVertical, Pencil, Trash2 } from "lucide-react";
 import { useSessions } from "../state/sessions";
 import { useHostsStore } from "../state/hosts";
@@ -68,6 +68,26 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const lastDragTarget = useRef<string | null>(null);
+  // FLIP animation support
+  const rowEls = useRef<Map<string, HTMLElement>>(new Map());
+  const snapshots = useRef<Map<string, number>>(new Map());
+
+  // After rules reorder, animate rows from their old positions to new ones (FLIP).
+  useLayoutEffect(() => {
+    if (!snapshots.current.size) return;
+    rowEls.current.forEach((el, id) => {
+      const oldTop = snapshots.current.get(id);
+      if (oldTop === undefined) return;
+      const dy = oldTop - el.getBoundingClientRect().top;
+      if (Math.abs(dy) < 1) return;
+      el.style.transition = "none";
+      el.style.transform = `translateY(${dy}px)`;
+      void el.offsetHeight; // flush reflow so next frame sees the transform
+      el.style.transition = "transform 0.22s cubic-bezier(0.25,0.46,0.45,0.94)";
+      el.style.transform = "";
+    });
+    snapshots.current.clear();
+  }, [rules]);
 
   useEffect(() => {
     if (hostId) {
@@ -223,6 +243,11 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       if (!targetId || targetId === srcId || targetId === lastDragTarget.current) return;
       lastDragTarget.current = targetId;
       setDragOverId(targetId);
+      // Snapshot current positions before React reorders the DOM (for FLIP).
+      snapshots.current.clear();
+      rowEls.current.forEach((el, id) => {
+        snapshots.current.set(id, el.getBoundingClientRect().top);
+      });
       setRules((prev) => {
         const si = prev.findIndex((r) => r.id === srcId);
         const ti = prev.findIndex((r) => r.id === targetId);
@@ -360,13 +385,21 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
             <div
               key={rule.id}
               data-rule-id={rule.id}
+              ref={(el) => { if (el) rowEls.current.set(rule.id, el); else rowEls.current.delete(rule.id); }}
               style={{
                 borderBottom: "1px solid var(--border)",
-                opacity: isDragging ? 0.4 : 1,
-                background: isDragOver ? "rgba(124,92,255,0.05)" : undefined,
-                borderTop: isDragOver ? "2px solid rgba(124,92,255,0.4)" : undefined,
-                transition: "opacity .1s, background .1s",
+                position: "relative",
                 userSelect: "none",
+                transition: "opacity 0.18s ease, box-shadow 0.18s ease, background 0.18s ease",
+                ...(isDragging ? {
+                  opacity: 0.55,
+                  boxShadow: "0 6px 24px rgba(0,0,0,0.32), 0 1px 6px rgba(0,0,0,0.18), inset 0 0 0 1.5px rgba(124,92,255,0.35)",
+                  background: "var(--panel-1)",
+                  zIndex: 10,
+                } : isDragOver ? {
+                  background: "rgba(124,92,255,0.08)",
+                  boxShadow: "inset 3px 0 0 #7c5cff",
+                } : {}),
               }}
             >
               {/* Main row */}
