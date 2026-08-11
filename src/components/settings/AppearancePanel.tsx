@@ -187,25 +187,66 @@ export function AppearancePanel() {
       <SectionHeader>Local terminal</SectionHeader>
 
       <TwoColField label="Shell">
+        <LocalShellPicker value={localShell} onChange={setLocalShell} />
+      </TwoColField>
+    </div>
+  );
+}
+
+const SHELL_PRESETS = [
+  { label: "Default (system shell)", value: "" },
+  { label: "Command Prompt (cmd.exe)", value: "cmd.exe" },
+  { label: "PowerShell 5 (powershell.exe)", value: "powershell.exe" },
+  { label: "PowerShell 7 (pwsh.exe)", value: "pwsh.exe" },
+  { label: "WSL (wsl.exe)", value: "wsl.exe" },
+  { label: "Bash", value: "bash" },
+  { label: "Zsh", value: "zsh" },
+  { label: "Fish", value: "fish" },
+  { label: "Custom path…", value: "__custom__" },
+];
+
+function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const isPreset = SHELL_PRESETS.some((p) => p.value === value);
+  const selectValue = isPreset ? value : "__custom__";
+  const isCustom = selectValue === "__custom__";
+
+  const inputStyle = {
+    width: "100%", padding: "4px 8px",
+    background: "var(--panel-3, var(--panel-2))",
+    border: "0.5px solid var(--border)",
+    borderRadius: 4, color: "var(--text-1)",
+    fontSize: "var(--font-ui-size)",
+    fontFamily: "var(--font-ui)",
+  } as const;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <select
+        value={selectValue}
+        onChange={(e) => {
+          if (e.target.value !== "__custom__") onChange(e.target.value);
+          else onChange(value && !isPreset ? value : "");
+        }}
+        style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}
+      >
+        {SHELL_PRESETS.map((p) => (
+          <option key={p.value} value={p.value}>{p.label}</option>
+        ))}
+      </select>
+      {isCustom && (
         <input
           type="text"
-          value={localShell}
-          onChange={(e) => setLocalShell(e.target.value)}
-          placeholder="Default (system shell)"
-          style={{
-            width: "100%", padding: "4px 8px",
-            background: "var(--panel-3, var(--panel-2))",
-            border: "0.5px solid var(--border)",
-            borderRadius: 4, color: "var(--text-1)",
-            fontSize: "var(--font-ui-size)",
-            fontFamily: "var(--font-ui)",
-          }}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="/usr/bin/zsh or C:\path\to\shell.exe"
+          style={inputStyle}
         />
-        <div style={{ fontSize: FS_META, color: "var(--text-3)", marginTop: 4 }}>
-          Leave blank to use the system default (cmd.exe on Windows, $SHELL on macOS/Linux).
-          Example: <code>C:\Windows\System32\PowerShell\v1.0\powershell.exe</code>
-        </div>
-      </TwoColField>
+      )}
+      <div style={{ fontSize: FS_META, color: "var(--text-3)" }}>
+        {isCustom
+          ? "Enter the full path to your shell executable."
+          : "Applies to all new local terminal tabs."}
+      </div>
     </div>
   );
 }
