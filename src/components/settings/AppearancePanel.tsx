@@ -94,7 +94,7 @@ export function AppearancePanel() {
 
       <TwoColField label={t("Density")}>
         <Segmented
-          options={DENSITY_META.map((d) => ({ id: d.id, label: d.label }))}
+          options={DENSITY_META.map((d) => ({ id: d.id, label: t(d.label) }))}
           value={density}
           onChange={(id) => setDensity(id as Settings["density"])}
         />
@@ -117,7 +117,7 @@ export function AppearancePanel() {
           }}
         >
           {SYSTEM_FONT_META.map((f) => (
-            <option key={f.id} value={f.id}>{f.label}</option>
+            <option key={f.id} value={f.id}>{t(f.label)}</option>
           ))}
         </select>
       </TwoColField>
@@ -181,9 +181,9 @@ export function AppearancePanel() {
       <TwoColField label={t("Cursor")}>
         <Segmented
           options={[
-            { id: "block", label: "Block" },
-            { id: "underline", label: "Underline" },
-            { id: "bar", label: "Bar" },
+            { id: "block", label: t("Block") },
+            { id: "underline", label: t("Underline") },
+            { id: "bar", label: t("Bar") },
           ]}
           value={terminal.cursorStyle}
           onChange={(id) => setCursorStyle(id as Settings["terminal"]["cursorStyle"])}
@@ -220,6 +220,7 @@ const SHELL_PRESETS = [
 ];
 
 function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useT();
   const isPreset = SHELL_PRESETS.some((p) => p.value === value);
   const selectValue = isPreset ? value : "__custom__";
   const isCustom = selectValue === "__custom__";
@@ -244,7 +245,7 @@ function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: st
         style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}
       >
         {SHELL_PRESETS.map((p) => (
-          <option key={p.value} value={p.value}>{p.label}</option>
+          <option key={p.value} value={p.value}>{t(p.label)}</option>
         ))}
       </select>
       {isCustom && (
@@ -258,8 +259,8 @@ function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: st
       )}
       <div style={{ fontSize: FS_META, color: "var(--text-3)" }}>
         {isCustom
-          ? "Enter the full path to your shell executable."
-          : "Applies to all new local terminal tabs."}
+          ? t("Enter the full path to your shell executable.")
+          : t("Applies to all new local terminal tabs.")}
       </div>
     </div>
   );
