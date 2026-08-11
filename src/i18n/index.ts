@@ -123,6 +123,8 @@ const zh: Record<string, string> = {
   "Language": "语言",
   "UI language": "界面语言",
   "Theme": "主题",
+  "Warm Minimal": "暖色极简",
+  "Warm Light": "暖色浅亮",
   "Density": "密度",
   "Compact": "紧凑",
   "Comfortable": "舒适",

@@ -66,27 +66,27 @@ export function AppearancePanel() {
           gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
           gap: 8, maxWidth: 420,
         }}>
-          {THEME_META.map((t) => (
+          {THEME_META.map((th) => (
             <div
-              key={t.id}
+              key={th.id}
               role="button"
-              aria-pressed={themeId === t.id}
-              onClick={() => setTheme(t.id)}
+              aria-pressed={themeId === th.id}
+              onClick={() => setTheme(th.id)}
               style={{
                 padding: "8px 8px", cursor: "pointer",
-                border: themeId === t.id
+                border: themeId === th.id
                   ? "1px solid var(--accent)" : "1px solid var(--border)",
-                boxShadow: themeId === t.id
+                boxShadow: themeId === th.id
                   ? "0 0 0 2px var(--accent-fade)" : undefined,
                 borderRadius: 5, background: "var(--panel-1)",
               }}
             >
               <div style={{ display: "flex", gap: 3, marginBottom: 6, height: 10 }}>
-                {t.swatch.map((c, i) => (
+                {th.swatch.map((c, i) => (
                   <span key={i} style={{ flex: 1, borderRadius: 2, background: c }} />
                 ))}
               </div>
-              <div style={{ fontSize: FS_META, color: "var(--text-1)" }}>{t.label}</div>
+              <div style={{ fontSize: FS_META, color: "var(--text-1)" }}>{t(th.label)}</div>
             </div>
           ))}
         </div>
