@@ -1,11 +1,10 @@
 use crate::error::{Error, Result};
-use crate::ipc::events::{ClosedEvent, DataEvent, EV_CLOSED, EV_DATA};
 use crate::session::{ConnectionId, ConnectionInfo, ConnectionKind, ConnectionState};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::collections::HashMap;
 use std::io::Read;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use tokio::sync::{mpsc, Mutex};
 use uuid::Uuid;
 
@@ -94,7 +93,7 @@ pub async fn spawn_local_pty(
     shell: &str,
     session_id: Uuid,
     label: String,
-    app: AppHandle,
+    _app: AppHandle,
     subs: Arc<Mutex<HashMap<ConnectionId, mpsc::Sender<Vec<u8>>>>>,
     inner_local: Arc<Mutex<HashMap<Uuid, LocalPtyHandle>>>,
 ) -> Result<LocalPtyHandle> {
@@ -134,7 +133,6 @@ pub async fn spawn_local_pty(
 
     let subs_driver = subs.clone();
     let inner_driver = inner_local.clone();
-    let app_driver = app.clone();
     tokio::spawn(local_driver_loop(
         session_id,
         reader,
@@ -143,7 +141,6 @@ pub async fn spawn_local_pty(
         writer_rx,
         subs_driver,
         inner_driver,
-        app_driver,
     ));
 
     Ok(LocalPtyHandle {
@@ -160,7 +157,6 @@ async fn local_driver_loop(
     mut cmds: mpsc::Receiver<LocalCmd>,
     subs: Arc<Mutex<HashMap<ConnectionId, mpsc::Sender<Vec<u8>>>>>,
     inner_local: Arc<Mutex<HashMap<Uuid, LocalPtyHandle>>>,
-    app: AppHandle,
 ) {
     // Obtain writer once — take_writer() can only be called once per master.
     let mut pty_writer = match master.take_writer() {
@@ -216,23 +212,22 @@ async fn local_driver_loop(
             },
             chunk = read_rx.recv() => match chunk {
                 Some(bytes) => {
-                    // Forward to subscriber (if any).
+                    // Forward to subscriber — the subscriber task in the IPC
+                    // layer emits session:data to the frontend.
                     let tx = subs.lock().await.get(&id).cloned();
                     if let Some(tx) = tx {
-                        let _ = tx.send(bytes.clone()).await;
+                        let _ = tx.send(bytes).await;
                     }
-                    // Also emit Tauri event so the frontend receives data.
-                    let _ = app.emit(EV_DATA, DataEvent { id, data: bytes });
                 }
                 None => break, // reader task exited — child has exited
             },
         }
     }
 
-    // Clean up: remove from both maps, emit connection:closed.
+    // Drop the subs sender — the subscriber task's rx.recv() returns None,
+    // which causes it to emit connection:closed to the frontend.
     subs.lock().await.remove(&id);
     inner_local.lock().await.remove(&id);
-    let _ = app.emit(EV_CLOSED, ClosedEvent { id, reason: "eof".into() });
 }
 
 #[cfg(test)]

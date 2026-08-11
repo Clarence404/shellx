@@ -232,10 +232,11 @@ impl SessionManager {
     }
 
     pub async fn subscribe(&self, id: ConnectionId) -> Result<mpsc::Receiver<Vec<u8>>> {
-        // Just check presence without holding the per-connection mutex.
+        // Check presence in either SSH or local session maps.
         {
-            let map = self.inner.lock().await;
-            if !map.contains_key(&id) {
+            let ssh = self.inner.lock().await;
+            let local = self.local_sessions.lock().await;
+            if !ssh.contains_key(&id) && !local.contains_key(&id) {
                 return Err(Error::Closed);
             }
         }
