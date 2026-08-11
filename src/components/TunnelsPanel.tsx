@@ -64,10 +64,10 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   const [importCmd, setImportCmd] = useState("");
   const [importParsed, setImportParsed] = useState<Array<{ local_port: number; remote_host: string; remote_port: number }> | null>(null);
 
-  // DnD state
-  const dragSrcId = useRef<string | null>(null);
+  // Pointer-based DnD state (HTML5 drag-and-drop is unreliable in WebView2)
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const lastDragTarget = useRef<string | null>(null);
 
   useEffect(() => {
     if (hostId) {
@@ -207,43 +207,49 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
     return `ssh -L ${rule.local_port}:${rule.remote_host}:${rule.remote_port} ${userHost}`;
   }
 
-  // ---- Drag-and-drop --------------------------------------------------------
+  // ---- Pointer-based drag-and-drop ------------------------------------------
+  // HTML5 DnD is unreliable in Tauri/WebView2; pointer events work everywhere.
 
-  function onDragStart(e: React.DragEvent, id: string) {
-    dragSrcId.current = id;
-    setDraggingId(id);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", id);
-  }
-
-  function onDragOver(e: React.DragEvent, id: string) {
+  function onGripPointerDown(e: React.PointerEvent, srcId: string) {
+    if (e.button !== 0) return;
     e.preventDefault();
-    const src = dragSrcId.current;
-    if (!src || src === id) { setDragOverId(id); return; }
-    setDragOverId(id);
-    setRules((prev) => {
-      const srcIdx = prev.findIndex((r) => r.id === src);
-      const tgtIdx = prev.findIndex((r) => r.id === id);
-      if (srcIdx === -1 || tgtIdx === -1) return prev;
-      const next = [...prev];
-      const [item] = next.splice(srcIdx, 1);
-      next.splice(tgtIdx, 0, item);
-      return next;
-    });
-  }
+    setDraggingId(srcId);
+    lastDragTarget.current = null;
 
-  function onListDragOver(e: React.DragEvent) {
-    e.preventDefault();
-  }
+    function onMove(ev: PointerEvent) {
+      const hit = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+      const row = hit?.closest<HTMLElement>("[data-rule-id]");
+      const targetId = row?.dataset.ruleId ?? null;
+      if (!targetId || targetId === srcId || targetId === lastDragTarget.current) return;
+      lastDragTarget.current = targetId;
+      setDragOverId(targetId);
+      setRules((prev) => {
+        const si = prev.findIndex((r) => r.id === srcId);
+        const ti = prev.findIndex((r) => r.id === targetId);
+        if (si === -1 || ti === -1) return prev;
+        const next = [...prev];
+        const [item] = next.splice(si, 1);
+        next.splice(ti, 0, item);
+        return next;
+      });
+    }
 
-  async function onDragEnd() {
-    dragSrcId.current = null;
-    setDraggingId(null);
-    setDragOverId(null);
-    if (!hostId) return;
-    try {
-      await reorderTunnels(hostId, rulesRef.current.map((r) => r.id));
-    } catch { /* non-fatal — order reverts on next load */ }
+    async function onUp() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      setDraggingId(null);
+      setDragOverId(null);
+      lastDragTarget.current = null;
+      if (!hostId) return;
+      try {
+        await reorderTunnels(hostId, rulesRef.current.map((r) => r.id));
+      } catch { /* non-fatal */ }
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   }
 
   // ---- Render ---------------------------------------------------------------
@@ -310,7 +316,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       </div>
 
       {/* Scrollable list */}
-      <div style={{ flex: 1, overflowY: "auto" }} onDragOver={onListDragOver}>
+      <div style={{ flex: 1, overflowY: "auto" }}>
 
         {/* Add form */}
         {addOpen && (
@@ -353,10 +359,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
           return (
             <div
               key={rule.id}
-              draggable
-              onDragStart={(e) => onDragStart(e, rule.id)}
-              onDragOver={(e) => onDragOver(e, rule.id)}
-              onDragEnd={onDragEnd}
+              data-rule-id={rule.id}
               style={{
                 borderBottom: "1px solid var(--border)",
                 opacity: isDragging ? 0.4 : 1,
@@ -368,9 +371,10 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
             >
               {/* Main row */}
               <div style={{ display: "flex", alignItems: "center" }}>
-                {/* Grip handle */}
+                {/* Grip handle — drag handle for pointer-based reorder */}
                 <div
-                  style={{ width: 22, alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "var(--text-3)", flexShrink: 0, opacity: 0.35 }}
+                  onPointerDown={(e) => onGripPointerDown(e, rule.id)}
+                  style={{ width: 22, alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", cursor: draggingId ? "grabbing" : "grab", color: "var(--text-3)", flexShrink: 0, opacity: 0.35, touchAction: "none" }}
                   title="Drag to reorder"
                 >
                   <GripVertical size={13} />
