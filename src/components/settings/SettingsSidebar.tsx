@@ -33,14 +33,15 @@ export function SettingsSidebar({ active, onSelect }: Props) {
           opacity: dim ? 0.4 : 1,
         }}
       >
-        <Icon size={iconSizes.md} strokeWidth={1.8} />{label}
+        <Icon size={iconSizes.md} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
       </div>
     );
   }
 
   return (
     <div style={{
-      width: 150, background: "var(--panel-1)",
+      width: 172, background: "var(--panel-1)",
       borderRight: "1px solid var(--border)", padding: "12px 8px",
       display: "flex", flexDirection: "column",
     }}>

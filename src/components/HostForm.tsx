@@ -475,7 +475,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 type="text"
                 value={keyFilter}
                 onChange={(e) => setKeyFilter(e.target.value)}
-                placeholder="Filter…"
+                placeholder={t("Filter…")}
                 style={{
                   width: "100%", padding: "6px 8px", fontSize: 12,
                   background: "var(--panel-1)", border: "none",
@@ -516,7 +516,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                     background: "transparent", color: "var(--text-2)",
                   }}
                 >
-                  浏览…
+                  {t("Browse…")}
                 </button>
               </div>
             </div>
@@ -596,7 +596,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             color: "var(--text-2)",
           }}
         >
-          浏览…
+          {t("Browse…")}
         </button>
       </div>
     );
@@ -634,9 +634,9 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       {tab === "basic" && (
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
           <Field label={t("Label")} value={label} onChange={setLabel} placeholder={t("auto-fills as user@host")} />
-          <Field label={t("Host")} value={host} onChange={setHost} />
-          <Field label={t("Port")} value={port} onChange={setPort} />
-          <Field label={t("Username")} value={username} onChange={setUsername} />
+          <Field label={t("Host")} value={host} onChange={setHost} placeholder="192.168.1.10 / example.com" />
+          <Field label={t("Port")} value={port} onChange={setPort} placeholder="22" />
+          <Field label={t("Username")} value={username} onChange={setUsername} placeholder="root" />
 
           {/* Auth method segmented switch */}
           <div style={{ display: "flex", gap: 4 }}>
@@ -652,7 +652,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 fontWeight: authMode === "password" ? 600 : 400,
               }}
             >
-              密码
+              {t("Password")}
             </button>
             <button
               type="button"
@@ -666,7 +666,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 fontWeight: authMode === "publickey" ? 600 : 400,
               }}
             >
-              密钥文件
+              {t("Key file")}
             </button>
           </div>
 
@@ -676,11 +676,11 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               {renderKeyPicker()}
 
               <Field
-                label="Passphrase"
+                label={t("Passphrase")}
                 type="password"
                 value={passphrase}
                 onChange={setPassphrase}
-                placeholder={mode === "edit" ? "留空保持不变" : ""}
+                placeholder={mode === "edit" ? t("leave blank to keep current") : t("Key passphrase (optional)")}
               />
 
               {mode === "edit" && keychainAvailable && (
@@ -690,7 +690,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                     checked={forgetPassphrase}
                     onChange={(e) => setForgetPassphrase(e.target.checked)}
                   />
-                  忘掉已保存的 passphrase
+                  {t("Forget stored passphrase")}
                 </label>
               )}
             </>
@@ -700,11 +700,11 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
           {authMode === "password" && (
             <>
               <Field
-                label="Password"
+                label={t("Password")}
                 type="password"
                 value={password}
                 onChange={setPassword}
-                placeholder={mode === "edit" ? "leave blank to keep current" : ""}
+                placeholder={mode === "edit" ? t("leave blank to keep current") : ""}
               />
 
               {mode === "edit" && keychainAvailable && (
@@ -730,7 +730,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 checked={saveHost}
                 onChange={(e) => setSaveHost(e.target.checked)}
               />
-              Save this host
+              {t("Save this host")}
             </label>
           )}
 
@@ -768,7 +768,8 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             <div style={{ display: "flex", gap: 4 }}>
               {(["terminal_only", "term_tunnels", "tunnels_only"] as const).map((m) => (
                 <button key={m} type="button" onClick={() => setConnectionMode(m)} style={{
-                  flex: 1, padding: "8px 6px", fontSize: 12, borderRadius: 6, cursor: "pointer",
+                  flex: 1, padding: "8px 2px", fontSize: 12, borderRadius: 6, cursor: "pointer",
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   border: "1px solid var(--border)",
                   background: connectionMode === m ? "var(--accent)" : "var(--panel-1)",
                   color: connectionMode === m ? "var(--text-on-accent)" : "var(--text-2)",

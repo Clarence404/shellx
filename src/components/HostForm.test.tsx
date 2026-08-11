@@ -157,9 +157,9 @@ describe("HostForm", () => {
     (keysDiscover as Mock).mockResolvedValue([KEY("id_ed25519"), KEY("id_rsa", "RSA-4096")]);
     render(<HostForm mode="create" onDone={() => {}} onCancel={() => {}} />);
     // Wait for keysDiscover to settle — password mode must remain selected
-    await screen.findByRole("button", { name: /密码/ });
-    expect(screen.getByRole("button", { name: /密码/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /密钥文件/ })).toHaveAttribute("aria-pressed", "false");
+    await screen.findByRole("button", { name: /^password$/i });
+    expect(screen.getByRole("button", { name: /^password$/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /key file/i })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("key picker pre-populated when switching to key mode", async () => {
@@ -170,16 +170,16 @@ describe("HostForm", () => {
     });
     (keysDiscover as Mock).mockResolvedValue([KEY("id_ed25519"), KEY("id_rsa", "RSA-4096")]);
     render(<HostForm mode="create" onDone={() => {}} onCancel={() => {}} />);
-    await screen.findByRole("button", { name: /密钥文件/ });
-    await user.click(screen.getByRole("button", { name: /密钥文件/ }));
+    await screen.findByRole("button", { name: /key file/i });
+    await user.click(screen.getByRole("button", { name: /key file/i }));
     expect(await screen.findByText(/id_ed25519/)).toBeInTheDocument();
   });
 
   it("defaults to password mode when no keys found", async () => {
     (keysDiscover as Mock).mockResolvedValue([]);
     render(<HostForm mode="create" onDone={() => {}} onCancel={() => {}} />);
-    await screen.findByRole("button", { name: /密码/ });
-    expect(screen.getByRole("button", { name: /密码/ })).toHaveAttribute("aria-pressed", "true");
+    await screen.findByRole("button", { name: /^password$/i });
+    expect(screen.getByRole("button", { name: /^password$/i })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("switches to dropdown picker at five keys after switching to key mode", async () => {
@@ -190,8 +190,8 @@ describe("HostForm", () => {
     });
     (keysDiscover as Mock).mockResolvedValue(["a","b","c","d","e"].map((n) => KEY(`key_${n}`)));
     render(<HostForm mode="create" onDone={() => {}} onCancel={() => {}} />);
-    await screen.findByRole("button", { name: /密钥文件/ });
-    await user.click(screen.getByRole("button", { name: /密钥文件/ }));
+    await screen.findByRole("button", { name: /key file/i });
+    await user.click(screen.getByRole("button", { name: /key file/i }));
     // dropdown trigger shows the selected key; key_e is not visible until opened
     expect(await screen.findByRole("button", { name: /key_a/ })).toBeInTheDocument();
     expect(screen.queryByText(/key_e/)).not.toBeInTheDocument();
@@ -203,8 +203,8 @@ describe("HostForm", () => {
       { path: "C:/u/.ssh/p.ppk", fileName: "p.ppk", kind: "ppk", algo: null, comment: null, encrypted: false },
     ]);
     render(<HostForm mode="create" onDone={() => {}} onCancel={() => {}} />);
-    await screen.findByRole("button", { name: /密钥文件/ });
-    await user.click(screen.getByRole("button", { name: /密钥文件/ }));
+    await screen.findByRole("button", { name: /key file/i });
+    await user.click(screen.getByRole("button", { name: /key file/i }));
     const chip = await screen.findByText(/p\.ppk/);
     expect(chip.closest("[aria-disabled='true']")).not.toBeNull();
   });
