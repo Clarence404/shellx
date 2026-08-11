@@ -39,6 +39,12 @@ jobs:
               echo "\`$NOTES_FILE\` was not present at build time."
               echo
             fi
+            # Standing footer, appended to every release. MUST stay on ONE
+            # line: GitHub renders single newlines in release bodies as hard
+            # line breaks, so a wrapped sentence displays as ragged lines.
+            echo "---"
+            echo
+            echo "> Installers below are unsigned — Windows SmartScreen and macOS Gatekeeper will warn on first launch. See the README for the \"Run anyway\" steps until installer signing lands."
             echo "EOF_NOTES"
           } >> "$GITHUB_OUTPUT"
 

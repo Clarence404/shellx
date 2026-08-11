@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
+import { useT } from "../i18n";
 import { useHostsStore } from "../state/hosts";
 import { useSessions } from "../state/sessions";
 import { openConnection } from "../ipc/commands";
@@ -27,6 +28,7 @@ interface Props {
 
 export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   const keychainAvailable = useHostsStore((s) => s.keychainAvailable);
+  const t = useT();
   const addHost = useHostsStore((s) => s.addHost);
   const updateHostById = useHostsStore((s) => s.updateHostById);
   const bumpRulesVersion = useSessions((s) => s.bumpRulesVersion);
@@ -414,10 +416,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   }
 
   const primaryLabel = mode === "edit"
-    ? "Save"
-    : (saveHost ? "Save & Connect" : "Connect");
+    ? t("Save")
+    : (saveHost ? t("Save & Connect") : t("Connect"));
 
-  const busyLabel = mode === "edit" ? "Saving…" : "Connecting…";
+  const busyLabel = mode === "edit" ? t("Saving…") : t("Connecting…");
 
   // Render the key picker (chips or dropdown)
   function renderKeyPicker() {
@@ -609,22 +611,21 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       {/* Header */}
       <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid var(--border)" }}>
         <h3 style={{ fontSize: 13, fontWeight: 600 }}>
-          {mode === "edit" ? "Edit host" : "New SSH connection"}
+          {mode === "edit" ? t("Edit host") : t("New SSH connection")}
         </h3>
       </div>
 
       {/* Tab bar */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--border)" }}>
-        {(["basic", "tunnels"] as const).map((t) => (
-          <button key={t} type="button" onClick={() => setTab(t)} style={{
+        {(["basic", "tunnels"] as const).map((tb) => (
+          <button key={tb} type="button" onClick={() => setTab(tb)} style={{
             flex: 1, padding: "7px 0", fontSize: 11, textAlign: "center",
             background: "none", border: "none", cursor: "pointer",
-            borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
-            color: tab === t ? "var(--text-1)" : "var(--text-2)",
-            fontWeight: tab === t ? 600 : 400,
-            textTransform: "capitalize",
+            borderBottom: tab === tb ? "2px solid var(--accent)" : "2px solid transparent",
+            color: tab === tb ? "var(--text-1)" : "var(--text-2)",
+            fontWeight: tab === tb ? 600 : 400,
           }}>
-            {t}
+            {tb === "basic" ? t("Basic") : t("Tunnels")}
           </button>
         ))}
       </div>
@@ -632,10 +633,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       {/* Basic tab */}
       {tab === "basic" && (
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Field label="Label" value={label} onChange={setLabel} placeholder="auto-fills as user@host" />
-          <Field label="Host" value={host} onChange={setHost} />
-          <Field label="Port" value={port} onChange={setPort} />
-          <Field label="Username" value={username} onChange={setUsername} />
+          <Field label={t("Label")} value={label} onChange={setLabel} placeholder={t("auto-fills as user@host")} />
+          <Field label={t("Host")} value={host} onChange={setHost} />
+          <Field label={t("Port")} value={port} onChange={setPort} />
+          <Field label={t("Username")} value={username} onChange={setUsername} />
 
           {/* Auth method segmented switch */}
           <div style={{ display: "flex", gap: 4 }}>
@@ -762,7 +763,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
           {/* Connection mode segmented control */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".7px", marginBottom: 8 }}>
-              Connection mode
+              {t("Connection mode")}
             </div>
             <div style={{ display: "flex", gap: 4 }}>
               {(["terminal_only", "term_tunnels", "tunnels_only"] as const).map((m) => (
@@ -774,7 +775,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                   fontWeight: connectionMode === m ? 600 : 400,
                   transition: "background .15s, color .15s",
                 }}>
-                  {m === "term_tunnels" ? "Term + Tunnels" : m === "tunnels_only" ? "仅 Tunnels" : "仅 Terminal"}
+                  {m === "term_tunnels" ? t("Term + Tunnels") : m === "tunnels_only" ? t("Tunnels only") : t("Terminal only")}
                 </button>
               ))}
             </div>
@@ -786,18 +787,18 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".7px" }}>
-                  Port forwarding
+                  {t("Port forwarding")}
                 </span>
                 {(tunnelRules.length + pendingRules.length) > 0 && (
                   <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-3)" }}>
-                    {tunnelRules.length + pendingRules.length} rules
+                    {tunnelRules.length + pendingRules.length} {t("rules")}
                   </span>
                 )}
               </div>
               {!addRuleOpen && (
                 <button type="button" onClick={() => setAddRuleOpen(true)}
                   style={{ fontSize: 12, fontWeight: 500, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                  + Add
+                  + {t("Add")}
                 </button>
               )}
             </div>
@@ -870,7 +871,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                         <button type="button"
                           onClick={(e) => { e.stopPropagation(); armDeleteRule(rule.id); }}
                           onMouseLeave={() => { if (confirmDeleteId === rule.id) disarmDeleteRule(); }}
-                          title={confirmDeleteId === rule.id ? "再次点击确认删除" : "Delete"}
+                          title={confirmDeleteId === rule.id ? t("Click again to confirm delete") : t("Delete")}
                           style={{
                             background: confirmDeleteId === rule.id ? "rgba(243,139,168,.12)" : "none",
                             border: "none", cursor: "pointer",
@@ -878,7 +879,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                             flexShrink: 0, padding: "2px 3px", borderRadius: 3,
                             display: "flex", alignItems: "center", gap: 4,
                           }}>
-                          {confirmDeleteId === rule.id && <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1 }}>确认?</span>}
+                          {confirmDeleteId === rule.id && <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1 }}>{t("Confirm?")}</span>}
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -910,7 +911,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                         <div
                           ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })}
                           style={{ padding: "0 12px 10px", borderTop: "1px solid var(--border)", background: "rgba(0,0,0,.15)" }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", padding: "9px 0 6px" }}>SSH command</div>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", letterSpacing: ".5px", textTransform: "uppercase", padding: "9px 0 6px" }}>{t("SSH command")}</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 5, padding: "8px 10px" }}>
                             <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-2)", lineHeight: 1.55, whiteSpace: "nowrap", overflowX: "auto" }}>{sshCmd}</span>
                             <button type="button" onClick={() => handleCopySshCmd(rule.id, sshCmd)}
@@ -922,7 +923,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                               }}>{copiedRuleId === rule.id ? "Copied" : "Copy"}</button>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-                            <span style={{ fontSize: 12, color: "var(--text-2)" }}>局域网共享 (0.0.0.0)</span>
+                            <span style={{ fontSize: 12, color: "var(--text-2)" }}>{t("LAN sharing (0.0.0.0)")}</span>
                             <div
                               onClick={() => handleToggleBindAllRule(rule)}
                               role="switch" aria-checked={rule.bind_all}
@@ -960,7 +961,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 </div>
                 <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "var(--text-2)", cursor: "pointer" }}>
                   <input type="checkbox" checked={newBindAll} onChange={(e) => setNewBindAll(e.target.checked)} />
-                  局域网共享 (0.0.0.0)
+                  {t("LAN sharing (0.0.0.0)")}
                 </label>
               </div>
             )}
@@ -977,7 +978,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             onClick={onCancel}
             style={{ flex: 1, padding: "6px 10px", borderRadius: 5, color: "var(--text-2)" }}
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             type="submit"

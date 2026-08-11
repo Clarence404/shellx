@@ -2,11 +2,12 @@ import type { ReactNode } from "react";
 import { Folder, File as FileIcon, FileCode, FileJson } from "lucide-react";
 import { useSettingsStore } from "../../state/settings";
 import {
-  THEME_META, DENSITY_META, FONT_MAP, SYSTEM_FONT_META,
+  THEME_META, DENSITY_META, FONT_MAP, SYSTEM_FONT_META, LANGUAGE_META,
   SYSTEM_FONT_SIZE_MIN, SYSTEM_FONT_SIZE_MAX,
   FILES_FONT_SIZE_MIN, FILES_FONT_SIZE_MAX,
 } from "../../types/settings";
 import type { Settings } from "../../types/settings";
+import { useT } from "../../i18n";
 
 // v0.5.4: every visible text size in this panel is derived from
 // var(--font-ui-size) so the System-font-size slider scales the whole
@@ -16,6 +17,8 @@ const FS_BODY    = "var(--font-ui-size)";              // labels, controls
 const FS_META    = "calc(var(--font-ui-size) - 2px)";  // hints, section markers, subtitle
 
 export function AppearancePanel() {
+  const t = useT();
+  const language = useSettingsStore((s) => s.language);
   const themeId = useSettingsStore((s) => s.themeId);
   const density = useSettingsStore((s) => s.density);
   const systemFont = useSettingsStore((s) => s.systemFont);
@@ -36,17 +39,28 @@ export function AppearancePanel() {
   const setCursorStyle = (s: Settings["terminal"]["cursorStyle"]) =>
     useSettingsStore.getState().setTerminalCursorStyle(s);
   const setLocalShell = (v: string) => useSettingsStore.getState().setLocalShell(v);
+  const setLanguage = (v: Settings["language"]) => useSettingsStore.getState().setLanguage(v);
 
   return (
     <div style={{ padding: "20px 24px", overflowY: "auto", color: "var(--text-1)", flex: 1 }}>
-      <h3 style={{ fontSize: FS_HEADING, fontWeight: 500, margin: "0 0 6px" }}>Appearance</h3>
+      <h3 style={{ fontSize: FS_HEADING, fontWeight: 500, margin: "0 0 6px" }}>{t("Appearance")}</h3>
       <div style={{ fontSize: FS_META, color: "var(--text-3)", marginBottom: 18 }}>
-        Changes apply live · saved to settings.json in your config directory
+        {t("Changes apply live · saved to settings.json in your config directory")}
       </div>
 
-      <SectionHeader>Interface</SectionHeader>
+      <SectionHeader>{t("Language")}</SectionHeader>
 
-      <TwoColField label="Theme">
+      <TwoColField label={t("UI language")}>
+        <Segmented
+          options={LANGUAGE_META.map((l) => ({ id: l.id, label: l.label }))}
+          value={language}
+          onChange={(id) => setLanguage(id as Settings["language"])}
+        />
+      </TwoColField>
+
+      <SectionHeader>{t("Interface")}</SectionHeader>
+
+      <TwoColField label={t("Theme")}>
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
@@ -78,7 +92,7 @@ export function AppearancePanel() {
         </div>
       </TwoColField>
 
-      <TwoColField label="Density">
+      <TwoColField label={t("Density")}>
         <Segmented
           options={DENSITY_META.map((d) => ({ id: d.id, label: d.label }))}
           value={density}
@@ -86,11 +100,11 @@ export function AppearancePanel() {
         />
       </TwoColField>
 
-      <SectionHeader>System font</SectionHeader>
+      <SectionHeader>{t("System font")}</SectionHeader>
 
       <TwoColField
-        label="Family"
-        hint="Sans UI — tabs, buttons, section headers."
+        label={t("Family")}
+        hint={t("Sans UI — tabs, buttons, section headers.")}
       >
         <select
           value={systemFont}
@@ -108,7 +122,7 @@ export function AppearancePanel() {
         </select>
       </TwoColField>
 
-      <TwoColField label="Size">
+      <TwoColField label={t("Size")}>
         <SizeSlider
           aria-label="System font size"
           min={SYSTEM_FONT_SIZE_MIN} max={SYSTEM_FONT_SIZE_MAX}
@@ -117,11 +131,11 @@ export function AppearancePanel() {
         />
       </TwoColField>
 
-      <SectionHeader>Files</SectionHeader>
+      <SectionHeader>{t("Files")}</SectionHeader>
 
       <TwoColField
-        label="Size"
-        hint="Filename + meta text in the Files panes. Independent of System font."
+        label={t("Size")}
+        hint={t("Filename + meta text in the Files panes. Independent of System font.")}
       >
         <SizeSlider
           aria-label="Files font size"
@@ -131,13 +145,13 @@ export function AppearancePanel() {
         />
       </TwoColField>
 
-      <TwoColField label="Preview">
+      <TwoColField label={t("Preview")}>
         <FilesPreview fontSize={filesFontSize} />
       </TwoColField>
 
-      <SectionHeader>Terminal</SectionHeader>
+      <SectionHeader>{t("Terminal")}</SectionHeader>
 
-      <TwoColField label="Family">
+      <TwoColField label={t("Family")}>
         <select
           value={terminal.fontFamily}
           onChange={(e) => setFontFamily(e.target.value as Settings["terminal"]["fontFamily"])}
@@ -155,7 +169,7 @@ export function AppearancePanel() {
         </select>
       </TwoColField>
 
-      <TwoColField label="Size">
+      <TwoColField label={t("Size")}>
         <SizeSlider
           aria-label="Terminal font size"
           min={10} max={20}
@@ -164,7 +178,7 @@ export function AppearancePanel() {
         />
       </TwoColField>
 
-      <TwoColField label="Cursor">
+      <TwoColField label={t("Cursor")}>
         <Segmented
           options={[
             { id: "block", label: "Block" },
@@ -176,7 +190,7 @@ export function AppearancePanel() {
         />
       </TwoColField>
 
-      <TwoColField label="Preview">
+      <TwoColField label={t("Preview")}>
         <TerminalPreview
           fontFamily={terminal.fontFamily}
           fontSize={terminal.fontSize}
@@ -184,9 +198,9 @@ export function AppearancePanel() {
         />
       </TwoColField>
 
-      <SectionHeader>Local terminal</SectionHeader>
+      <SectionHeader>{t("Local terminal")}</SectionHeader>
 
-      <TwoColField label="Shell">
+      <TwoColField label={t("Shell")}>
         <LocalShellPicker value={localShell} onChange={setLocalShell} />
       </TwoColField>
     </div>

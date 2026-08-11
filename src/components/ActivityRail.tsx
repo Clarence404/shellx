@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Server, Files, Cable, Settings, type LucideIcon } from "lucide-react";
 import { useSessions, type RailView } from "../state/sessions";
+import { useT } from "../i18n";
 
 export type { RailView };
 
@@ -38,6 +39,7 @@ function RailButton({ item, active, onClick }: {
   active: boolean;
   onClick: () => void;
 }) {
+  const t = useT();
   const [hover, setHover] = useState(false);
   const { label, Icon } = item;
   // Colour precedence: active > hover > idle. Hover uses --border (a subtle
@@ -77,7 +79,7 @@ function RailButton({ item, active, onClick }: {
         lineHeight: 1.1, letterSpacing: 0.2,
         whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         maxWidth: "100%",
-      }}>{label}</span>
+      }}>{t(label)}</span>
     </button>
   );
 }

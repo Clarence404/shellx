@@ -31,7 +31,7 @@ describe("TrustedServersPanel", () => {
     const { hostkeysList } = await import("../../ipc/hostkeys");
     (hostkeysList as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     render(<TrustedServersPanel />);
-    expect(await screen.findByText(/暂无记录/)).toBeInTheDocument();
+    expect(await screen.findByText(/No entries/)).toBeInTheDocument();
   });
 
   it("shows copy button for each row", async () => {
@@ -40,7 +40,7 @@ describe("TrustedServersPanel", () => {
       { host: "test-bastion.company.com", key_type: "ssh-ed25519", fingerprint: "SHA256:abc" },
     ]);
     render(<TrustedServersPanel />);
-    const btn = await screen.findByRole("button", { name: /复制/ });
+    const btn = await screen.findByRole("button", { name: /Copy/ });
     expect(btn).toBeInTheDocument();
   });
 });

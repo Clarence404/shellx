@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { hostkeysList, type TrustedHost } from "../../ipc/hostkeys";
+import { useT } from "../../i18n";
 
 export function TrustedServersPanel() {
+  const t = useT();
   const [rows, setRows] = useState<TrustedHost[] | null>(null);
 
   useEffect(() => {
@@ -10,32 +12,35 @@ export function TrustedServersPanel() {
 
   return (
     <div style={{
-      flex: 1, padding: "20px 24px", display: "flex", flexDirection: "column",
+      flex: 1, minHeight: 0, padding: "20px 24px", display: "flex", flexDirection: "column",
       gap: 16, overflowY: "auto",
     }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>
-          已信任的服务器
+          {t("Trusted servers")}
         </div>
         <div style={{ fontSize: 11, color: "var(--text-3)" }}>
-          ~/.ssh/known_hosts · 只读展示
+          ~/.ssh/known_hosts · {t("read-only view")}
         </div>
       </div>
 
       {rows === null && (
-        <div style={{ color: "var(--text-3)", fontSize: 12 }}>加载中…</div>
+        <div style={{ color: "var(--text-3)", fontSize: 12 }}>{t("Loading…")}</div>
       )}
       {rows !== null && rows.length === 0 && (
         <div style={{
           flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
           color: "var(--text-3)", fontSize: 12,
         }}>
-          暂无记录
+          {t("No entries")}
         </div>
       )}
       {rows !== null && rows.length > 0 && (
+        // overflowY:auto (NOT hidden): as a shrinkable flex item this list
+        // gets squeezed when the window is short — hidden would clip rows
+        // with no way to see them; auto shows a scrollbar instead.
         <div style={{
-          border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden",
+          border: "1px solid var(--border)", borderRadius: 6, overflowY: "auto", minHeight: 60,
         }}>
           {rows.map((r, i) => (
             <div key={`${r.host}-${r.key_type}-${i}`} style={{
@@ -70,15 +75,15 @@ export function TrustedServersPanel() {
                   border: "0.5px solid var(--border)", cursor: "pointer",
                 }}
               >
-                复制
+                {t("Copy")}
               </button>
             </div>
           ))}
         </div>
       )}
 
-      <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: "auto" }}>
-        shellx 只追加、不修改此文件 · 删除条目请直接编辑 known_hosts
+      <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: "auto", flexShrink: 0 }}>
+        {t("shellx only appends to this file · to remove an entry, edit known_hosts directly")}
       </div>
     </div>
   );

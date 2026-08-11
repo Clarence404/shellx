@@ -7,6 +7,7 @@ import { useRailFiles } from "../state/railFiles";
 import { closeSession } from "../ipc/commands";
 import type { HostInfo } from "../types/host";
 import type { RailView } from "./ActivityRail";
+import { useT } from "../i18n";
 
 interface Props {
   view: RailView;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Props) {
+  const t = useT();
   const hosts = useHostsStore((s) => s.hosts);
   const deleteHostById = useHostsStore((s) => s.deleteHostById);
   const addHost = useHostsStore((s) => s.addHost);
@@ -96,7 +98,7 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
       display: "flex", flexDirection: "column",
     }}>
       <SectionHeader
-        label={view}
+        label={t("Hosts")}
         action={
           <button
             aria-label="Collapse drawer"
@@ -145,7 +147,7 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
             display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
           }}>
           <Plus size={12} strokeWidth={2.5} />
-          New connection
+          {t("New connection")}
         </button>
       )}
     </aside>
