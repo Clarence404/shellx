@@ -762,7 +762,8 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
 
           {/* Connection mode segmented control */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".7px", marginBottom: 8 }}>
+            {/* Same label style as the Basic tab's Field headings */}
+            <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
               {t("Connection mode")}
             </div>
             <div style={{ display: "flex", gap: 4 }}>
@@ -787,7 +788,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             {/* Section header */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".7px" }}>
+                <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-1)", textTransform: "uppercase", letterSpacing: 0.8 }}>
                   {t("Port forwarding")}
                 </span>
                 {(tunnelRules.length + pendingRules.length) > 0 && (
