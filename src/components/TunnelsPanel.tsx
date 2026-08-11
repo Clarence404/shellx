@@ -213,6 +213,8 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
     dragSrcId.current = id;
     setDraggingId(id);
     e.dataTransfer.effectAllowed = "move";
+    // WebView2 requires at least one setData call for a drag to initiate.
+    e.dataTransfer.setData("text/plain", id);
   }
 
   function onDragOver(e: React.DragEvent, id: string) {
@@ -220,7 +222,6 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
     const src = dragSrcId.current;
     if (!src || src === id) { setDragOverId(id); return; }
     setDragOverId(id);
-    // Optimistically reorder in state so the list tracks the dragged item.
     setRules((prev) => {
       const srcIdx = prev.findIndex((r) => r.id === src);
       const tgtIdx = prev.findIndex((r) => r.id === id);
@@ -230,6 +231,11 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       next.splice(tgtIdx, 0, item);
       return next;
     });
+  }
+
+  function onListDragOver(e: React.DragEvent) {
+    // Allow drop on the list container (required when dragging past the last item).
+    if (dragSrcId.current) e.preventDefault();
   }
 
   async function onDragEnd() {
@@ -306,7 +312,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       </div>
 
       {/* Scrollable list */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div style={{ flex: 1, overflowY: "auto" }} onDragOver={onListDragOver}>
 
         {/* Add form */}
         {addOpen && (
@@ -340,11 +346,11 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
           const isDragging = draggingId === rule.id;
           const isDragOver = dragOverId === rule.id && draggingId !== rule.id;
 
-          const statusBarColor = hasError
+          const dotColor = hasError
             ? "var(--error)"
             : active
             ? "var(--success)"
-            : "var(--border-hi)";
+            : "var(--text-3)";
 
           return (
             <div
@@ -359,20 +365,21 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
                 background: isDragOver ? "rgba(124,92,255,0.05)" : undefined,
                 borderTop: isDragOver ? "2px solid rgba(124,92,255,0.4)" : undefined,
                 transition: "opacity .1s, background .1s",
+                userSelect: "none",
               }}
             >
               {/* Main row */}
               <div style={{ display: "flex", alignItems: "center" }}>
-                {/* Grip */}
+                {/* Grip handle */}
                 <div
-                  style={{ width: 24, alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "var(--text-3)", flexShrink: 0, opacity: 0.5 }}
+                  style={{ width: 22, alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center", cursor: "grab", color: "var(--text-3)", flexShrink: 0, opacity: 0.35 }}
                   title="Drag to reorder"
                 >
                   <GripVertical size={13} />
                 </div>
 
-                {/* Status bar */}
-                <div style={{ width: 3, alignSelf: "stretch", background: statusBarColor, flexShrink: 0, borderRadius: 0 }} />
+                {/* Status dot */}
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
 
                 {/* Content */}
                 <div
@@ -437,7 +444,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
 
               {/* Edit form */}
               {isEditing && (
-                <div style={{ padding: "0 12px 8px 39px", display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ padding: "0 12px 8px 31px", display: "flex", flexDirection: "column", gap: 4 }}>
                   {editErr && <div style={{ fontSize: 10, color: "var(--error)" }}>{editErr}</div>}
                   <div style={{ display: "flex", gap: 4 }}>
                     <input value={editLabel} onChange={(e) => setEditLabel(e.target.value)} placeholder="Label" style={{ ...field, flex: 1 }} />
