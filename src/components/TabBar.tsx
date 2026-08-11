@@ -190,6 +190,7 @@ export function TabBar({
         {tabs.map((t) => (
           <div key={t.id} role="tab" aria-selected={t.id === activeTabId}
             ref={t.id === activeTabId ? activeRef : undefined}
+            title={t.title}
             onClick={() => onSelect(t.id)}
             onContextMenu={(e) => {
               e.preventDefault();
@@ -215,11 +216,15 @@ export function TabBar({
               background: t.state === "closed" ? "var(--text-3)" : "var(--success)",
               opacity: t.state === "closed" ? 0.4 : 1,
             }} />
-            {t.title}
+            {/* Cap tab width so one long host label can't monopolize the
+                strip; full name lives in the tooltip. The × never shrinks. */}
+            <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
+              {t.title}
+            </span>
             <span
               onClick={(e) => { e.stopPropagation(); onClose(t.id); }}
               aria-label={`close ${t.title}`}
-              style={{ opacity: 0.6, fontSize: 12 }}>×</span>
+              style={{ opacity: 0.6, fontSize: 12, flexShrink: 0 }}>×</span>
           </div>
         ))}
         {onNewConnection && (

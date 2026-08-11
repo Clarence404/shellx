@@ -633,7 +633,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       {/* Basic tab */}
       {tab === "basic" && (
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Field label={t("Label")} value={label} onChange={setLabel} placeholder={t("auto-fills as user@host")} />
+          <Field label={t("Label")} value={label} onChange={setLabel} placeholder={t("auto-fills as user@host")} maxLength={60} />
           <Field label={t("Host")} value={host} onChange={setHost} placeholder="192.168.1.10 / example.com" />
           <Field label={t("Port")} value={port} onChange={setPort} placeholder="22" />
           <Field label={t("Username")} value={username} onChange={setUsername} placeholder="root" />
@@ -999,10 +999,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
 }
 
 function Field({
-  label, value, onChange, type = "text", placeholder,
+  label, value, onChange, type = "text", placeholder, maxLength,
 }: {
   label: string; value: string; onChange: (v: string) => void;
-  type?: string; placeholder?: string;
+  type?: string; placeholder?: string; maxLength?: number;
 }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -1015,6 +1015,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        maxLength={maxLength}
         style={{
           background: "var(--panel-1)", border: "1px solid var(--border)",
           borderRadius: 4, padding: "6px 8px", fontSize: 12,
