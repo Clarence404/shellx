@@ -217,6 +217,7 @@ mod tests {
                 remote_host: "db.internal".into(),
                 remote_port: 5432,
                 enabled: None,
+                bind_all: None,
             })
             .await
             .unwrap();
@@ -242,6 +243,7 @@ mod tests {
                 remote_host: "h".into(),
                 remote_port: 80,
                 enabled: None,
+                bind_all: None,
             })
             .await
             .unwrap();
@@ -253,6 +255,7 @@ mod tests {
                 local_port: None,
                 remote_host: None,
                 remote_port: None,
+                bind_all: None,
                 sort_order: None,
             })
             .await
@@ -273,6 +276,7 @@ mod tests {
                 remote_host: "h".into(),
                 remote_port: 80,
                 enabled: None,
+                bind_all: None,
             })
             .await
             .unwrap();
