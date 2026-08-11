@@ -218,7 +218,6 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
 
   function onDragOver(e: React.DragEvent, id: string) {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
     const src = dragSrcId.current;
     if (!src || src === id) { setDragOverId(id); return; }
     setDragOverId(id);
@@ -234,11 +233,6 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
   }
 
   function onListDragOver(e: React.DragEvent) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  }
-
-  function onItemDrop(e: React.DragEvent) {
     e.preventDefault();
   }
 
@@ -316,7 +310,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       </div>
 
       {/* Scrollable list */}
-      <div style={{ flex: 1, overflowY: "auto" }} onDragOver={onListDragOver} onDrop={(e) => e.preventDefault()}>
+      <div style={{ flex: 1, overflowY: "auto" }} onDragOver={onListDragOver}>
 
         {/* Add form */}
         {addOpen && (
@@ -362,7 +356,6 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
               draggable
               onDragStart={(e) => onDragStart(e, rule.id)}
               onDragOver={(e) => onDragOver(e, rule.id)}
-              onDrop={onItemDrop}
               onDragEnd={onDragEnd}
               style={{
                 borderBottom: "1px solid var(--border)",
