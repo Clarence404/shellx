@@ -96,7 +96,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     const tryInitialFit = () => {
       if (firstFitDone) return;
       if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
-      fit.fit();
+      try { fit.fit(); } catch { return; }
       firstFitDone = true;
       for (const chunk of pendingBytes) term.write(chunk);
       pendingBytes.length = 0;
@@ -125,7 +125,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     const ro = new ResizeObserver(() => {
       if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
       if (!firstFitDone) tryInitialFit();
-      else fit.fit();
+      else try { fit.fit(); } catch { /* renderer not ready */ }
     });
     ro.observe(hostRef.current);
 
@@ -183,7 +183,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     termRef.current.options.fontSize = terminal.fontSize;
     termRef.current.options.cursorStyle = terminal.cursorStyle;
     if (hostRef.current && hostRef.current.offsetHeight > 0) {
-      fitRef.current.fit();
+      try { fitRef.current.fit(); } catch { /* renderer not ready */ }
     }
   }, [terminal.fontFamily, terminal.fontSize, terminal.cursorStyle]);
 
