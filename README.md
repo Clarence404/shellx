@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.11.2** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.12.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -175,6 +175,7 @@ pnpm tsc --noEmit
 | Next / previous tab     | `Ctrl+Tab` / `Ctrl+Shift+Tab`    | `Ctrl+Tab` / `Ctrl+Shift+Tab`    |
 | Command palette         | `Ctrl+K`                         | `Cmd+K`                          |
 | Toggle sidebar drawer   | `Ctrl+Shift+B`                   | `Cmd+B`                          |
+| Search in terminal      | `Ctrl+Shift+F`                   | `Ctrl+Shift+F`                   |
 
 Windows/Linux use `Ctrl+Shift+T` / `Ctrl+Shift+W` (not `Ctrl+T` / `Ctrl+W`) so they don't collide with terminal-inside-terminal muscle memory (`Ctrl+T` and `Ctrl+W` are common bash/tmux bindings).
 

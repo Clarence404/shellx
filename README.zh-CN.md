@@ -4,7 +4,7 @@
 
 一个小巧、精致的终端 + 文件传输客户端 —— 跨平台（Windows / macOS / Linux），开源，基于 Tauri + Rust + React。
 
-当前版本：**v0.11.2** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
+当前版本：**v0.12.0** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
 
 ---
 
@@ -175,6 +175,7 @@ pnpm tsc --noEmit
 | 上一个 / 下一个 tab     | `Ctrl+Tab` / `Ctrl+Shift+Tab`    | `Ctrl+Tab` / `Ctrl+Shift+Tab`    |
 | 命令面板                | `Ctrl+K`                         | `Cmd+K`                          |
 | 侧边栏抽屉开关          | `Ctrl+Shift+B`                   | `Cmd+B`                          |
+| 终端内搜索              | `Ctrl+Shift+F`                   | `Ctrl+Shift+F`                   |
 
 Windows/Linux 上用 `Ctrl+Shift+T` / `Ctrl+Shift+W`（不是 `Ctrl+T` / `Ctrl+W`），避免和终端里的常用绑定冲突（bash / tmux 通常都用 `Ctrl+T` 和 `Ctrl+W`）。
 
