@@ -28,6 +28,9 @@ pub struct Settings {
     /// serde default resolves to "en".
     #[serde(default = "default_language")]
     pub language: String,
+    /// Check GitHub Releases for updates on startup. serde default: true.
+    #[serde(default = "default_auto_update_check")]
+    pub auto_update_check: bool,
     pub schema_version: u32,
 }
 
@@ -35,6 +38,7 @@ fn default_system_font() -> String { "system-default".into() }
 fn default_system_font_size() -> u32 { 13 }
 fn default_files_font_size() -> u32 { 13 }
 fn default_language() -> String { "en".into() }
+fn default_auto_update_check() -> bool { true }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -106,6 +110,7 @@ mod tests {
             },
             local_shell: None,
             language: "en".into(),
+            auto_update_check: true,
             schema_version: 1,
         }
     }
@@ -181,5 +186,15 @@ mod tests {
         std::fs::write(td.path().join("settings.json"), legacy).unwrap();
         let got = store.load().unwrap().unwrap();
         assert_eq!(got.local_shell, None);
+    }
+
+    #[test]
+    fn load_old_settings_without_auto_update_check_defaults_true() {
+        let td = TempDir::new().unwrap();
+        let store = SettingsStore::open(td.path());
+        let legacy = r#"{"themeId":"warm-minimal","density":"comfortable","systemFont":"system-default","systemFontSize":13,"filesFontSize":13,"terminal":{"fontFamily":"jetbrains-mono","fontSize":13,"cursorStyle":"block"},"schemaVersion":1}"#;
+        std::fs::write(td.path().join("settings.json"), legacy).unwrap();
+        let got = store.load().unwrap().unwrap();
+        assert!(got.auto_update_check);
     }
 }
