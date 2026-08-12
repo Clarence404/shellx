@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Server, Files, Cable, Settings, type LucideIcon } from "lucide-react";
 import { useSessions, type RailView } from "../state/sessions";
 import { useT } from "../i18n";
+import { useUpdater } from "../state/updater";
 
 export type { RailView };
 
@@ -16,6 +17,7 @@ export function ActivityRail() {
   const activeView = useSessions((s) => s.railView);
   const setView = useSessions((s) => s.setRailView);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
+  const updateAvailable = useUpdater((s) => s.status === "available");
   return (
     <nav aria-label="activity rail" style={{
       width: "var(--rail-w)", flexShrink: 0, background: "var(--panel-1)",
@@ -28,16 +30,18 @@ export function ActivityRail() {
           item={item}
           active={activeView === item.id}
           onClick={() => (activeView === item.id ? toggleDrawer() : setView(item.id))}
+          showDot={item.id === "settings" && updateAvailable}
         />
       ))}
     </nav>
   );
 }
 
-function RailButton({ item, active, onClick }: {
+function RailButton({ item, active, onClick, showDot = false }: {
   item: { id: RailView; label: string; Icon: LucideIcon };
   active: boolean;
   onClick: () => void;
+  showDot?: boolean;
 }) {
   const t = useT();
   const [hover, setHover] = useState(false);
@@ -69,7 +73,14 @@ function RailButton({ item, active, onClick }: {
         cursor: "pointer", border: "none",
         transition: "background 120ms ease",
       }}>
-      <Icon size={18} strokeWidth={1.8} />
+      <div style={{ position: "relative", display: "flex" }}>
+        <Icon size={18} strokeWidth={1.8} />
+        {showDot && <span style={{
+          position: "absolute", top: -2, right: -4, width: 7, height: 7,
+          borderRadius: "50%", background: "var(--error)",
+          border: "1.5px solid var(--panel-1)",
+        }} />}
+      </div>
       <span style={{
         // Follows the System font size slider — 2 px smaller than the
         // main chrome so the rail can pack four labels in 64 px width.

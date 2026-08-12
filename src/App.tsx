@@ -16,6 +16,7 @@ import { useHostsStore } from "./state/hosts";
 import { useSettingsStore } from "./state/settings";
 import { useRailFiles } from "./state/railFiles";
 import { useFilesStore } from "./state/files";
+import { useUpdater } from "./state/updater";
 import { SYSTEM_FONT_MAP } from "./types/settings";
 import { useTransfersStore } from "./state/transfers";
 import { closeSession, openConnection } from "./ipc/commands";
@@ -120,7 +121,13 @@ export function App() {
 
   // Load persisted settings once on mount. If none exist, the store's
   // DEFAULT_SETTINGS remain in effect.
-  useEffect(() => { void useSettingsStore.getState().load(); }, []);
+  useEffect(() => {
+    void useSettingsStore.getState().load().then(() => {
+      if (useSettingsStore.getState().autoUpdateCheck) {
+        void useUpdater.getState().check(true);
+      }
+    });
+  }, []);
 
   // Wire the global session:data router. Buffers per-session bytes until a
   // TerminalView subscribes, so a freshly opened tab doesn't lose its

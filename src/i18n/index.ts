@@ -145,6 +145,15 @@ const zh: Record<string, string> = {
   "Local shell": "本地 Shell",
   "Reset all settings to defaults?": "将所有设置恢复为默认值？",
   "Reset to defaults": "恢复默认",
+  "Check for updates": "检查更新",
+  "Checking…": "检查中…",
+  "Up to date": "已是最新版本",
+  "New version available": "发现新版本",
+  "Download & restart": "下载并重启",
+  "Downloading…": "下载中…",
+  "Update check failed": "检查更新失败",
+  "Retry": "重试",
+  "Automatically check for updates": "自动检查更新",
 
   // Trusted servers panel
   "read-only view": "只读展示",
