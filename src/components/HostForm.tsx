@@ -877,7 +877,21 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                   const isEditing = editingRuleId === rule.id;
                   const isExpanded = expandedRuleId === rule.id && !isEditing;
                   const dotColor = rule.bind_all ? "var(--accent)" : ((!rule.isPending && rule.enabled) ? "var(--success)" : "var(--text-3)");
-                  const sshCmd = `ssh -L ${rule.local_port}:${rule.remote_host}:${rule.remote_port} ${username || "<user>"}@${host || "<host>"}`;
+                  // Mirror TunnelsPanel.buildSSHCmd: key file, non-default
+                  // port, and 0.0.0.0 bind prefix — copied command works
+                  // verbatim in plain ssh.
+                  const sshCmd = (() => {
+                    const parts = ["ssh"];
+                    if (authMode === "publickey" && selectedKeyPath) {
+                      parts.push("-i", /\s/.test(selectedKeyPath) ? `"${selectedKeyPath}"` : selectedKeyPath);
+                    }
+                    const p = port.trim();
+                    if (p && p !== "22") parts.push("-p", p);
+                    const bind = rule.bind_all ? "0.0.0.0:" : "";
+                    parts.push("-L", `${bind}${rule.local_port}:${rule.remote_host}:${rule.remote_port}`);
+                    parts.push(`${username || "<user>"}@${host || "<host>"}`);
+                    return parts.join(" ");
+                  })();
                   return (
                     <div key={rule.id} style={{ borderBottom: idx < arr.length - 1 ? "1px solid var(--border)" : "none" }}>
                       {/* Main row — two-line layout */}

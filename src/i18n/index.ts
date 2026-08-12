@@ -176,6 +176,11 @@ const zh: Record<string, string> = {
   "Previous match": "上一个匹配",
   "Next match": "下一个匹配",
 
+  // Host dropdown (Files view)
+  "Pick a host": "选择主机",
+  "No saved hosts yet": "暂无已保存主机",
+  "connect": "连接",
+
   // Misc
   "Loading": "加载中",
   "Connecting": "连接中",

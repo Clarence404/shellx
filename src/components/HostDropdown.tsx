@@ -5,6 +5,7 @@ import { useHostsStore } from "../state/hosts";
 import { useIconSizes } from "../state/settings";
 import type { HostInfo } from "../types/host";
 import type { ConnectionInfo } from "../types/connection";
+import { useT } from "../i18n";
 
 interface Props {
   /** ConnectionId of the currently-picked remote host (may be null). */
@@ -69,6 +70,7 @@ function buildRows(hosts: HostInfo[], sessions: ConnectionInfo[]): Row[] {
 }
 
 export function HostDropdown({ currentHost, fallbackLabel, onSelect, onConnectSavedHost, onNewConnection }: Props) {
+  const t = useT();
   const sessions = useSessions((s) => s.sessions);
   const connecting = useSessions((s) => s.connecting);
   const hosts = useHostsStore((s) => s.hosts);
@@ -93,7 +95,7 @@ export function HostDropdown({ currentHost, fallbackLabel, onSelect, onConnectSa
   const currentSession = sessions.find((s) => s.id === currentHost);
   // Label precedence: live session → saved-host fallback (surviving the
   // 300 ms fade-then-remove window) → generic placeholder.
-  const label = currentSession?.label ?? fallbackLabel ?? "Pick a host";
+  const label = currentSession?.label ?? fallbackLabel ?? t("Pick a host");
   // "closed" badge shows whenever we have a currentHost but no active
   // session — covers both the pre-remove "state==='closed'" window and
   // the fully-purged case (currentSession undefined).
@@ -125,8 +127,10 @@ export function HostDropdown({ currentHost, fallbackLabel, onSelect, onConnectSa
           border: "1px solid var(--border)", borderRadius: 5,
           fontFamily: "\"JetBrains Mono\", var(--font-mono)",
         }}>
-        <Server size={iconSizes.md} color="var(--text-2)" />
-        <span>{label}</span>
+        <Server size={iconSizes.md} color="var(--text-2)" style={{ flexShrink: 0 }} />
+        {/* Same 150px cap as tabs / HOSTS rows so a long label truncates
+            at a consistent point everywhere; full name in the tooltip. */}
+        <span title={label} style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
         {isClosed && (
           <span style={{
             fontSize: 9, textTransform: "uppercase", letterSpacing: 0.6,
@@ -141,13 +145,16 @@ export function HostDropdown({ currentHost, fallbackLabel, onSelect, onConnectSa
       {open && (
         <ul ref={listRef} role="listbox" style={{
           position: "absolute", top: "100%", left: 0, marginTop: 4,
-          minWidth: 220, background: "var(--panel-2)",
+          // Fixed drawer width (220px): labels truncate at the same point
+          // as the HOSTS sidebar instead of stretching or wrapping.
+          width: "var(--drawer-w)", boxSizing: "border-box",
+          background: "var(--panel-2)", margin: 0,
           border: "0.5px solid var(--border)", borderRadius: 6,
           padding: 4, zIndex: 100, listStyle: "none",
         }}>
           {rows.length === 0 && (
             <li style={{ padding: "6px 10px", fontSize: 11, color: "var(--text-3)" }}>
-              No saved hosts yet
+              {t("No saved hosts yet")}
             </li>
           )}
           {rows.map((row) => {
@@ -171,9 +178,9 @@ export function HostDropdown({ currentHost, fallbackLabel, onSelect, onConnectSa
                   opacity: isActive ? 1 : (isConnecting ? 1 : 0.3),
                   animation: isConnecting ? "hostrow-pulse 900ms ease-in-out infinite" : undefined,
                 }} />
-                <span style={{ flex: 1 }}>{row.label}</span>
+                <span title={row.label} style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.label}</span>
                 {!row.session && (
-                  <span style={{ fontSize: 9, color: "var(--text-3)" }}>connect</span>
+                  <span style={{ fontSize: 9, color: "var(--text-3)", flexShrink: 0 }}>{t("connect")}</span>
                 )}
               </li>
             );
@@ -188,7 +195,7 @@ export function HostDropdown({ currentHost, fallbackLabel, onSelect, onConnectSa
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--border)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
           >
-            <Plus size={iconSizes.sm} /> New connection
+            <Plus size={iconSizes.sm} /> {t("New connection")}
           </li>
         </ul>
       )}

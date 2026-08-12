@@ -271,9 +271,20 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
 
   // ---- SSH cmd helper -------------------------------------------------------
 
+  // Faithful equivalent of what shellx opens: key file when the host uses
+  // key auth, -p for non-default ports, and the 0.0.0.0 bind prefix when
+  // LAN sharing is on — so the copied command works verbatim in plain ssh.
   function buildSSHCmd(rule: TunnelRule) {
-    const userHost = hostInfo ? `${hostInfo.username}@${hostInfo.host}` : "<user@host>";
-    return `ssh -L ${rule.local_port}:${rule.remote_host}:${rule.remote_port} ${userHost}`;
+    const parts = ["ssh"];
+    if (hostInfo?.auth_method === "publickey" && hostInfo.key_path) {
+      const kp = hostInfo.key_path;
+      parts.push("-i", /\s/.test(kp) ? `"${kp}"` : kp);
+    }
+    if (hostInfo && hostInfo.port !== 22) parts.push("-p", String(hostInfo.port));
+    const bind = rule.bind_all ? "0.0.0.0:" : "";
+    parts.push("-L", `${bind}${rule.local_port}:${rule.remote_host}:${rule.remote_port}`);
+    parts.push(hostInfo ? `${hostInfo.username}@${hostInfo.host}` : "<user@host>");
+    return parts.join(" ");
   }
 
   // ---- Pointer-based drag-and-drop ------------------------------------------
