@@ -217,8 +217,10 @@ export function TabBar({
               opacity: t.state === "closed" ? 0.4 : 1,
             }} />
             {/* Cap tab width so one long host label can't monopolize the
-                strip; full name lives in the tooltip. The × never shrinks. */}
-            <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>
+                strip; full name lives in the tooltip. The × never shrinks.
+                150px ≈ the text width of a HOSTS drawer row, so tab and
+                sidebar truncate a long label at the same point. */}
+            <span style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis" }}>
               {t.title}
             </span>
             <span
