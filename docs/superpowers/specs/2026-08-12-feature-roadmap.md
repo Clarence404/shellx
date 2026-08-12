@@ -1,57 +1,46 @@
 # shellx Feature Roadmap — v0.14 → v1.0
 
-Status: approved 2026-08-12, revised same day — -R/-D forwarding dropped
-from the near-term plan (no real-world demand from the owner's workflow;
-deferred until a concrete need appears). One main course per release,
-alternating product features with open-source launch infrastructure. Each
-release is an independently shippable cycle following the repo's branch →
-verify → merge → tag workflow.
+Status: approved 2026-08-12, revised same day — -R/-D forwarding and jump
+host (ProxyJump) both dropped from the near-term plan (no real-world demand
+from the owner's workflow; deferred until a concrete need appears). One
+main course per release. Each release is an independently shippable cycle
+following the repo's branch → verify → merge → tag workflow.
 
 ## Goals
 
-1. Cover the owner's daily high-frequency needs: jump hosts, command
-   snippets, serial debugging.
-2. Build the open-source launch foundation in parallel: onboarding
-   (ssh-config import), retention (auto-update), trust (signing, docs).
+1. Cover the owner's daily high-frequency needs: command snippets, serial
+   debugging.
+2. Build the open-source launch foundation: retention (auto-update),
+   onboarding (ssh-config import), trust (signing, docs).
 
 ## Release plan
 
-### v0.14 — Jump host (ProxyJump)
-
-- `hosts` gains `jump_host_id` (nullable FK to another saved host).
-- Connect chain: connect to the jump host, then open `direct-tcpip` to the
-  target and run the SSH handshake through it (russh supports channel
-  streams as transport). One jump level in v0.14; chains later if needed.
-- UI: Basic tab gains a "Jump host" picker (saved hosts list, none by
-  default). Import/export understands `-J user@host[:port]`.
-- Cycle detection: a host cannot (transitively) jump through itself.
-- Rationale for going first: the only selected capability where absence
-  means some machines are unreachable — daily necessity on layered
-  corporate networks.
-
-### v0.15 — ssh-config import + config export
-
-- Import `~/.ssh/config`: Host blocks → saved hosts (HostName, User, Port,
-  IdentityFile, ProxyJump maps onto v0.14's jump_host_id). Conflict
-  strategy: skip existing labels, report a summary.
-- Export/import shellx config as a JSON bundle: hosts, tunnel rules,
-  settings, snippets (when they exist). Passwords/passphrases stay in the
-  OS keychain and are explicitly NOT exported; the bundle marks which
-  hosts had stored secrets so the importer can prompt.
-- Rationale: the first thing a new open-source user does is migrate
-  existing hosts — first-impression feature; export doubles as machine
-  migration. Landing right after jump hosts means imported ProxyJump
-  entries work immediately.
-
-### v0.16 — Auto-update
+### v0.14 — Auto-update
 
 - tauri-plugin-updater against GitHub Releases; updater signing keypair
   generated and the public key baked into tauri.conf.json.
 - Release workflow uploads `.sig` + `latest.json` artifacts.
 - Settings → About: current version, check-for-updates button,
   install-on-restart flow. Opt-out toggle.
+- Rationale for going first: pure infrastructure with no schema changes,
+  and every release after it reaches users automatically — the earlier it
+  ships, the more releases benefit.
 
-### v0.17 — Command snippets
+### v0.15 — ssh-config import + config export
+
+- Import `~/.ssh/config`: Host blocks → saved hosts (HostName, User, Port,
+  IdentityFile). Entries using ProxyJump import as plain hosts with a
+  warning (jump chains are out of scope). Conflict strategy: skip existing
+  labels, report a summary.
+- Export/import shellx config as a JSON bundle: hosts, tunnel rules,
+  settings, snippets (when they exist). Passwords/passphrases stay in the
+  OS keychain and are explicitly NOT exported; the bundle marks which
+  hosts had stored secrets so the importer can prompt.
+- Rationale: the first thing a new open-source user does is migrate
+  existing hosts — first-impression feature; export doubles as machine
+  migration.
+
+### v0.16 — Command snippets
 
 - SQLite `snippets` table: label, body (multi-line), sort order.
 - `${placeholder}` variables prompt on send; sends to the active terminal
@@ -59,7 +48,7 @@ verify → merge → tag workflow.
 - Surfaces: command palette entries and a snippets popover in the terminal
   toolbar; per-snippet "send on connect" flag deferred.
 
-### v0.18 — Serial terminal
+### v0.17 — Serial terminal
 
 - Backend: serialport-rs transport implementing the existing transport
   trait; device enumeration IPC (COM ports / ttyUSB).
@@ -80,17 +69,19 @@ verify → merge → tag workflow.
 
 ## Sequencing rationale
 
-- Jump host goes first: the only capability whose absence makes machines
-  unreachable — connectivity beats convenience.
-- ssh-config import follows immediately so imported ProxyJump entries are
-  functional on day one; it is also the open-source first impression.
-- Auto-update lands after the first user-facing wave (v0.15 brings the
-  first migrants) and before the later features, so users stop manually
-  reinstalling from v0.16 on.
-- Serial closes the feature tier as the largest single scope.
+- Auto-update goes first: no schema risk, and every subsequent release
+  reaches users without manual reinstalls — maximum compounding benefit.
+- ssh-config import is the open-source first impression and lands before
+  the crowd arrives.
+- Snippets before serial: serial is the largest single scope (new
+  transport + new config surface) and closes the feature tier.
 
 ## Out of scope (revisit after v1.0)
 
+- Jump host (ProxyJump) — dropped 2026-08-12: the owner's machines are
+  directly reachable; revisit when a layered-network need actually
+  appears (design sketch: hosts.jump_host_id FK + direct-tcpip chained
+  handshake, one level).
 - `-R` remote / `-D` dynamic (SOCKS) forwarding — dropped 2026-08-12: no
   real-world demand in the owner's workflow; the completeness argument
   alone doesn't justify the slot. Revisit if a concrete need appears
