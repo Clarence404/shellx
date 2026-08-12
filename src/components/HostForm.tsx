@@ -181,6 +181,29 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   function handleParseImport() {
     const parsed = parseSSHImport(importCmd);
     setImportParsed(parsed.length > 0 ? parsed : []);
+
+    // Also lift the connection target out of the command onto the Basic
+    // tab: `user@host` fills Username + Host, `-p N` fills Port. The
+    // pasted command is authoritative, so non-empty parses overwrite.
+    const target = importCmd.match(/(?:^|\s)([A-Za-z0-9._-]+)@([A-Za-z0-9.:_-]+)(?=\s|$)/);
+    if (target) {
+      setUsername(target[1]);
+      setHost(target[2]);
+    }
+    const portFlag = importCmd.match(/(?:^|\s)-p\s+(\d{1,5})(?=\s|$)/);
+    if (portFlag) setPort(portFlag[1]);
+
+    // `-i <identity file>` switches auth to key-file and selects that key.
+    // The path may be quoted (spaces) or a bare token (Windows backslashes
+    // included); the picker shows non-discovered paths as an external chip.
+    const identity = importCmd.match(/(?:^|\s)-i\s+(?:"([^"]+)"|'([^']+)'|(\S+))/);
+    if (identity) {
+      const keyPath = identity[1] ?? identity[2] ?? identity[3];
+      if (keyPath) {
+        setAuthMode("publickey");
+        setSelectedKeyPath(keyPath);
+      }
+    }
   }
 
   async function handleImportAdd() {
@@ -415,6 +438,15 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     }
   }
 
+  // Port must be a whole number in 1..=65535 — anything else blocks save.
+  const portInvalid = (() => {
+    const s = port.trim();
+    if (!s) return false; // emptiness is the Required check's job
+    if (!/^\d+$/.test(s)) return true;
+    const n = parseInt(s, 10);
+    return n < 1 || n > 65535;
+  })();
+
   const primaryLabel = mode === "edit"
     ? t("Save")
     : (saveHost ? t("Save & Connect") : t("Connect"));
@@ -443,7 +475,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
           onClick={() => setSelectedKeyPath(null)}
           style={{ background: "none", border: "none", cursor: "pointer", padding: 0,
             color: "inherit", fontSize: 13, lineHeight: 1 }}
-          title="取消选择"
+          title={t("Deselect")}
         >×</button>
       </div>
     ) : null;
@@ -634,9 +666,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
       {tab === "basic" && (
         <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
           <Field label={t("Label")} value={label} onChange={setLabel} placeholder={t("auto-fills as user@host")} maxLength={60} />
-          <Field label={t("Host")} value={host} onChange={setHost} placeholder="192.168.1.10 / example.com" />
-          <Field label={t("Port")} value={port} onChange={setPort} placeholder="22" />
-          <Field label={t("Username")} value={username} onChange={setUsername} placeholder="root" />
+          <Field label={t("Host")} value={host} onChange={setHost} placeholder="192.168.1.10 / example.com" required />
+          <Field label={t("Port")} value={port} onChange={setPort} placeholder="22" required
+            errorText={portInvalid ? t("Port must be 1–65535") : undefined} />
+          <Field label={t("Username")} value={username} onChange={setUsername} placeholder="root" required />
 
           {/* Auth method segmented switch */}
           <div style={{ display: "flex", gap: 4 }}>
@@ -992,7 +1025,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
           </button>
           <button
             type="submit"
-            disabled={busy || !host || !username}
+            disabled={busy || !host.trim() || !username.trim() || !port.trim() || portInvalid}
             style={{
               flex: 1, padding: "6px 10px", borderRadius: 5,
               background: "var(--accent)", color: "var(--text-on-accent)",
@@ -1008,29 +1041,46 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
 }
 
 function Field({
-  label, value, onChange, type = "text", placeholder, maxLength,
+  label, value, onChange, type = "text", placeholder, maxLength, required, errorText,
 }: {
   label: string; value: string; onChange: (v: string) => void;
   type?: string; placeholder?: string; maxLength?: number;
+  /** Marks the label with * and shows a "Required" hint once the field
+   *  has been touched and left empty. */
+  required?: boolean;
+  /** Extra validation message from the parent (e.g. port out of range);
+   *  shown once the field has been touched. */
+  errorText?: string;
 }) {
+  const t = useT();
+  const [touched, setTouched] = useState(false);
+  const missing = !!required && touched && value.trim() === "";
+  const err = missing ? t("Required") : (touched ? errorText : undefined);
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span style={{
         fontSize: 11, color: "var(--text-1)", fontWeight: 500,
         textTransform: "uppercase", letterSpacing: 0.8,
-      }}>{label}</span>
+      }}>
+        {label}
+        {required && <span style={{ color: "var(--error)" }}> *</span>}
+      </span>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={() => setTouched(true)}
         placeholder={placeholder}
         maxLength={maxLength}
+        aria-invalid={!!err}
         style={{
-          background: "var(--panel-1)", border: "1px solid var(--border)",
+          background: "var(--panel-1)",
+          border: err ? "1px solid var(--error)" : "1px solid var(--border)",
           borderRadius: 4, padding: "6px 8px", fontSize: 12,
           color: "var(--text-1)",
         }}
       />
+      {err && <span style={{ fontSize: 10, color: "var(--error)" }}>{err}</span>}
     </label>
   );
 }
