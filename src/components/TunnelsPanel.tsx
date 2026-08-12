@@ -289,7 +289,16 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       const hit = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
       const row = hit?.closest<HTMLElement>("[data-rule-id]");
       const targetId = row?.dataset.ruleId ?? null;
-      if (!targetId || targetId === srcId || targetId === lastDragTarget.current) return;
+      if (!targetId) return;
+      if (targetId === srcId) {
+        // Pointer is back over the dragged row (its new slot after a swap).
+        // Re-arm the guard so the row we just swapped with can become a
+        // target again — otherwise dragging back is dead.
+        lastDragTarget.current = null;
+        setDragOverId(null);
+        return;
+      }
+      if (targetId === lastDragTarget.current) return;
       lastDragTarget.current = targetId;
       setDragOverId(targetId);
       // Snapshot current positions before React reorders the DOM (for FLIP).
