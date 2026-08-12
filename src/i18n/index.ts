@@ -64,6 +64,7 @@ const zh: Record<string, string> = {
     "删除已保存的密码，下次连接需要重新输入。",
   "(Password storage unavailable on this system)": "（当前系统不支持密码存储）",
   "Browse…": "浏览…",
+  "Deselect": "取消选择",
   "Filter…": "筛选…",
   "Save this host": "保存此主机",
   "Save": "保存",

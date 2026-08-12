@@ -192,6 +192,18 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     }
     const portFlag = importCmd.match(/(?:^|\s)-p\s+(\d{1,5})(?=\s|$)/);
     if (portFlag) setPort(portFlag[1]);
+
+    // `-i <identity file>` switches auth to key-file and selects that key.
+    // The path may be quoted (spaces) or a bare token (Windows backslashes
+    // included); the picker shows non-discovered paths as an external chip.
+    const identity = importCmd.match(/(?:^|\s)-i\s+(?:"([^"]+)"|'([^']+)'|(\S+))/);
+    if (identity) {
+      const keyPath = identity[1] ?? identity[2] ?? identity[3];
+      if (keyPath) {
+        setAuthMode("publickey");
+        setSelectedKeyPath(keyPath);
+      }
+    }
   }
 
   async function handleImportAdd() {
@@ -463,7 +475,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
           onClick={() => setSelectedKeyPath(null)}
           style={{ background: "none", border: "none", cursor: "pointer", padding: 0,
             color: "inherit", fontSize: 13, lineHeight: 1 }}
-          title="取消选择"
+          title={t("Deselect")}
         >×</button>
       </div>
     ) : null;
