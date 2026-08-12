@@ -57,6 +57,8 @@ directories = "5"
 keyring = "3"
 tauri-plugin-dialog = "2"
 dirs = "5"
+tauri-plugin-updater = "2.10.1"
+tauri-plugin-process = "2.3.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
