@@ -134,6 +134,21 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     });
     ro.observe(hostRef.current);
 
+    // Re-announce terminal dimensions on demand. When a shell is opened
+    // late onto an existing session (host switched from tunnels-only to a
+    // terminal mode), the PTY starts at the backend default 80x24; the
+    // container size hasn't changed so no ResizeObserver tick fires. The
+    // dispatcher (ConnectDialog) fires this event after open_shell so the
+    // PTY picks up the real cols/rows immediately.
+    const onRefit = (ev: Event) => {
+      const id = (ev as CustomEvent<string>).detail;
+      if (id !== sessionId || !termRef.current) return;
+      try { fitRef.current?.fit(); } catch { /* renderer not ready */ }
+      const tm = termRef.current;
+      void resizeSession(sessionId, tm.cols, tm.rows);
+    };
+    window.addEventListener("shellx:refit", onRefit);
+
     // Wire incoming data via the global session:data router. Bytes that
     // arrived before this TerminalView mounted are replayed synchronously
     // inside `subscribeSession` — no more "fresh tab is blank until you
@@ -166,6 +181,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       dataDisp.dispose();
       resizeDisp.dispose();
       ro.disconnect();
+      window.removeEventListener("shellx:refit", onRefit);
       unlistenData();
       unlistenClosed?.();
       termRef.current = null;
