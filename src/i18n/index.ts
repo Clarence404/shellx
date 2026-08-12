@@ -118,7 +118,7 @@ const zh: Record<string, string> = {
   "Default (system shell)": "默认（系统 shell）",
   "Custom path…": "自定义路径…",
   "About": "关于",
-  "Trusted servers": "信任的服务器",
+  "Known hosts": "受信主机",
   "Advanced": "高级",
   "Language": "语言",
   "UI language": "界面语言",
