@@ -382,7 +382,9 @@ function PlusMenu({
       role="menu"
       style={{
         position: "fixed", top, left,
-        minWidth: 240, maxWidth: 320,
+        // Same width as the HOSTS drawer so quick-connect labels truncate
+        // at the same point as the host list rows.
+        width: "var(--drawer-w)", boxSizing: "border-box",
         background: "var(--panel-2)", border: "0.5px solid var(--border)",
         borderRadius: 6, padding: 4, zIndex: 300,
         boxShadow: "0 8px 24px rgba(0,0,0,0.4)",

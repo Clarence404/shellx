@@ -17,7 +17,7 @@ export function TrustedServersPanel() {
     }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>
-          {t("Trusted servers")}
+          {t("Known hosts")}
         </div>
         <div style={{ fontSize: 11, color: "var(--text-3)" }}>
           ~/.ssh/known_hosts · {t("read-only view")}
