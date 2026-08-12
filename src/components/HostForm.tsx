@@ -181,6 +181,17 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   function handleParseImport() {
     const parsed = parseSSHImport(importCmd);
     setImportParsed(parsed.length > 0 ? parsed : []);
+
+    // Also lift the connection target out of the command onto the Basic
+    // tab: `user@host` fills Username + Host, `-p N` fills Port. The
+    // pasted command is authoritative, so non-empty parses overwrite.
+    const target = importCmd.match(/(?:^|\s)([A-Za-z0-9._-]+)@([A-Za-z0-9.:_-]+)(?=\s|$)/);
+    if (target) {
+      setUsername(target[1]);
+      setHost(target[2]);
+    }
+    const portFlag = importCmd.match(/(?:^|\s)-p\s+(\d{1,5})(?=\s|$)/);
+    if (portFlag) setPort(portFlag[1]);
   }
 
   async function handleImportAdd() {
