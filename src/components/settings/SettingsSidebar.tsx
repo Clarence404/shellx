@@ -1,9 +1,9 @@
-import { Palette, Info, Wrench, Shield, type LucideIcon } from "lucide-react";
+import { Palette, Info, Wrench, Shield, Keyboard, type LucideIcon } from "lucide-react";
 import { useSettingsStore, useIconSizes } from "../../state/settings";
 import { SectionHeader } from "../SectionHeader";
 import { useT } from "../../i18n";
 
-type Section = "appearance" | "about" | "trusted-servers";
+type Section = "appearance" | "shortcuts" | "about" | "trusted-servers";
 
 interface Props {
   active: Section;
@@ -48,6 +48,8 @@ export function SettingsSidebar({ active, onSelect }: Props) {
       <SectionHeader label={t("Settings")} />
       <Row id="appearance" label={t("Appearance")} Icon={Palette}
         onClick={() => onSelect("appearance")} />
+      <Row id="shortcuts" label={t("Shortcuts")} Icon={Keyboard}
+        onClick={() => onSelect("shortcuts")} />
       <Row id="about" label={t("About")} Icon={Info}
         onClick={() => onSelect("about")} />
       <Row id="trusted-servers" label={t("Known hosts")} Icon={Shield}

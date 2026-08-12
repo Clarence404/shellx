@@ -157,6 +157,22 @@ const zh: Record<string, string> = {
   "to search.": "搜索。",
   "to open a saved host": "打开已保存的主机",
 
+  // Shortcuts
+  "Shortcuts": "快捷键",
+  "Keyboard shortcuts": "键盘快捷键",
+  "Shortcuts are fixed in this version — customization is planned.":
+    "本版本快捷键为固定配置，自定义功能在计划中。",
+  "New tab": "新建标签页",
+  "Next tab": "下一个标签页",
+  "Previous tab": "上一个标签页",
+  "Command palette": "命令面板",
+  "Toggle sidebar": "收起/展开侧栏",
+  "Search in terminal": "终端内搜索",
+  "On macOS, Cmd+T / Cmd+W also work for tabs.": "macOS 上标签页也可用 Cmd+T / Cmd+W。",
+  "Search": "搜索",
+  "Previous match": "上一个匹配",
+  "Next match": "下一个匹配",
+
   // Misc
   "Loading": "加载中",
   "Connecting": "连接中",

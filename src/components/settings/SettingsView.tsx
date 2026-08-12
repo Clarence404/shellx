@@ -3,8 +3,9 @@ import { SettingsSidebar } from "./SettingsSidebar";
 import { AppearancePanel } from "./AppearancePanel";
 import { AboutPanel } from "./AboutPanel";
 import { TrustedServersPanel } from "./TrustedServersPanel";
+import { ShortcutsPanel } from "./ShortcutsPanel";
 
-type Section = "appearance" | "about" | "trusted-servers";
+type Section = "appearance" | "shortcuts" | "about" | "trusted-servers";
 
 export function SettingsView() {
   const [section, setSection] = useState<Section>("appearance");
@@ -13,6 +14,7 @@ export function SettingsView() {
       style={{ height: "100%", display: "flex", background: "var(--panel-2)" }}>
       <SettingsSidebar active={section} onSelect={setSection} />
       {section === "appearance" && <AppearancePanel />}
+      {section === "shortcuts" && <ShortcutsPanel />}
       {section === "about" && <AboutPanel />}
       {section === "trusted-servers" && <TrustedServersPanel />}
     </div>

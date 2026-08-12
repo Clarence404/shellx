@@ -1,19 +1,48 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { SearchAddon } from "@xterm/addon-search";
+import { ChevronUp, ChevronDown, X } from "lucide-react";
 import "@xterm/xterm/css/xterm.css";
 import { onSessionClosed } from "../ipc/events";
 import { subscribeSession } from "../state/sessionStream";
 import { writeSessionInput, resizeSession } from "../ipc/commands";
 import type { SessionId } from "../types/session";
 import { useSettingsStore } from "../state/settings";
+import { useSessions } from "../state/sessions";
 import { FONT_MAP } from "../types/settings";
+import { useT } from "../i18n";
 
 export function TerminalView({ sessionId }: { sessionId: SessionId }) {
+  const t = useT();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const terminal = useSettingsStore((s) => s.terminal);
+
+  function openSearch() {
+    setSearchOpen(true);
+    // Focus after the bar renders.
+    setTimeout(() => searchInputRef.current?.select(), 0);
+  }
+
+  function closeSearch() {
+    setSearchOpen(false);
+    searchRef.current?.clearDecorations();
+    termRef.current?.focus();
+  }
+
+  function findNext(q: string) {
+    if (q) searchRef.current?.findNext(q);
+  }
+
+  function findPrev(q: string) {
+    if (q) searchRef.current?.findPrevious(q);
+  }
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -75,9 +104,34 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+    const search = new SearchAddon();
+    term.loadAddon(search);
     term.open(hostRef.current);
     termRef.current = term;
     fitRef.current = fit;
+    searchRef.current = search;
+
+    // Ctrl+Shift+F opens the scrollback search bar. Intercepted at the
+    // xterm level so it works while the terminal has keyboard focus
+    // (returning false stops xterm from forwarding it to the shell).
+    term.attachCustomKeyEventHandler((ev) => {
+      if (ev.type === "keydown" && ev.ctrlKey && ev.shiftKey && (ev.key === "F" || ev.key === "f")) {
+        openSearch();
+        return false;
+      }
+      return true;
+    });
+
+    // Same shortcut at window level for when the terminal is visible but
+    // not focused. Guarded to the active tab so only one bar opens.
+    const onGlobalKey = (ev: KeyboardEvent) => {
+      if (!(ev.ctrlKey && ev.shiftKey && (ev.key === "F" || ev.key === "f"))) return;
+      if (useSessions.getState().activeId !== sessionId) return;
+      if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
+      ev.preventDefault();
+      openSearch();
+    };
+    window.addEventListener("keydown", onGlobalKey);
 
     // v0.5.7 stale-prompt fix: DON'T fit or write incoming bytes yet
     // if the container has 0-size (typical case: a session was just
@@ -182,10 +236,12 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       resizeDisp.dispose();
       ro.disconnect();
       window.removeEventListener("shellx:refit", onRefit);
+      window.removeEventListener("keydown", onGlobalKey);
       unlistenData();
       unlistenClosed?.();
       termRef.current = null;
       fitRef.current = null;
+      searchRef.current = null;
       term.dispose();
     };
   }, [sessionId]);
@@ -209,16 +265,61 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
   }, [terminal.fontFamily, terminal.fontSize, terminal.cursorStyle]);
 
   return (
-    <div
-      ref={hostRef}
-      // Background matches xterm's own theme.background (#1e1c24) rather
-      // than var(--panel-2). Under the light theme --panel-2 is #ffffff,
-      // which turns the 8px padding into a bright white gutter around
-      // the dark terminal — inconsistent with how the same padding
-      // reads as "extended dark bezel" in dark themes. Pinning it to
-      // the terminal palette's own background keeps the visual gap
-      // between drawer/toolbar and rendered text identical everywhere.
-      style={{ width: "100%", height: "100%", padding: 8, background: "#1e1c24" }}
-    />
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      <div
+        ref={hostRef}
+        // Background matches xterm's own theme.background (#1e1c24) rather
+        // than var(--panel-2). Under the light theme --panel-2 is #ffffff,
+        // which turns the 8px padding into a bright white gutter around
+        // the dark terminal — inconsistent with how the same padding
+        // reads as "extended dark bezel" in dark themes. Pinning it to
+        // the terminal palette's own background keeps the visual gap
+        // between drawer/toolbar and rendered text identical everywhere.
+        style={{ width: "100%", height: "100%", padding: 8, background: "#1e1c24", boxSizing: "border-box" }}
+      />
+      {searchOpen && (
+        <div style={{
+          position: "absolute", top: 8, right: 20, zIndex: 20,
+          display: "flex", alignItems: "center", gap: 4,
+          background: "var(--panel-2)", border: "1px solid var(--border)",
+          borderRadius: 6, padding: "4px 6px",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+        }}>
+          <input
+            ref={searchInputRef}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              // Incremental: extend the current match instead of jumping.
+              if (e.target.value) searchRef.current?.findNext(e.target.value, { incremental: true });
+              else searchRef.current?.clearDecorations();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.shiftKey) findPrev(query);
+              else if (e.key === "Enter") findNext(query);
+              else if (e.key === "Escape") closeSearch();
+            }}
+            placeholder={t("Search")}
+            style={{
+              width: 180, fontSize: 12, padding: "3px 6px",
+              background: "var(--panel-1)", border: "1px solid var(--border)",
+              borderRadius: 4, color: "var(--text-1)", outline: "none",
+            }}
+          />
+          <button onClick={() => findPrev(query)} title={t("Previous match") + " (Shift+Enter)"}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-2)", padding: 3, display: "flex", borderRadius: 3 }}>
+            <ChevronUp size={14} />
+          </button>
+          <button onClick={() => findNext(query)} title={t("Next match") + " (Enter)"}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-2)", padding: 3, display: "flex", borderRadius: 3 }}>
+            <ChevronDown size={14} />
+          </button>
+          <button onClick={closeSearch} title={t("Close") + " (Esc)"}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-2)", padding: 3, display: "flex", borderRadius: 3 }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
