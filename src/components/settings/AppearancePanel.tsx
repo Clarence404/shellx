@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Folder, File as FileIcon, FileCode, FileJson } from "lucide-react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useSettingsStore } from "../../state/settings";
 import { listAvailableShells, type ShellOption } from "../../ipc/local_pty";
 import {
@@ -213,16 +214,26 @@ const CUSTOM_OPTION: ShellOption = { label: "Custom path…", value: "__custom__
 function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const t = useT();
   const [presets, setPresets] = useState<ShellOption[]>([]);
+  const [showCustom, setShowCustom] = useState(false);
 
   useEffect(() => {
     listAvailableShells().then((shells) => {
-      setPresets([{ label: "Default (system shell)", value: "" }, ...shells, CUSTOM_OPTION]);
+      const all: ShellOption[] = [
+        { label: "Default (system shell)", value: "" },
+        ...shells,
+        CUSTOM_OPTION,
+      ];
+      setPresets(all);
+      // If the saved value isn't a known preset, open custom input automatically.
+      const known = all.filter(p => p.value !== "__custom__").map(p => p.value);
+      if (value !== "" && !known.includes(value)) setShowCustom(true);
     });
   }, []);
 
-  const isPreset = presets.some((p) => p.value === value);
-  const selectValue = isPreset ? value : (presets.length > 0 ? "__custom__" : "");
-  const isCustom = selectValue === "__custom__";
+  const knownValues = presets.filter(p => p.value !== "__custom__").map(p => p.value);
+  const selectValue = (showCustom || (!knownValues.includes(value) && presets.length > 0))
+    ? "__custom__"
+    : value;
 
   const inputStyle = {
     width: "100%", padding: "4px 8px",
@@ -238,8 +249,12 @@ function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: st
       <select
         value={selectValue}
         onChange={(e) => {
-          if (e.target.value !== "__custom__") onChange(e.target.value);
-          else onChange(value && !isPreset ? value : "");
+          if (e.target.value === "__custom__") {
+            setShowCustom(true);
+          } else {
+            setShowCustom(false);
+            onChange(e.target.value);
+          }
         }}
         style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}
         disabled={presets.length === 0}
@@ -248,17 +263,47 @@ function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: st
           <option key={p.value} value={p.value}>{t(p.label)}</option>
         ))}
       </select>
-      {isCustom && (
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="/usr/bin/zsh or C:\path\to\shell.exe"
-          style={inputStyle}
-        />
+      {showCustom && (
+        <div style={{ display: "flex", gap: 4 }}>
+          <input
+            autoFocus
+            type="text"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="C:\path\to\shell.exe"
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <button
+            type="button"
+            title={t("Browse…")}
+            onClick={async () => {
+              const selected = await openDialog({
+                multiple: false,
+                filters: [
+                  { name: "Executable", extensions: ["exe", "cmd", "bat", "*"] },
+                ],
+              });
+              if (typeof selected === "string" && selected) onChange(selected);
+            }}
+            style={{
+              padding: "4px 8px",
+              background: "var(--panel-3, var(--panel-2))",
+              border: "0.5px solid var(--border)",
+              borderRadius: 4,
+              color: "var(--text-1)",
+              fontSize: "var(--font-ui-size)",
+              fontFamily: "var(--font-ui)",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            {t("Browse…")}
+          </button>
+        </div>
       )}
       <div style={{ fontSize: FS_META, color: "var(--text-3)" }}>
-        {isCustom
+        {showCustom
           ? t("Enter the full path to your shell executable.")
           : t("Applies to all new local terminal tabs.")}
       </div>
