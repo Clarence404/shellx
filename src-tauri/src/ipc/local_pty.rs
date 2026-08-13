@@ -44,8 +44,17 @@ fn resolve_shell(shell: &str) -> String {
                 format!("{}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", sysroot)
             }
             "wsl.exe" | "wsl" => format!("{}\\System32\\wsl.exe", sysroot),
-            // pwsh.exe (PS7), bash, zsh, fish — location varies; pass through
-            // and let the OS search PATH (will fail gracefully if not installed).
+            "pwsh.exe" | "pwsh" => {
+                // PowerShell 7 is typically in Program Files, not System32.
+                let pf = std::env::var("ProgramFiles")
+                    .unwrap_or_else(|_| "C:\\Program Files".into());
+                let candidate = format!("{}\\PowerShell\\7\\pwsh.exe", pf);
+                if std::path::Path::new(&candidate).exists() {
+                    candidate
+                } else {
+                    shell.to_string()
+                }
+            }
             _ => shell.to_string(),
         }
     }

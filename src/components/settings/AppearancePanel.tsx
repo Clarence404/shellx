@@ -207,17 +207,24 @@ export function AppearancePanel() {
   );
 }
 
-const SHELL_PRESETS = [
-  { label: "Default (system shell)", value: "" },
-  { label: "Command Prompt (cmd.exe)", value: "cmd.exe" },
-  { label: "PowerShell 5 (powershell.exe)", value: "powershell.exe" },
-  { label: "PowerShell 7 (pwsh.exe)", value: "pwsh.exe" },
-  { label: "WSL (wsl.exe)", value: "wsl.exe" },
-  { label: "Bash", value: "bash" },
-  { label: "Zsh", value: "zsh" },
-  { label: "Fish", value: "fish" },
-  { label: "Custom path…", value: "__custom__" },
-];
+const IS_WINDOWS = navigator.platform.toLowerCase().startsWith("win");
+
+const SHELL_PRESETS = IS_WINDOWS
+  ? [
+      { label: "Default (system shell)", value: "" },
+      { label: "Command Prompt (cmd.exe)", value: "cmd.exe" },
+      { label: "PowerShell 5 (powershell.exe)", value: "powershell.exe" },
+      { label: "PowerShell 7 (pwsh.exe)", value: "pwsh.exe" },
+      { label: "WSL (wsl.exe)", value: "wsl.exe" },
+      { label: "Custom path…", value: "__custom__" },
+    ]
+  : [
+      { label: "Default (system shell)", value: "" },
+      { label: "Bash", value: "bash" },
+      { label: "Zsh", value: "zsh" },
+      { label: "Fish", value: "fish" },
+      { label: "Custom path…", value: "__custom__" },
+    ];
 
 function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const t = useT();
