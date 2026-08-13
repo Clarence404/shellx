@@ -90,6 +90,11 @@ following the repo's branch → verify → merge → tag workflow.
 - Multi-session broadcast, Zmodem (rz/sz), session recording/logging,
   SFTP remote-edit-with-local-editor, host groups/folders, settings sync
   over network.
+- Session monitor tab — 2026-08-13: a "监控" third tab alongside 终端/文件
+  in the SSH session view, showing live CPU / memory / disk / network
+  sparklines sampled via SSH (`/proc/stat`, `free`, `/proc/net/dev`) on a
+  configurable interval, pushed to the frontend as Tauri events. Only
+  visible for SSH sessions (not local/serial). Branch: `feat/session-monitor`.
 
 ## Process
 
