@@ -56,16 +56,42 @@ jobs:
         with:
           script: |
             const tag = context.payload.inputs?.tag || context.ref.replace('refs/tags/', '');
-            const { data } = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: tag,
-              name: `shellx ${tag}`,
-              body: process.env.RELEASE_BODY,
-              draft: false,
-              prerelease: false,
-            });
-            core.setOutput('id', data.id);
+            let releaseId;
+            try {
+              const { data } = await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                name: `shellx ${tag}`,
+                body: process.env.RELEASE_BODY,
+                draft: false,
+                prerelease: false,
+              });
+              releaseId = data.id;
+            } catch (err) {
+              if (err.status === 422) {
+                // Release already exists (e.g. re-run after a partial failure).
+                // Fetch the existing ID and update its body so re-runs stay idempotent.
+                const { data: existing } = await github.rest.repos.getReleaseByTag({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag: tag,
+                });
+                await github.rest.repos.updateRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: existing.id,
+                  name: `shellx ${tag}`,
+                  body: process.env.RELEASE_BODY,
+                  draft: false,
+                  prerelease: false,
+                });
+                releaseId = existing.id;
+              } else {
+                throw err;
+              }
+            }
+            core.setOutput('id', releaseId);
 
   # Platform builds — run in parallel after the release is created.
   # Each uploads its installer artifact to the existing release.
