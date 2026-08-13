@@ -10,6 +10,10 @@ interface UpdaterState {
   notes: string | null;
   /** 0..1 while downloading; stays 0 when total size unknown. */
   progress: number;
+  /** Bytes received so far; updated on every Progress event. */
+  received: number;
+  /** Total bytes; 0 when the server omits Content-Length. */
+  total: number;
   error: string | null;
   check(silent: boolean): Promise<void>;
   downloadAndInstall(): Promise<void>;
@@ -19,7 +23,7 @@ interface UpdaterState {
 let pending: Update | null = null;
 
 export const useUpdater = create<UpdaterState>((set, get) => ({
-  status: "idle", version: null, notes: null, progress: 0, error: null,
+  status: "idle", version: null, notes: null, progress: 0, received: 0, total: 0, error: null,
 
   async check(silent) {
     const s = get().status;
@@ -48,15 +52,20 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
 
   async downloadAndInstall() {
     if (!pending) return;
-    set({ status: "downloading", progress: 0, error: null });
+    set({ status: "downloading", progress: 0, received: 0, total: 0, error: null });
     try {
-      let total = 0;
-      let received = 0;
+      let bytesTotal = 0;
+      let bytesReceived = 0;
       await pending.downloadAndInstall((ev) => {
-        if (ev.event === "Started") total = ev.data.contentLength ?? 0;
-        else if (ev.event === "Progress") {
-          received += ev.data.chunkLength;
-          if (total > 0) set({ progress: received / total });
+        if (ev.event === "Started") {
+          bytesTotal = ev.data.contentLength ?? 0;
+          set({ total: bytesTotal });
+        } else if (ev.event === "Progress") {
+          bytesReceived += ev.data.chunkLength;
+          set({
+            received: bytesReceived,
+            ...(bytesTotal > 0 ? { progress: bytesReceived / bytesTotal } : {}),
+          });
         }
       });
       await relaunch();

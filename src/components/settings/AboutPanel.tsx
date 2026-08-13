@@ -10,7 +10,7 @@ export function AboutPanel() {
   const [paths, setPaths] = useState<ConfigPaths | null>(null);
   const t = useT();
 
-  const { status, version: newVersion, notes, progress, error } = useUpdater();
+  const { status, version: newVersion, notes, progress, received, total, error } = useUpdater();
   const autoUpdateCheck = useSettingsStore((s) => s.autoUpdateCheck);
 
   // Clear stale error state when panel mounts so navigating away and back
@@ -80,14 +80,34 @@ export function AboutPanel() {
           )}
           {status === "downloading" && (
             <>
-              <div style={{ marginBottom: 6 }}>{t("Downloading…")}</div>
-              <div style={{ height: 4, borderRadius: 2, background: "var(--border)", overflow: "hidden" }}>
-                <div style={{
-                  height: "100%", borderRadius: 2, background: "var(--accent)",
-                  width: `${Math.max(5, progress * 100)}%`,
-                  transition: "width 200ms ease",
-                }} />
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span>{t("Downloading…")}</span>
+                {progress > 0 && (
+                  <span style={{ color: "var(--text-2)" }}>{Math.round(progress * 100)}%</span>
+                )}
               </div>
+              <div style={{ position: "relative", height: 8, borderRadius: 4, background: "var(--border)", overflow: "hidden" }}>
+                {progress > 0 ? (
+                  <div style={{
+                    position: "absolute", top: 0, left: 0,
+                    height: "100%", borderRadius: 4, background: "var(--accent)",
+                    width: `${progress * 100}%`,
+                    transition: "width 200ms ease",
+                  }} />
+                ) : (
+                  <div style={{
+                    position: "absolute", top: 0,
+                    height: "100%", width: "40%", borderRadius: 4,
+                    background: "linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%)",
+                    animation: "shellx-progress-sweep 1.4s ease-in-out infinite",
+                  }} />
+                )}
+              </div>
+              {received > 0 && (
+                <div style={{ fontSize: 11, color: "var(--text-2)", marginTop: 4 }}>
+                  {fmtBytes(received)}{total > 0 ? ` / ${fmtBytes(total)}` : ""}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -160,6 +180,11 @@ export function AboutPanel() {
       )}
     </div>
   );
+}
+
+function fmtBytes(b: number): string {
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function PathRow({ label, value }: { label: string; value: string }) {

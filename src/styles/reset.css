@@ -43,6 +43,13 @@ input { font: inherit; color: inherit; }
   to   { opacity: 1; }
 }
 
+/* Indeterminate progress bar sweep — used by the updater when the server
+   omits Content-Length so we can't show a real percentage. */
+@keyframes shellx-progress-sweep {
+  0%   { left: -40%; }
+  100% { left: 110%; }
+}
+
 /* Warm-Minimal scrollbar — the WebView2 default is nearly invisible on dark. */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
