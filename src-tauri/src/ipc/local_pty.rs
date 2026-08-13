@@ -13,10 +13,45 @@ use super::events;
 /// Default shell per platform when `settings.local_shell` is None or empty.
 fn default_shell() -> String {
     #[cfg(windows)]
-    return "cmd.exe".into();
+    {
+        let sysroot = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
+        format!("{}\\System32\\cmd.exe", sysroot)
+    }
     #[cfg(not(windows))]
     {
         std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into())
+    }
+}
+
+/// Resolve a short shell name to its full path where possible, so that
+/// `CommandBuilder::new` doesn't depend on the child process's PATH.
+///
+/// On Windows, `%SystemRoot%\System32` is guaranteed to be in PATH but
+/// `WindowsPowerShell\v1.0` is not, and PowerShell 7 / Unix shells aren't
+/// there at all.  Using absolute paths makes spawning reliable regardless of
+/// the caller's environment.
+fn resolve_shell(shell: &str) -> String {
+    #[cfg(windows)]
+    {
+        // Already absolute — contains a backslash or a drive letter.
+        if shell.contains('\\') || (shell.len() > 2 && shell.chars().nth(1) == Some(':')) {
+            return shell.to_string();
+        }
+        let sysroot = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
+        match shell.to_ascii_lowercase().as_str() {
+            "cmd.exe" | "cmd" => format!("{}\\System32\\cmd.exe", sysroot),
+            "powershell.exe" | "powershell" => {
+                format!("{}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", sysroot)
+            }
+            "wsl.exe" | "wsl" => format!("{}\\System32\\wsl.exe", sysroot),
+            // pwsh.exe (PS7), bash, zsh, fish — location varies; pass through
+            // and let the OS search PATH (will fail gracefully if not installed).
+            _ => shell.to_string(),
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        shell.to_string()
     }
 }
 
@@ -26,12 +61,14 @@ pub async fn open_local_terminal(
     mgr: State<'_, SessionManager>,
     settings: State<'_, SettingsStore>,
 ) -> Result<ConnectionInfo> {
-    let shell = settings
-        .load()
-        .ok()
-        .flatten()
-        .and_then(|s| s.local_shell.filter(|s| !s.is_empty()))
-        .unwrap_or_else(default_shell);
+    let shell = resolve_shell(
+        &settings
+            .load()
+            .ok()
+            .flatten()
+            .and_then(|s| s.local_shell.filter(|s| !s.is_empty()))
+            .unwrap_or_else(default_shell),
+    );
 
     let info = mgr
         .open_local_session(&shell, "Local Terminal".into(), app.clone())
