@@ -89,7 +89,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     }, 1500);
   }
   const [importCmd, setImportCmd] = useState("");
-  const [importParsed, setImportParsed] = useState<Array<{ local_port: number; remote_host: string; remote_port: number }> | null>(null);
+  const [importParsed, setImportParsed] = useState<Array<{ local_port: number; remote_host: string; remote_port: number; bind_all: boolean }> | null>(null);
 
   // Auth method state
   const [authMode, setAuthMode] = useState<"publickey" | "password">(
@@ -169,11 +169,12 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   }
 
   function parseSSHImport(cmd: string) {
-    const results: Array<{ local_port: number; remote_host: string; remote_port: number }> = [];
-    const re = /-L\s+(\d+):([^:\s]+):(\d+)/g;
+    const results: Array<{ local_port: number; remote_host: string; remote_port: number; bind_all: boolean }> = [];
+    // Matches both 3-part (-L port:host:port) and 4-part (-L bind:port:host:port) forms.
+    const re = /-L\s+(?:([^:\s]+):)?(\d+):([^:\s]+):(\d+)/g;
     let m;
     while ((m = re.exec(cmd)) !== null) {
-      results.push({ local_port: parseInt(m[1], 10), remote_host: m[2], remote_port: parseInt(m[3], 10) });
+      results.push({ local_port: parseInt(m[2], 10), remote_host: m[3], remote_port: parseInt(m[4], 10), bind_all: m[1] === "0.0.0.0" });
     }
     return results;
   }
@@ -210,10 +211,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     if (!importParsed || importParsed.length === 0) return;
     for (const p of importParsed) {
       if (!initial?.id) {
-        setPendingRules((r) => [...r, { id: `pending-${Date.now()}-${p.local_port}`, label: "", local_port: p.local_port, remote_host: p.remote_host, remote_port: p.remote_port, bind_all: false }]);
+        setPendingRules((r) => [...r, { id: `pending-${Date.now()}-${p.local_port}`, label: "", local_port: p.local_port, remote_host: p.remote_host, remote_port: p.remote_port, bind_all: p.bind_all }]);
       } else {
         try {
-          const rule = await addTunnel({ host_id: initial.id, label: "", local_port: p.local_port, remote_host: p.remote_host, remote_port: p.remote_port });
+          const rule = await addTunnel({ host_id: initial.id, label: "", local_port: p.local_port, remote_host: p.remote_host, remote_port: p.remote_port, bind_all: p.bind_all });
           setTunnelRules((r) => [...r, rule]);
           bumpRulesVersion(initial.id);
         } catch { /* skip */ }
@@ -859,7 +860,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             {importParsed !== null && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", marginBottom: 8, background: importParsed.length > 0 ? "rgba(166,227,161,.08)" : "rgba(243,139,168,.08)", border: `1px solid ${importParsed.length > 0 ? "var(--success)" : "var(--error)"}`, borderRadius: 5 }}>
                 <span style={{ fontSize: 11, color: importParsed.length > 0 ? "var(--success)" : "var(--error)", flex: 1, fontFamily: "var(--font-mono)" }}>
-                  {importParsed.length > 0 ? importParsed.map((p) => `${p.local_port}→${p.remote_host}:${p.remote_port}`).join(", ") : "No -L rules found"}
+                  {importParsed.length > 0 ? importParsed.map((p) => `${p.bind_all ? "0.0.0.0:" : ""}${p.local_port}→${p.remote_host}:${p.remote_port}`).join(", ") : "No -L rules found"}
                 </span>
                 {importParsed.length > 0 && (
                   <button type="button" onClick={handleImportAdd}

@@ -17,12 +17,13 @@ interface Props {
   connectionMode: string;
 }
 
-function parseSSHImport(cmd: string): Array<{ local_port: number; remote_host: string; remote_port: number }> {
-  const results: Array<{ local_port: number; remote_host: string; remote_port: number }> = [];
-  const re = /-L\s+(\d+):([^:\s]+):(\d+)/g;
+function parseSSHImport(cmd: string): Array<{ local_port: number; remote_host: string; remote_port: number; bind_all: boolean }> {
+  const results: Array<{ local_port: number; remote_host: string; remote_port: number; bind_all: boolean }> = [];
+  // Matches both 3-part (-L port:host:port) and 4-part (-L bind:port:host:port) forms.
+  const re = /-L\s+(?:([^:\s]+):)?(\d+):([^:\s]+):(\d+)/g;
   let m;
   while ((m = re.exec(cmd)) !== null) {
-    results.push({ local_port: parseInt(m[1], 10), remote_host: m[2], remote_port: parseInt(m[3], 10) });
+    results.push({ local_port: parseInt(m[2], 10), remote_host: m[3], remote_port: parseInt(m[4], 10), bind_all: m[1] === "0.0.0.0" });
   }
   return results;
 }
@@ -85,7 +86,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
 
   // Import state
   const [importCmd, setImportCmd] = useState("");
-  const [importParsed, setImportParsed] = useState<Array<{ local_port: number; remote_host: string; remote_port: number }> | null>(null);
+  const [importParsed, setImportParsed] = useState<Array<{ local_port: number; remote_host: string; remote_port: number; bind_all: boolean }> | null>(null);
 
   // Pointer-based DnD state (HTML5 drag-and-drop is unreliable in WebView2)
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -260,7 +261,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
     if (!importParsed || importParsed.length === 0 || !hostId) return;
     for (const p of importParsed) {
       try {
-        const rule = await addTunnel({ host_id: hostId, label: "", local_port: p.local_port, remote_host: p.remote_host, remote_port: p.remote_port });
+        const rule = await addTunnel({ host_id: hostId, label: "", local_port: p.local_port, remote_host: p.remote_host, remote_port: p.remote_port, bind_all: p.bind_all });
         await openTunnel({ session_id: sessionId, rule_id: rule.id, local_port: rule.local_port, remote_host: rule.remote_host, remote_port: rule.remote_port, bind_all: rule.bind_all });
         setRules((r) => [...r, rule]);
       } catch { /* skip failed rules */ }
@@ -384,7 +385,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
           <div style={{ marginTop: 5, display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", background: importParsed.length > 0 ? "rgba(var(--success-rgb,166,227,161),.08)" : "rgba(var(--error-rgb,243,139,168),.08)", border: `1px solid ${importParsed.length > 0 ? "var(--success)" : "var(--error)"}`, borderRadius: 4, opacity: 0.85 }}>
             <span style={{ fontSize: 10, color: importParsed.length > 0 ? "var(--success)" : "var(--error)", flex: 1, fontFamily: "var(--font-mono)" }}>
               {importParsed.length > 0
-                ? importParsed.map((p) => `${p.local_port}→${p.remote_host}:${p.remote_port}`).join(", ")
+                ? importParsed.map((p) => `${p.bind_all ? "0.0.0.0:" : ""}${p.local_port}→${p.remote_host}:${p.remote_port}`).join(", ")
                 : t("No -L rules found")}
             </span>
             {importParsed.length > 0 && (
