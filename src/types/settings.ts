@@ -11,6 +11,7 @@ export interface Settings {
   };
   localShell?: string;
   language: "en" | "zh";
+  autoUpdateCheck: boolean;
   schemaVersion: 1;
 }
 
@@ -26,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
     cursorStyle: "block",
   },
   language: "en",
+  autoUpdateCheck: true,
   schemaVersion: 1,
 };
 

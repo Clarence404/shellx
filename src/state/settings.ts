@@ -21,6 +21,7 @@ interface State extends Settings {
   localShell: string;
   setLocalShell(v: string): void;
   setLanguage(v: Settings["language"]): void;
+  setAutoUpdateCheck(v: boolean): void;
   reset(): void;
 }
 
@@ -37,6 +38,7 @@ function snapshotForSave(s: State): Settings {
     terminal: s.terminal,
     localShell: s.localShell || undefined,
     language: s.language,
+    autoUpdateCheck: s.autoUpdateCheck,
     schemaVersion: s.schemaVersion,
   };
 }
@@ -120,6 +122,11 @@ export const useSettingsStore = create<State>((set, get) => ({
 
   setLanguage(v) {
     set({ language: v });
+    immediateSave(get);
+  },
+
+  setAutoUpdateCheck(v) {
+    set({ autoUpdateCheck: v });
     immediateSave(get);
   },
 
