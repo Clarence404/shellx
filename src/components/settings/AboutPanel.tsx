@@ -13,6 +13,15 @@ export function AboutPanel() {
   const { status, version: newVersion, notes, progress, error } = useUpdater();
   const autoUpdateCheck = useSettingsStore((s) => s.autoUpdateCheck);
 
+  // Clear stale error state when panel mounts so navigating away and back
+  // always starts fresh. The startup check already leaves status=idle; this
+  // only cleans up a lingering manual-check failure from a previous visit.
+  useEffect(() => {
+    if (useUpdater.getState().status === "error") {
+      useUpdater.setState({ status: "idle", error: null });
+    }
+  }, []);
+
   // Load config paths once on mount. Silently ignore IPC failure — the
   // panel falls back to hiding the paths block rather than showing an
   // error inline, since it's informational chrome not a workflow.
