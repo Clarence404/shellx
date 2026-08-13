@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Folder, File as FileIcon, FileCode, FileJson } from "lucide-react";
 import { useSettingsStore } from "../../state/settings";
+import { listAvailableShells, type ShellOption } from "../../ipc/local_pty";
 import {
   THEME_META, DENSITY_META, FONT_MAP, SYSTEM_FONT_META, LANGUAGE_META,
   SYSTEM_FONT_SIZE_MIN, SYSTEM_FONT_SIZE_MAX,
@@ -207,29 +208,20 @@ export function AppearancePanel() {
   );
 }
 
-const IS_WINDOWS = navigator.platform.toLowerCase().startsWith("win");
-
-const SHELL_PRESETS = IS_WINDOWS
-  ? [
-      { label: "Default (system shell)", value: "" },
-      { label: "Command Prompt (cmd.exe)", value: "cmd.exe" },
-      { label: "PowerShell 5 (powershell.exe)", value: "powershell.exe" },
-      { label: "PowerShell 7 (pwsh.exe)", value: "pwsh.exe" },
-      { label: "WSL (wsl.exe)", value: "wsl.exe" },
-      { label: "Custom path…", value: "__custom__" },
-    ]
-  : [
-      { label: "Default (system shell)", value: "" },
-      { label: "Bash", value: "bash" },
-      { label: "Zsh", value: "zsh" },
-      { label: "Fish", value: "fish" },
-      { label: "Custom path…", value: "__custom__" },
-    ];
+const CUSTOM_OPTION: ShellOption = { label: "Custom path…", value: "__custom__" };
 
 function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const t = useT();
-  const isPreset = SHELL_PRESETS.some((p) => p.value === value);
-  const selectValue = isPreset ? value : "__custom__";
+  const [presets, setPresets] = useState<ShellOption[]>([]);
+
+  useEffect(() => {
+    listAvailableShells().then((shells) => {
+      setPresets([{ label: "Default (system shell)", value: "" }, ...shells, CUSTOM_OPTION]);
+    });
+  }, []);
+
+  const isPreset = presets.some((p) => p.value === value);
+  const selectValue = isPreset ? value : (presets.length > 0 ? "__custom__" : "");
   const isCustom = selectValue === "__custom__";
 
   const inputStyle = {
@@ -250,8 +242,9 @@ function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: st
           else onChange(value && !isPreset ? value : "");
         }}
         style={{ ...inputStyle, cursor: "pointer", appearance: "auto" }}
+        disabled={presets.length === 0}
       >
-        {SHELL_PRESETS.map((p) => (
+        {presets.map((p) => (
           <option key={p.value} value={p.value}>{t(p.label)}</option>
         ))}
       </select>

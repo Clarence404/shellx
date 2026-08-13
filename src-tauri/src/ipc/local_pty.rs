@@ -5,7 +5,7 @@ use crate::session::manager::SessionManager;
 use crate::session::{ConnectionInfo, SessionId};
 use crate::settings::SettingsStore;
 use events::{ClosedEvent, DataEvent, EV_CLOSED, EV_DATA};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
 use super::events;
@@ -61,6 +61,65 @@ fn resolve_shell(shell: &str) -> String {
     #[cfg(not(windows))]
     {
         shell.to_string()
+    }
+}
+
+#[derive(Serialize)]
+pub struct ShellOption {
+    pub label: String,
+    pub value: String,
+}
+
+/// Return only the shells that actually exist on this machine.
+#[tauri::command]
+pub fn list_available_shells() -> Vec<ShellOption> {
+    #[cfg(windows)]
+    {
+        let mut out = vec![];
+        let sysroot = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
+
+        // cmd.exe — always present
+        out.push(ShellOption { label: "Command Prompt (cmd.exe)".into(), value: "cmd.exe".into() });
+
+        // PowerShell 5 — built-in since Windows 7
+        let ps5 = format!("{}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", sysroot);
+        if std::path::Path::new(&ps5).exists() {
+            out.push(ShellOption { label: "PowerShell 5 (powershell.exe)".into(), value: "powershell.exe".into() });
+        }
+
+        // PowerShell 7 — optional, installed to Program Files
+        let pf = std::env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".into());
+        if std::path::Path::new(&format!("{}\\PowerShell\\7\\pwsh.exe", pf)).exists() {
+            out.push(ShellOption { label: "PowerShell 7 (pwsh.exe)".into(), value: "pwsh.exe".into() });
+        }
+
+        // WSL — present when the Windows feature is enabled
+        let wsl = format!("{}\\System32\\wsl.exe", sysroot);
+        if std::path::Path::new(&wsl).exists() {
+            out.push(ShellOption { label: "WSL (wsl.exe)".into(), value: "wsl.exe".into() });
+        }
+
+        out
+    }
+    #[cfg(not(windows))]
+    {
+        let candidates: &[(&str, &str)] = &[
+            ("/bin/bash",              "Bash"),
+            ("/usr/bin/bash",          "Bash"),
+            ("/bin/zsh",               "Zsh"),
+            ("/usr/bin/zsh",           "Zsh"),
+            ("/opt/homebrew/bin/fish", "Fish"),
+            ("/usr/local/bin/fish",    "Fish"),
+            ("/usr/bin/fish",          "Fish"),
+        ];
+        let mut out = vec![];
+        let mut seen = std::collections::HashSet::new();
+        for (path, label) in candidates {
+            if std::path::Path::new(path).exists() && seen.insert(*label) {
+                out.push(ShellOption { label: label.to_string(), value: path.to_string() });
+            }
+        }
+        out
     }
 }
 
