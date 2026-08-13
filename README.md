@@ -1,4 +1,4 @@
-# shellx
+# ShellX
 
 **English** · [简体中文](./README.zh-CN.md)
 
@@ -8,9 +8,9 @@ Current release: **v0.14.0** — see [`docs/release-notes/`](docs/release-notes/
 
 ---
 
-## 1. What is shellx
+## 1. What is ShellX
 
-shellx is a desktop app that gives you:
+ShellX is a desktop app that gives you:
 
 - **SSH terminal** in tabs — connect to Linux / BSD / macOS servers, get a working shell with themes, custom fonts, cursor style; public-key (Ed25519/RSA/ECDSA) or password auth, host-key verification against `~/.ssh/known_hosts`
 - **Local terminal** — open a shell on your own machine (PowerShell by default on Windows; any shell via Settings) in a tab right next to your SSH sessions
@@ -26,9 +26,9 @@ It's a single ~7 MB installer with no runtime dependencies (Tauri bundles a smal
 
 ## 2. Architecture
 
-shellx has two halves and a boundary between them.
+ShellX has two halves and a boundary between them.
 
-<img src="docs/architecture.svg" alt="shellx architecture" width="100%">
+<img src="docs/architecture.svg" alt="ShellX architecture" width="100%">
 
 ### The frontend
 
@@ -52,9 +52,9 @@ That's the whole picture. Add a new file operation? Write one command in `src-ta
 
 ---
 
-## 3. Running shellx locally
+## 3. Running ShellX locally
 
-This section is for developers who want to build and run shellx from source. **You don't need to know Rust or Tauri** — the tooling handles almost everything. You do need to install a few things once.
+This section is for developers who want to build and run ShellX from source. **You don't need to know Rust or Tauri** — the tooling handles almost everything. You do need to install a few things once.
 
 ### 3.1 Install the tooling (one-time)
 
@@ -125,7 +125,7 @@ What happens:
 
 1. Vite starts a dev server on port 1420 (auto-reload on frontend file changes).
 2. Cargo compiles the Rust backend. **The first build takes 5–15 minutes** and downloads ~2 GB of Rust dependencies into `src-tauri/target/`. Every build after that is incremental — seconds.
-3. A native desktop window opens with the shellx app. Edit any React file → HMR live-reloads. Edit any Rust file → Tauri rebuilds and relaunches automatically.
+3. A native desktop window opens with the ShellX app. Edit any React file → HMR live-reloads. Edit any Rust file → Tauri rebuilds and relaunches automatically.
 
 Close the window to stop the dev server.
 

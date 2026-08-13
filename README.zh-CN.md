@@ -1,4 +1,4 @@
-# shellx
+# ShellX
 
 [English](./README.md) · **简体中文**
 
@@ -8,9 +8,9 @@
 
 ---
 
-## 1. shellx 是什么
+## 1. ShellX 是什么
 
-shellx 是一个桌面应用，提供：
+ShellX 是一个桌面应用，提供：
 
 - **SSH 终端**（多 tab）—— 连接 Linux / BSD / macOS 服务器，主题、字体、光标样式全可定制；支持公钥（Ed25519/RSA/ECDSA）或密码认证，连接时对照 `~/.ssh/known_hosts` 验证 host key
 - **本地终端** —— 在 SSH 会话旁边直接打开本机 shell（Windows 默认 PowerShell，可在设置里换任意 shell）
@@ -26,9 +26,9 @@ shellx 是一个桌面应用，提供：
 
 ## 2. 架构
 
-shellx 分成前后端两半，中间隔着一层清晰的 IPC 边界。
+ShellX 分成前后端两半，中间隔着一层清晰的 IPC 边界。
 
-<img src="docs/architecture.zh-CN.svg" alt="shellx 架构图" width="100%">
+<img src="docs/architecture.zh-CN.svg" alt="ShellX 架构图" width="100%">
 
 ### 前端
 
@@ -54,7 +54,7 @@ shellx 分成前后端两半，中间隔着一层清晰的 IPC 边界。
 
 ## 3. 本地跑起来
 
-这一节是给想从源码构建 shellx 的开发者的。**你不用懂 Rust 或 Tauri** —— 工具链处理了绝大部分事。只需要装一次几个东西。
+这一节是给想从源码构建 ShellX 的开发者的。**你不用懂 Rust 或 Tauri** —— 工具链处理了绝大部分事。只需要装一次几个东西。
 
 ### 3.1 装工具链（只装一次）
 
@@ -125,7 +125,7 @@ pnpm tauri:dev
 
 1. Vite 在 1420 端口启动开发服务器（前端文件改动自动 HMR）。
 2. Cargo 编译 Rust 后端。**第一次编译 5–15 分钟**，会下载约 2 GB Rust 依赖到 `src-tauri/target/`。之后都是增量编译，几秒钟。
-3. 弹出 shellx 的原生窗口。改 React 文件 → HMR 热更新；改 Rust 文件 → Tauri 自动重编译并重启窗口。
+3. 弹出 ShellX 的原生窗口。改 React 文件 → HMR 热更新；改 Rust 文件 → Tauri 自动重编译并重启窗口。
 
 关掉窗口就退出开发服务器。
 

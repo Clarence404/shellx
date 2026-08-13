@@ -159,8 +159,8 @@ const zh: Record<string, string> = {
   "read-only view": "只读展示",
   "Loading…": "加载中…",
   "No entries": "暂无记录",
-  "shellx only appends to this file · to remove an entry, edit known_hosts directly":
-    "shellx 只追加、不修改此文件 · 删除条目请直接编辑 known_hosts",
+  "ShellX only appends to this file · to remove an entry, edit known_hosts directly":
+    "ShellX 只追加、不修改此文件 · 删除条目请直接编辑 known_hosts",
 
   // Empty state
   "A tiny, pretty terminal client.": "小巧、精致的终端客户端。",

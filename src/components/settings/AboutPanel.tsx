@@ -38,7 +38,7 @@ export function AboutPanel() {
       <h3 style={{ fontSize: 15, fontWeight: 500, margin: "0 0 20px" }}>{t("About")}</h3>
       <div style={{ fontSize: 13, marginBottom: 8 }}>
         <span style={{ color: "var(--accent)", fontFamily: '"JetBrains Mono", var(--font-mono)' }}>&gt;_</span>
-        {" "}shellx <span style={{ color: "var(--text-2)" }}>v{version}</span>
+        {" "}ShellX <span style={{ color: "var(--text-2)" }}>v{version}</span>
       </div>
       <div style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 6 }}>MIT License · Copyright © 2026</div>
       <a
@@ -154,7 +154,7 @@ export function AboutPanel() {
             To customize: set the <code style={{
               fontFamily: '"JetBrains Mono", var(--font-mono)', background: "var(--panel-1)",
               padding: "0 4px", borderRadius: 3,
-            }}>SHELLX_CONFIG_DIR</code> environment variable before launching shellx.
+            }}>SHELLX_CONFIG_DIR</code> environment variable before launching ShellX.
           </div>
         </div>
       )}

@@ -83,7 +83,7 @@ export function TrustedServersPanel() {
       )}
 
       <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: "auto", flexShrink: 0 }}>
-        {t("shellx only appends to this file · to remove an entry, edit known_hosts directly")}
+        {t("ShellX only appends to this file · to remove an entry, edit known_hosts directly")}
       </div>
     </div>
   );
