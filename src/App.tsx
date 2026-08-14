@@ -141,7 +141,7 @@ export function App() {
   // "warm-minimal" / "comfortable" means "no attribute" → default block.
   useEffect(() => {
     const el = document.documentElement;
-    if (themeId === "warm-minimal") delete el.dataset.theme; else el.dataset.theme = themeId;
+    if (themeId === "warm-light") delete el.dataset.theme; else el.dataset.theme = themeId;
     if (density === "comfortable") delete el.dataset.density; else el.dataset.density = density;
   }, [themeId, density]);
 

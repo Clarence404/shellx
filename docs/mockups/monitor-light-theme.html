@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>ShellX · Monitor Light Theme Mockup</title>
+<style>
+  :root {
+    --bg:        #F7F8FA;
+    --card:      #FFFFFF;
+    --card-2:    #F5F7FB;
+    --border:    #E7EAF0;
+    --border-2:  #EEF2F8;
+    --shadow:    0 1px 2px rgba(15, 23, 42, 0.04);
+
+    --text-1:    #0F172A;
+    --text-2:    #475569;
+    --text-3:    #94A3B8;
+
+    --accent:      #4C7CFF;
+    --accent-2:    #6B8FFF;
+    --accent-fade: #EBF1FF;
+    --success:     #22C55E;
+    --success-fade:#E9FBEF;
+    --info:        #38BDF8;
+    --warn:        #F59E0B;
+    --warn-fade:   #FFF7E6;
+    --error:       #EF4444;
+    --error-fade:  #FEECEC;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: -apple-system, "Segoe UI Variable", "Segoe UI", "PingFang SC",
+                 "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+  .top {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex; align-items: center; gap: 14px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .top .brand { font-weight: 700; font-size: 15px; }
+  .top .tag { font-size: 11px; color: var(--accent);
+              background: var(--accent-fade); padding: 3px 10px; border-radius: 999px; }
+  .top .nav { margin-left: auto; display: flex; gap: 6px; }
+  .top .nav a {
+    text-decoration: none; color: var(--text-2);
+    padding: 6px 12px; border-radius: 8px; font-size: 12px;
+  }
+  .top .nav a:hover { background: var(--card-2); }
+  .top .nav a.active { background: var(--accent-fade); color: var(--accent); }
+
+  .stage {
+    max-width: 760px;
+    margin: 32px auto;
+    padding: 0 24px 64px;
+  }
+  .stage h2 {
+    font-size: 13px; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 1.5px;
+    margin: 32px 0 10px;
+    font-weight: 500;
+  }
+  .stage h2:first-of-type { margin-top: 0; }
+
+  /* ── Host info card ───────────────────────────────────────── */
+  .host {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+  }
+  .host-head {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 14px;
+  }
+  .badge {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: var(--accent-fade);
+    color: var(--accent);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .badge svg { width: 20px; height: 20px; }
+  .host-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+  .host-sub   { font-size: 12px; color: var(--text-3); margin-top: 1px; }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 40px;
+    row-gap: 8px;
+  }
+  .info-row { display: flex; align-items: baseline; gap: 14px; }
+  .info-lbl { font-size: 12px; color: var(--text-3); width: 78px; flex-shrink: 0; }
+  .info-val { font-size: 12px; color: var(--text-1); font-variant-numeric: tabular-nums;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .os-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+            background: #E95420; margin-right: 6px;
+            box-shadow: 0 0 0 2px rgba(233, 84, 32, 0.18); }
+
+  /* ── Sub-tab bar + content ────────────────────────────────── */
+  .subtabs {
+    display: flex; align-items: center;
+    gap: 4px;
+    padding: 4px 4px 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+    border-bottom: none;
+    margin-top: 12px;
+    box-shadow: var(--shadow);
+  }
+  .subtab {
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text-2);
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .subtab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
+  .subtab svg   { width: 14px; height: 14px; }
+  .subtab-right { margin-left: auto; padding: 4px 12px; display: flex; align-items: center; gap: 8px; }
+  .interval-select {
+    font-size: 12px; color: var(--text-2);
+    background: var(--card-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 10px;
+  }
+  .content {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 14px 14px;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 14px;
+    box-shadow: var(--shadow);
+  }
+
+  /* ── Metric card ──────────────────────────────────────────── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card-head { display: flex; align-items: center; gap: 8px; }
+  .card-head .icon { color: var(--text-3); width: 14px; height: 14px; }
+  .card-head .title { font-size: 13px; font-weight: 600; color: var(--text-1); }
+  .card-head .right {
+    margin-left: auto; font-size: 12px; color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pill { padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+  .pill.ok   { background: var(--success-fade); color: var(--success); }
+  .pill.warn { background: var(--warn-fade);    color: var(--warn); }
+  .pill.bad  { background: var(--error-fade);   color: var(--error); }
+
+  .big {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-top: 2px;
+  }
+  .big .num {
+    font-size: 36px; font-weight: 300; color: var(--text-1);
+    letter-spacing: -0.5px; font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .big .unit { font-size: 14px; color: var(--text-3); }
+  .big .meta {
+    margin-left: auto; font-size: 12px; color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .spark { width: 100%; height: 60px; display: block; }
+
+  /* ── Per-core rows ────────────────────────────────────────── */
+  .cores-head {
+    display: flex; align-items: center;
+    font-size: 11px; color: var(--text-3);
+  }
+  .cores-head .right { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .core-row {
+    display: flex; align-items: center; gap: 12px; margin-top: 4px;
+  }
+  .core-lbl { font-size: 11px; color: var(--text-3); width: 24px;
+              font-variant-numeric: tabular-nums; }
+  .core-track { flex: 1; height: 4px; background: var(--border-2);
+                border-radius: 2px; overflow: hidden; }
+  .core-fill { height: 100%; background: var(--accent); border-radius: 2px; }
+  .core-fill.dim { background: var(--accent-2); opacity: 0.55; }
+  .core-pct { font-size: 11px; color: var(--text-2); width: 34px; text-align: right;
+              font-variant-numeric: tabular-nums; }
+  .collapse-btn {
+    align-self: center; margin-top: 4px;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--text-3); font-size: 12px; padding: 4px 10px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+
+  /* ── Memory segmented bar ─────────────────────────────────── */
+  .mem-seg {
+    height: 6px; border-radius: 3px; overflow: hidden;
+    display: flex; background: var(--border-2);
+  }
+  .mem-seg span { display: block; height: 100%; }
+  .mem-seg .used  { background: var(--success); }
+  .mem-seg .cache { background: var(--info); }
+  .mem-legend {
+    display: flex; gap: 20px; font-size: 11px; color: var(--text-2);
+    align-items: center;
+  }
+  .mem-legend .dot {
+    width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px;
+  }
+  .mem-legend .used  .dot { background: var(--success); }
+  .mem-legend .cache .dot { background: var(--info); }
+  .mem-legend .free  .dot { background: #CBD5E1; }
+  .mem-legend .free      { color: var(--text-3); }
+  .swap-row {
+    display: flex; justify-content: space-between; font-size: 12px; color: var(--text-3);
+    padding-top: 6px; border-top: 1px dashed var(--border);
+  }
+  .swap-row span:last-child { color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+  /* ── Dual metric card (network / disk io) ─────────────────── */
+  .dual {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .dual .sub {
+    border-radius: 10px; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .dual .sub.rx { background: var(--accent-fade); }
+  .dual .sub.tx { background: var(--error-fade); }
+  .dual .sub .lbl { font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 4px; }
+  .dual .sub .val { font-size: 22px; font-weight: 300; letter-spacing: -0.5px;
+                    color: var(--text-1); font-variant-numeric: tabular-nums; }
+  .dual .sub.rx .arrow { color: var(--accent); }
+  .dual .sub.tx .arrow { color: var(--error); }
+
+  /* ── Process table ────────────────────────────────────────── */
+  .proc-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .proc-head {
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .proc-head .icon { color: var(--text-3); }
+  .proc-head .title { font-size: 13px; font-weight: 600; color: var(--text-1); }
+  .proc-head .right { margin-left: auto; font-size: 11px; color: var(--text-3); }
+  table.proc {
+    width: 100%; border-collapse: collapse;
+    font-size: 12px;
+  }
+  table.proc thead th {
+    padding: 8px 14px; text-align: left;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text-3); font-weight: 500;
+    background: var(--card-2);
+    border-bottom: 1px solid var(--border);
+  }
+  table.proc thead th.num { text-align: right; }
+  table.proc tbody td {
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border-2);
+    color: var(--text-1);
+    font-variant-numeric: tabular-nums;
+  }
+  table.proc tbody td.name { color: var(--text-1); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+  table.proc tbody td.pid { color: var(--text-3); }
+  table.proc tbody td.num { text-align: right; }
+  table.proc tbody tr:hover { background: var(--card-2); }
+  .badge-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; padding: 1px 6px; border-radius: 4px;
+    margin-left: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+  .badge-tag.cpu { background: var(--accent-fade); color: var(--accent); }
+  .badge-tag.mem { background: var(--success-fade); color: var(--success); }
+
+  /* ── Disk mount rows ──────────────────────────────────────── */
+  .disk-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .disk-head {
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .disk-head .icon { color: var(--text-3); }
+  .disk-head .title { font-size: 13px; font-weight: 600; color: var(--text-1); }
+  .disk-head .right {
+    margin-left: auto; font-size: 12px; color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .disk-row {
+    padding: 12px 16px;
+    display: flex; flex-direction: column; gap: 6px;
+    border-bottom: 1px solid var(--border-2);
+  }
+  .disk-row:last-child { border-bottom: none; }
+  .disk-row-top {
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  .disk-mount {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px; color: var(--text-1);
+  }
+  .disk-meta {
+    font-size: 11px; color: var(--text-3);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .disk-pct {
+    font-size: 13px; font-weight: 600;
+    font-variant-numeric: tabular-nums; width: 46px; text-align: right;
+  }
+  .disk-pct.ok   { color: var(--success); }
+  .disk-pct.warn { color: var(--warn); }
+  .disk-pct.bad  { color: var(--error); }
+  .disk-track {
+    height: 6px; background: var(--border-2); border-radius: 3px; overflow: hidden;
+  }
+  .disk-fill { height: 100%; border-radius: 3px; }
+  .disk-fill.ok   { background: linear-gradient(90deg, var(--success), #16A34A); }
+  .disk-fill.warn { background: linear-gradient(90deg, var(--warn), #EA580C); }
+  .disk-fill.bad  { background: linear-gradient(90deg, var(--error), #DC2626); }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span class="brand">ShellX · Monitor 光源重设计</span>
+  <span class="tag">Mockup</span>
+  <div class="nav">
+    <a href="#tab-perf" class="active">性能</a>
+    <a href="#tab-proc">进程</a>
+    <a href="#tab-disk">磁盘</a>
+  </div>
+</div>
+
+<div class="stage">
+
+  <!-- ────────────────────────────────  PERFORMANCE  ──────────────────────── -->
+  <h2 id="tab-perf">性能标签页</h2>
+
+  <!-- Host info card -->
+  <div class="host">
+    <div class="host-head">
+      <span class="badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </span>
+      <div>
+        <div class="host-title">root@192.168.126.128</div>
+        <div class="host-sub">线上 · 已保持连接 12 分钟</div>
+      </div>
+    </div>
+    <div class="info-grid">
+      <div class="info-row"><span class="info-lbl">系统</span>
+        <span class="info-val"><span class="os-dot"></span>Ubuntu 24.04.2 LTS</span></div>
+      <div class="info-row"><span class="info-lbl">虚拟化</span><span class="info-val">VMware</span></div>
+      <div class="info-row"><span class="info-lbl">内核</span><span class="info-val">6.8.0-137-generic</span></div>
+      <div class="info-row"><span class="info-lbl">架构</span><span class="info-val">x86_64</span></div>
+      <div class="info-row"><span class="info-lbl">CPU</span><span class="info-val">Intel Core i7-14700</span></div>
+      <div class="info-row"><span class="info-lbl">内存</span><span class="info-val">7.7 GB</span></div>
+      <div class="info-row"><span class="info-lbl">主机名</span><span class="info-val">ubuntu</span></div>
+      <div class="info-row"><span class="info-lbl">IP</span><span class="info-val">192.168.126.128</span></div>
+      <div class="info-row"><span class="info-lbl">启动</span><span class="info-val">2026-08-14 11:32</span></div>
+      <div class="info-row"><span class="info-lbl">运行时长</span><span class="info-val">8 小时 52 分</span></div>
+    </div>
+  </div>
+
+  <!-- Sub-tab bar -->
+  <div class="subtabs">
+    <div class="subtab active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
+      性能
+    </div>
+    <div class="subtab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      进程
+    </div>
+    <div class="subtab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+      磁盘
+    </div>
+    <div class="subtab-right">
+      <span style="color: var(--text-3); font-size: 11px;">刷新</span>
+      <select class="interval-select"><option>2s</option></select>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- CPU card -->
+    <div class="card">
+      <div class="card-head">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>
+          <line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/>
+          <line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/>
+          <line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/>
+          <line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>
+        </svg>
+        <span class="title">CPU 使用率（总览）</span>
+        <span class="pill ok" style="margin-left:auto">正常</span>
+      </div>
+      <div class="big">
+        <span class="num">2.1</span><span class="unit">%</span>
+        <span class="meta">8 核心 · 均 0.6%</span>
+      </div>
+      <svg class="spark" viewBox="0 0 320 60" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stop-color="#4C7CFF" stop-opacity="0.28"/>
+            <stop offset="100%" stop-color="#4C7CFF" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="M0,50 L15,48 L30,45 L45,20 L60,40 L75,25 L90,42 L105,18 L120,45 L135,22 L150,44 L165,15 L180,42 L195,25 L210,40 L225,18 L240,44 L255,22 L270,42 L285,20 L300,45 L320,32 L320,60 L0,60 Z" fill="url(#g1)"/>
+        <path d="M0,50 L15,48 L30,45 L45,20 L60,40 L75,25 L90,42 L105,18 L120,45 L135,22 L150,44 L165,15 L180,42 L195,25 L210,40 L225,18 L240,44 L255,22 L270,42 L285,20 L300,45 L320,32" stroke="#4C7CFF" stroke-width="1.5" fill="none"/>
+      </svg>
+
+      <div class="cores-head">
+        <span>每核心使用率</span>
+        <span class="right">max C7 2% · min C1 0%</span>
+      </div>
+      <div class="core-row"><span class="core-lbl">C0</span><div class="core-track"><div class="core-fill" style="width:1%"></div></div><span class="core-pct">1%</span></div>
+      <div class="core-row"><span class="core-lbl">C1</span><div class="core-track"><div class="core-fill dim" style="width:0%"></div></div><span class="core-pct">0%</span></div>
+      <div class="core-row"><span class="core-lbl">C2</span><div class="core-track"><div class="core-fill" style="width:1%"></div></div><span class="core-pct">1%</span></div>
+      <div class="core-row"><span class="core-lbl">C3</span><div class="core-track"><div class="core-fill" style="width:1%"></div></div><span class="core-pct">1%</span></div>
+      <div class="core-row"><span class="core-lbl">C4</span><div class="core-track"><div class="core-fill dim" style="width:0%"></div></div><span class="core-pct">0%</span></div>
+      <div class="core-row"><span class="core-lbl">C5</span><div class="core-track"><div class="core-fill dim" style="width:0%"></div></div><span class="core-pct">0%</span></div>
+      <div class="core-row"><span class="core-lbl">C6</span><div class="core-track"><div class="core-fill dim" style="width:0%"></div></div><span class="core-pct">0%</span></div>
+      <div class="core-row"><span class="core-lbl">C7</span><div class="core-track"><div class="core-fill" style="width:2%"></div></div><span class="core-pct">2%</span></div>
+      <button class="collapse-btn">▲ 收起</button>
+    </div>
+
+    <!-- Memory card -->
+    <div class="card">
+      <div class="card-head">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="14"/><line x1="10" y1="10" x2="10" y2="14"/><line x1="14" y1="10" x2="14" y2="14"/><line x1="18" y1="10" x2="18" y2="14"/></svg>
+        <span class="title">内存使用</span>
+        <span class="right">3.3 / 7.7 GB</span>
+      </div>
+      <div class="big">
+        <span class="num">42.9</span><span class="unit">%</span>
+      </div>
+      <svg class="spark" viewBox="0 0 320 60" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stop-color="#22C55E" stop-opacity="0.22"/>
+            <stop offset="100%" stop-color="#22C55E" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="M0,34 L20,33 L40,34 L60,32 L80,33 L100,34 L120,33 L140,34 L160,33 L180,34 L200,33 L220,32 L240,33 L260,34 L280,33 L300,34 L320,33 L320,60 L0,60 Z" fill="url(#g2)"/>
+        <path d="M0,34 L20,33 L40,34 L60,32 L80,33 L100,34 L120,33 L140,34 L160,33 L180,34 L200,33 L220,32 L240,33 L260,34 L280,33 L300,34 L320,33" stroke="#22C55E" stroke-width="1.5" fill="none"/>
+      </svg>
+
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <span style="font-size:12px;color:var(--text-2);">内存分布</span>
+        <span style="font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums;">3.3 / 7.7 GB</span>
+      </div>
+      <div class="mem-seg">
+        <span class="used"  style="width:43%"></span>
+        <span class="cache" style="width:26%"></span>
+      </div>
+      <div class="mem-legend">
+        <span class="used"><span class="dot"></span>在用 3.3G</span>
+        <span class="cache"><span class="dot"></span>缓存 2.0G</span>
+        <span class="free"><span class="dot"></span>剩余 2.5G</span>
+      </div>
+      <div class="swap-row">
+        <span>Swap 交换分区</span>
+        <span>0.0 / 4.0 GB</span>
+      </div>
+    </div>
+
+    <!-- Network card -->
+    <div class="card">
+      <div class="card-head">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h5l2-8 4 16 2-8h7"/></svg>
+        <span class="title">网络流量</span>
+        <span class="right">1 个接口</span>
+      </div>
+      <div class="dual">
+        <div class="sub rx">
+          <div class="lbl"><span class="arrow">↓</span>下行</div>
+          <div class="val">2.2 KB/s</div>
+        </div>
+        <div class="sub tx">
+          <div class="lbl"><span class="arrow">↑</span>上行</div>
+          <div class="val">23.1 KB/s</div>
+        </div>
+      </div>
+      <svg class="spark" viewBox="0 0 320 60" preserveAspectRatio="none">
+        <path d="M0,50 L20,48 L40,52 L60,46 L80,50 L100,44 L120,50 L140,42 L160,48 L180,45 L200,50 L220,44 L240,49 L260,46 L280,50 L300,45 L320,48" stroke="#4C7CFF" stroke-width="1.5" fill="none"/>
+        <path d="M0,20 L20,18 L40,25 L60,15 L80,22 L100,10 L120,20 L140,8 L160,18 L180,12 L200,20 L220,15 L240,22 L260,10 L280,18 L300,12 L320,15" stroke="#EF4444" stroke-width="1.5" fill="none"/>
+      </svg>
+    </div>
+
+  </div>
+
+
+  <!-- ────────────────────────────────  PROCESS  ──────────────────────── -->
+  <h2 id="tab-proc">进程标签页</h2>
+
+  <!-- Sub-tab bar with 进程 active -->
+  <div class="subtabs">
+    <div class="subtab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
+      性能
+    </div>
+    <div class="subtab active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      进程
+    </div>
+    <div class="subtab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+      磁盘
+    </div>
+    <div class="subtab-right">
+      <span style="color: var(--text-3); font-size: 11px;">刷新</span>
+      <select class="interval-select"><option>2s</option></select>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="proc-card">
+      <div class="proc-head">
+        <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span class="title">进程</span>
+        <span class="right">共 128 个 · 按 CPU 排序</span>
+      </div>
+      <table class="proc">
+        <thead>
+          <tr>
+            <th>PID</th>
+            <th class="num">CPU%(avg)</th>
+            <th class="num">MEM%</th>
+            <th>进程</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="pid">1247</td>
+            <td class="num">18.4% <span class="badge-tag cpu">CPU</span></td>
+            <td class="num">3.2%</td>
+            <td class="name">/usr/bin/node</td>
+          </tr>
+          <tr>
+            <td class="pid">982</td>
+            <td class="num">7.1%</td>
+            <td class="num">32.5% <span class="badge-tag mem">MEM</span></td>
+            <td class="name">postgres: writer process</td>
+          </tr>
+          <tr>
+            <td class="pid">1023</td>
+            <td class="num">3.8%</td>
+            <td class="num">8.7%</td>
+            <td class="name">/usr/sbin/nginx -g daemon off;</td>
+          </tr>
+          <tr>
+            <td class="pid">1156</td>
+            <td class="num">2.4%</td>
+            <td class="num">4.1%</td>
+            <td class="name">python3 worker.py</td>
+          </tr>
+          <tr>
+            <td class="pid">874</td>
+            <td class="num">1.9%</td>
+            <td class="num">1.2%</td>
+            <td class="name">/usr/bin/dockerd</td>
+          </tr>
+          <tr>
+            <td class="pid">1</td>
+            <td class="num">0.8%</td>
+            <td class="num">0.4%</td>
+            <td class="name">/sbin/init</td>
+          </tr>
+          <tr>
+            <td class="pid">432</td>
+            <td class="num">0.5%</td>
+            <td class="num">0.7%</td>
+            <td class="name">/usr/lib/systemd/systemd-journald</td>
+          </tr>
+          <tr>
+            <td class="pid">521</td>
+            <td class="num">0.3%</td>
+            <td class="num">0.2%</td>
+            <td class="name">sshd: root@pts/0</td>
+          </tr>
+          <tr>
+            <td class="pid">1289</td>
+            <td class="num">0.2%</td>
+            <td class="num">0.3%</td>
+            <td class="name">bash</td>
+          </tr>
+          <tr>
+            <td class="pid">2</td>
+            <td class="num">0.1%</td>
+            <td class="num">0.0%</td>
+            <td class="name">[kthreadd]</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+
+  <!-- ────────────────────────────────  DISK  ─────────────────────────── -->
+  <h2 id="tab-disk">磁盘标签页</h2>
+
+  <!-- Sub-tab bar with 磁盘 active -->
+  <div class="subtabs">
+    <div class="subtab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
+      性能
+    </div>
+    <div class="subtab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      进程
+    </div>
+    <div class="subtab active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+      磁盘
+    </div>
+    <div class="subtab-right">
+      <span style="color: var(--text-3); font-size: 11px;">刷新</span>
+      <select class="interval-select"><option>2s</option></select>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- Partitions -->
+    <div class="disk-card">
+      <div class="disk-head">
+        <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+        <span class="title">分区使用</span>
+        <span class="right">600.5 / 888.1 GB · 67.6%</span>
+      </div>
+
+      <div class="disk-row">
+        <div class="disk-row-top">
+          <span class="disk-mount">/</span>
+          <span class="disk-meta">66.7 / 97.9 GB · 可用 26.2 GB</span>
+          <span class="disk-pct warn">68%</span>
+        </div>
+        <div class="disk-track"><div class="disk-fill warn" style="width:68%"></div></div>
+      </div>
+
+      <div class="disk-row">
+        <div class="disk-row-top">
+          <span class="disk-mount">/boot</span>
+          <span class="disk-meta">0.2 / 1.9 GB · 可用 1.6 GB</span>
+          <span class="disk-pct ok">11%</span>
+        </div>
+        <div class="disk-track"><div class="disk-fill ok" style="width:11%"></div></div>
+      </div>
+
+      <div class="disk-row">
+        <div class="disk-row-top">
+          <span class="disk-mount">/boot/efi</span>
+          <span class="disk-meta">0.0 / 1.0 GB · 可用 0.9 GB</span>
+          <span class="disk-pct ok">3%</span>
+        </div>
+        <div class="disk-track"><div class="disk-fill ok" style="width:3%"></div></div>
+      </div>
+
+      <div class="disk-row">
+        <div class="disk-row-top">
+          <span class="disk-mount">/run</span>
+          <span class="disk-meta">0.0 / 0.8 GB · 可用 0.8 GB</span>
+          <span class="disk-pct ok">1%</span>
+        </div>
+        <div class="disk-track"><div class="disk-fill ok" style="width:1%"></div></div>
+      </div>
+
+      <div class="disk-row">
+        <div class="disk-row-top">
+          <span class="disk-mount">/dev/shm</span>
+          <span class="disk-meta">0.0 / 3.9 GB · 可用 3.9 GB</span>
+          <span class="disk-pct ok">1%</span>
+        </div>
+        <div class="disk-track"><div class="disk-fill ok" style="width:1%"></div></div>
+      </div>
+
+      <div class="disk-row">
+        <div class="disk-row-top">
+          <span class="disk-mount" title="/var/lib/docker/overlay2/ad7f109942aebef2ae94465dc67c1297c6beec4f1…">/var/lib/docker/overlay2/ad7f10…</span>
+          <span class="disk-meta">66.7 / 97.9 GB · 可用 26.2 GB</span>
+          <span class="disk-pct warn">68%</span>
+        </div>
+        <div class="disk-track"><div class="disk-fill warn" style="width:68%"></div></div>
+      </div>
+
+      <div class="disk-row">
+        <div class="disk-row-top">
+          <span class="disk-mount" title="/var/lib/docker/overlay2/729cc19de5f3314e6341e61652b0452e39c0ea23a…">/var/lib/docker/overlay2/729cc1…</span>
+          <span class="disk-meta">66.7 / 97.9 GB · 可用 26.2 GB</span>
+          <span class="disk-pct warn">68%</span>
+        </div>
+        <div class="disk-track"><div class="disk-fill warn" style="width:68%"></div></div>
+      </div>
+
+    </div>
+
+    <!-- Disk I/O -->
+    <div class="card">
+      <div class="card-head">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        <span class="title">磁盘 I/O</span>
+      </div>
+      <div class="dual">
+        <div class="sub rx">
+          <div class="lbl"><span class="arrow">↓</span>读取</div>
+          <div class="val">0 B/s</div>
+        </div>
+        <div class="sub tx">
+          <div class="lbl"><span class="arrow">↑</span>写入</div>
+          <div class="val">149 KB/s</div>
+        </div>
+      </div>
+      <svg class="spark" viewBox="0 0 320 60" preserveAspectRatio="none">
+        <path d="M0,50 L20,50 L40,50 L60,50 L80,50 L100,50 L120,48 L140,50 L160,50 L180,50 L200,50 L220,50 L240,49 L260,50 L280,50 L300,50 L320,50" stroke="#4C7CFF" stroke-width="1.5" fill="none"/>
+        <path d="M0,40 L20,35 L40,42 L60,30 L80,38 L100,25 L120,40 L140,20 L160,35 L180,28 L200,42 L220,30 L240,38 L260,22 L280,40 L300,32 L320,35" stroke="#EF4444" stroke-width="1.5" fill="none"/>
+      </svg>
+    </div>
+
+  </div>
+
+</div>
+</body>
+</html>

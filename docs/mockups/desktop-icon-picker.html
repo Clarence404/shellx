@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>ShellX · 桌面图标候选</title>
+<style>
+  :root {
+    --bg: #F7F8FA; --card: #FFFFFF; --border: #E7EAF0;
+    --text-1: #0F172A; --text-3: #94A3B8;
+    --accent: #4C7CFF;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text-1);
+    font-family: -apple-system, "Segoe UI Variable", "Segoe UI",
+                 "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+    padding: 40px 20px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+  .sub { color: var(--text-3); font-size: 13px; margin-bottom: 28px; }
+  .stage { max-width: 1080px; margin: 0 auto; }
+  .grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px;
+  }
+  .opt {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px 22px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .opt-head { display: flex; align-items: center; gap: 10px; }
+  .opt-badge {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--accent); color: white;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .opt-name { font-size: 14px; font-weight: 600; }
+  .opt-desc { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+
+  .row {
+    display: flex; align-items: center; gap: 18px;
+    padding: 14px 16px;
+    background: #F5F7FB;
+    border-radius: 10px;
+  }
+  .row.dark  { background: #0B0F1A; }
+  .row.wall  { background: linear-gradient(135deg, #4F46E5 0%, #E11D48 100%); }
+  .row .item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .row .item .sz {
+    font-size: 10px; color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .row.dark  .item .sz { color: #94A3B8; }
+  .row.wall  .item .sz { color: rgba(255,255,255,0.75); }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <h1>ShellX 桌面图标 · 候选</h1>
+  <div class="sub">三种主题下的表现：浅色 dock / 深色 dock / 花色壁纸（macOS 常见场景）。三个尺寸：16 / 32 / 96。</div>
+
+  <div class="grid">
+
+    <!-- ══════════════════ 1 ══════════════════ -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="opt-badge">1</span>
+        <div>
+          <div class="opt-name">深底 · 亮蓝 stroke</div>
+          <div class="opt-desc">跟应用内主色一致的蓝，深灰底当"底座"。稳、克制、和左上角 logo 是同一家。</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="16" height="16">
+            <rect x="56" y="56" width="400" height="400" rx="88" fill="#161824"/>
+            <g fill="none" stroke="#4C7CFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="140,320 220,240 140,160"/>
+              <line x1="260" y1="360" x2="380" y2="360"/>
+            </g>
+          </svg>
+          <span class="sz">16</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="32" height="32">
+            <rect x="56" y="56" width="400" height="400" rx="88" fill="#161824"/>
+            <g fill="none" stroke="#4C7CFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="140,320 220,240 140,160"/>
+              <line x1="260" y1="360" x2="380" y2="360"/>
+            </g>
+          </svg>
+          <span class="sz">32</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="96" height="96">
+            <rect x="56" y="56" width="400" height="400" rx="88" fill="#161824"/>
+            <g fill="none" stroke="#4C7CFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="140,320 220,240 140,160"/>
+              <line x1="260" y1="360" x2="380" y2="360"/>
+            </g>
+          </svg>
+          <span class="sz">96</span>
+        </div>
+      </div>
+      <div class="row dark">
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="16" height="16"><rect x="56" y="56" width="400" height="400" rx="88" fill="#161824"/><g fill="none" stroke="#4C7CFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">16</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="32" height="32"><rect x="56" y="56" width="400" height="400" rx="88" fill="#161824"/><g fill="none" stroke="#4C7CFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">32</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="96" height="96"><rect x="56" y="56" width="400" height="400" rx="88" fill="#161824"/><g fill="none" stroke="#4C7CFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">96</span>
+        </div>
+      </div>
+      <div class="row wall">
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="16" height="16"><rect x="56" y="56" width="400" height="400" rx="88" fill="#161824"/><g fill="none" stroke="#4C7CFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">16</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="32" height="32"><rect x="56" y="56" width="400" height="400" rx="88" fill="#161824"/><g fill="none" stroke="#4C7CFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">32</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="96" height="96"><rect x="56" y="56" width="400" height="400" rx="88" fill="#161824"/><g fill="none" stroke="#4C7CFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">96</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ 2 ══════════════════ -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="opt-badge">2</span>
+        <div>
+          <div class="opt-name">蓝色实心 · 白 stroke</div>
+          <div class="opt-desc">主色蓝当底、白色 stroke。醒目，一眼看到，跟顶栏主色高度绑定。</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="16" height="16">
+            <rect x="56" y="56" width="400" height="400" rx="88" fill="#4C7CFF"/>
+            <g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="140,320 220,240 140,160"/>
+              <line x1="260" y1="360" x2="380" y2="360"/>
+            </g>
+          </svg>
+          <span class="sz">16</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="32" height="32">
+            <rect x="56" y="56" width="400" height="400" rx="88" fill="#4C7CFF"/>
+            <g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="140,320 220,240 140,160"/>
+              <line x1="260" y1="360" x2="380" y2="360"/>
+            </g>
+          </svg>
+          <span class="sz">32</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="96" height="96">
+            <rect x="56" y="56" width="400" height="400" rx="88" fill="#4C7CFF"/>
+            <g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="140,320 220,240 140,160"/>
+              <line x1="260" y1="360" x2="380" y2="360"/>
+            </g>
+          </svg>
+          <span class="sz">96</span>
+        </div>
+      </div>
+      <div class="row dark">
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="16" height="16"><rect x="56" y="56" width="400" height="400" rx="88" fill="#4C7CFF"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">16</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="32" height="32"><rect x="56" y="56" width="400" height="400" rx="88" fill="#4C7CFF"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">32</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="96" height="96"><rect x="56" y="56" width="400" height="400" rx="88" fill="#4C7CFF"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">96</span>
+        </div>
+      </div>
+      <div class="row wall">
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="16" height="16"><rect x="56" y="56" width="400" height="400" rx="88" fill="#4C7CFF"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">16</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="32" height="32"><rect x="56" y="56" width="400" height="400" rx="88" fill="#4C7CFF"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">32</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="96" height="96"><rect x="56" y="56" width="400" height="400" rx="88" fill="#4C7CFF"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">96</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ 3 ══════════════════ -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="opt-badge">3</span>
+        <div>
+          <div class="opt-name">蓝紫渐变 · 白 stroke</div>
+          <div class="opt-desc">对角渐变，跟现代 SaaS（Linear/Warp/Cursor）同一视觉温度。醒目又不吵。</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="16" height="16">
+            <defs><linearGradient id="gr16a" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#4C7CFF"/><stop offset="100%" stop-color="#8B5CF6"/>
+            </linearGradient></defs>
+            <rect x="56" y="56" width="400" height="400" rx="88" fill="url(#gr16a)"/>
+            <g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="140,320 220,240 140,160"/>
+              <line x1="260" y1="360" x2="380" y2="360"/>
+            </g>
+          </svg>
+          <span class="sz">16</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="32" height="32">
+            <defs><linearGradient id="gr32a" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#4C7CFF"/><stop offset="100%" stop-color="#8B5CF6"/>
+            </linearGradient></defs>
+            <rect x="56" y="56" width="400" height="400" rx="88" fill="url(#gr32a)"/>
+            <g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="140,320 220,240 140,160"/>
+              <line x1="260" y1="360" x2="380" y2="360"/>
+            </g>
+          </svg>
+          <span class="sz">32</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="96" height="96">
+            <defs><linearGradient id="gr96a" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#4C7CFF"/><stop offset="100%" stop-color="#8B5CF6"/>
+            </linearGradient></defs>
+            <rect x="56" y="56" width="400" height="400" rx="88" fill="url(#gr96a)"/>
+            <g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="140,320 220,240 140,160"/>
+              <line x1="260" y1="360" x2="380" y2="360"/>
+            </g>
+          </svg>
+          <span class="sz">96</span>
+        </div>
+      </div>
+      <div class="row dark">
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="16" height="16"><defs><linearGradient id="gr16b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4C7CFF"/><stop offset="100%" stop-color="#8B5CF6"/></linearGradient></defs><rect x="56" y="56" width="400" height="400" rx="88" fill="url(#gr16b)"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">16</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="32" height="32"><defs><linearGradient id="gr32b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4C7CFF"/><stop offset="100%" stop-color="#8B5CF6"/></linearGradient></defs><rect x="56" y="56" width="400" height="400" rx="88" fill="url(#gr32b)"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">32</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="96" height="96"><defs><linearGradient id="gr96b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4C7CFF"/><stop offset="100%" stop-color="#8B5CF6"/></linearGradient></defs><rect x="56" y="56" width="400" height="400" rx="88" fill="url(#gr96b)"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">96</span>
+        </div>
+      </div>
+      <div class="row wall">
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="16" height="16"><defs><linearGradient id="gr16c" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4C7CFF"/><stop offset="100%" stop-color="#8B5CF6"/></linearGradient></defs><rect x="56" y="56" width="400" height="400" rx="88" fill="url(#gr16c)"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">16</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="32" height="32"><defs><linearGradient id="gr32c" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4C7CFF"/><stop offset="100%" stop-color="#8B5CF6"/></linearGradient></defs><rect x="56" y="56" width="400" height="400" rx="88" fill="url(#gr32c)"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">32</span>
+        </div>
+        <div class="item">
+          <svg viewBox="0 0 512 512" width="96" height="96"><defs><linearGradient id="gr96c" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4C7CFF"/><stop offset="100%" stop-color="#8B5CF6"/></linearGradient></defs><rect x="56" y="56" width="400" height="400" rx="88" fill="url(#gr96c)"/><g fill="none" stroke="white" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"><polyline points="140,320 220,240 140,160"/><line x1="260" y1="360" x2="380" y2="360"/></g></svg>
+          <span class="sz">96</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:32px; padding:16px 20px; background:var(--card); border:1px solid var(--border);
+              border-radius:12px; font-size:13px; color:#475569;">
+    <b>说明：</b>
+    <br><br>
+    左上角"应用内 logo"用 A 方案（无容器 chevron，克制），是刻意让顶栏保持轻盈；
+    桌面/任务栏图标需要容器来 hold 住背景对比 —— 三个方案里挑一个数字告诉我。<br><br>
+    <b>1</b> — 稳、专业感、跟当前深底老 logo 血脉延续<br>
+    <b>2</b> — 醒目、主色最强、辨识度最高<br>
+    <b>3</b> — 现代 SaaS 感、有渐变的品牌温度<br><br>
+    选完我会更新 <code>src-tauri/icons/source.svg</code> + 重新导出所有尺寸的 PNG / ICO / ICNS。
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>ShellX Logo · 候选方案</title>
+<style>
+  :root {
+    --bg:      #F7F8FA;
+    --card:    #FFFFFF;
+    --card-2:  #F5F7FB;
+    --border:  #E7EAF0;
+    --text-1:  #0F172A;
+    --text-2:  #475569;
+    --text-3:  #94A3B8;
+    --accent:  #4C7CFF;
+    --shadow:  0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text-1);
+    font-family: -apple-system, "Segoe UI Variable", "Segoe UI",
+                 "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+    padding: 40px 20px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 6px; }
+  .sub { color: var(--text-3); font-size: 13px; margin-bottom: 28px; }
+  .stage { max-width: 1080px; margin: 0 auto; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 22px;
+  }
+  .opt {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 22px;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .opt-head { display: flex; align-items: center; gap: 10px; }
+  .opt-badge {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--accent); color: white;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .opt-name { font-size: 14px; font-weight: 600; color: var(--text-1); }
+  .opt-desc { font-size: 12px; color: var(--text-3); margin-top: 4px; }
+
+  .row {
+    display: flex; align-items: center; gap: 22px;
+    padding: 12px 16px;
+    background: var(--card-2);
+    border-radius: 10px;
+  }
+  .row .item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .row .item .sz { font-size: 10px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .row .item .box {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: white; border-radius: 6px; padding: 4px;
+  }
+
+  .in-title {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 12px;
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 4px;
+  }
+  .in-title .name { font-size: 15px; font-weight: 700; letter-spacing: 0.2px; }
+  .in-title .ver {
+    color: var(--text-3); font-size: 11px;
+    background: var(--card-2); padding: 2px 8px; border-radius: 10px;
+  }
+
+  /* Dark preview */
+  .dark {
+    background: #0B0F1A;
+    color: #F1F5F9;
+    border-color: #262B3A;
+  }
+  .dark .box { background: #141824; }
+  .dark .name { color: #F1F5F9; }
+  .dark .ver { background: #1A1F2E; color: #94A3B8; }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <h1>ShellX Logo · 候选方案</h1>
+  <div class="sub">四个方向，每个在 28 / 48 / 96 三档尺寸下的预览，最下面一行是深色主题上的效果。选一个数字告诉我。</div>
+
+  <div class="grid">
+
+    <!-- ═════════════════════ A ═════════════════════ -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="opt-badge">A</span>
+        <div>
+          <div class="opt-name">Chevron 单色</div>
+          <div class="opt-desc">脱掉方框容器，纯 `>_` 单色线条。极简，跟 Linear / Vercel 同一流派。</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="28" height="28">
+            <g fill="none" stroke="#4C7CFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="8,10 15,16 8,22"/>
+              <line x1="18" y1="24" x2="26" y2="24"/>
+            </g>
+          </svg>
+        </div><span class="sz">28</span></div>
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="48" height="48">
+            <g fill="none" stroke="#4C7CFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="8,10 15,16 8,22"/>
+              <line x1="18" y1="24" x2="26" y2="24"/>
+            </g>
+          </svg>
+        </div><span class="sz">48</span></div>
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="96" height="96">
+            <g fill="none" stroke="#4C7CFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="8,10 15,16 8,22"/>
+              <line x1="18" y1="24" x2="26" y2="24"/>
+            </g>
+          </svg>
+        </div><span class="sz">96</span></div>
+      </div>
+      <div class="in-title">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <g fill="none" stroke="#4C7CFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="8,10 15,16 8,22"/>
+            <line x1="18" y1="24" x2="26" y2="24"/>
+          </g>
+        </svg>
+        <span class="name">ShellX</span>
+        <span class="ver">v0.15.0</span>
+      </div>
+      <div class="in-title dark">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <g fill="none" stroke="#7C9BFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="8,10 15,16 8,22"/>
+            <line x1="18" y1="24" x2="26" y2="24"/>
+          </g>
+        </svg>
+        <span class="name">ShellX</span>
+        <span class="ver">v0.15.0</span>
+      </div>
+    </div>
+
+    <!-- ═════════════════════ B ═════════════════════ -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="opt-badge">B</span>
+        <div>
+          <div class="opt-name">渐变胶囊</div>
+          <div class="opt-desc">柔和圆角方块 + 蓝紫渐变 + 白色 `>_`。像 Notion / Warp 那种 SaaS 感。</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="28" height="28">
+            <defs><linearGradient id="grB" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#4C7CFF"/><stop offset="100%" stop-color="#8B5CF6"/>
+            </linearGradient></defs>
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#grB)"/>
+            <g fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="10,11 15,16 10,21"/>
+              <line x1="17" y1="22" x2="22" y2="22"/>
+            </g>
+          </svg>
+        </div><span class="sz">28</span></div>
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="48" height="48">
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#grB)"/>
+            <g fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="10,11 15,16 10,21"/>
+              <line x1="17" y1="22" x2="22" y2="22"/>
+            </g>
+          </svg>
+        </div><span class="sz">48</span></div>
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="96" height="96">
+            <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#grB)"/>
+            <g fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="10,11 15,16 10,21"/>
+              <line x1="17" y1="22" x2="22" y2="22"/>
+            </g>
+          </svg>
+        </div><span class="sz">96</span></div>
+      </div>
+      <div class="in-title">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#grB)"/>
+          <g fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="10,11 15,16 10,21"/>
+            <line x1="17" y1="22" x2="22" y2="22"/>
+          </g>
+        </svg>
+        <span class="name">ShellX</span>
+        <span class="ver">v0.15.0</span>
+      </div>
+      <div class="in-title dark">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <rect x="2" y="2" width="28" height="28" rx="8" fill="url(#grB)"/>
+          <g fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="10,11 15,16 10,21"/>
+            <line x1="17" y1="22" x2="22" y2="22"/>
+          </g>
+        </svg>
+        <span class="name">ShellX</span>
+        <span class="ver">v0.15.0</span>
+      </div>
+    </div>
+
+    <!-- ═════════════════════ C ═════════════════════ -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="opt-badge">C</span>
+        <div>
+          <div class="opt-name">交错 X</div>
+          <div class="opt-desc">两个反向 chevron 组成 X 形，暗示 "ShellX" 里的 X + 双向连接。抽象但辨识度高。</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="28" height="28">
+            <g fill="none" stroke="#4C7CFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6,8 14,16 6,24"/>
+              <polyline points="26,8 18,16 26,24" opacity="0.55"/>
+            </g>
+          </svg>
+        </div><span class="sz">28</span></div>
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="48" height="48">
+            <g fill="none" stroke="#4C7CFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6,8 14,16 6,24"/>
+              <polyline points="26,8 18,16 26,24" opacity="0.55"/>
+            </g>
+          </svg>
+        </div><span class="sz">48</span></div>
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="96" height="96">
+            <g fill="none" stroke="#4C7CFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6,8 14,16 6,24"/>
+              <polyline points="26,8 18,16 26,24" opacity="0.55"/>
+            </g>
+          </svg>
+        </div><span class="sz">96</span></div>
+      </div>
+      <div class="in-title">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <g fill="none" stroke="#4C7CFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6,8 14,16 6,24"/>
+            <polyline points="26,8 18,16 26,24" opacity="0.55"/>
+          </g>
+        </svg>
+        <span class="name">ShellX</span>
+        <span class="ver">v0.15.0</span>
+      </div>
+      <div class="in-title dark">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <g fill="none" stroke="#7C9BFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6,8 14,16 6,24"/>
+            <polyline points="26,8 18,16 26,24" opacity="0.55"/>
+          </g>
+        </svg>
+        <span class="name">ShellX</span>
+        <span class="ver">v0.15.0</span>
+      </div>
+    </div>
+
+    <!-- ═════════════════════ D ═════════════════════ -->
+    <div class="opt">
+      <div class="opt-head">
+        <span class="opt-badge">D</span>
+        <div>
+          <div class="opt-name">终端窗口</div>
+          <div class="opt-desc">带三个圆点的终端窗口 + 内部提示符，辨识度最高，一眼看出是终端工具。</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="28" height="28">
+            <rect x="3" y="5" width="26" height="22" rx="4" fill="#4C7CFF"/>
+            <rect x="3" y="5" width="26" height="6" rx="4" fill="#3E68E6"/>
+            <path d="M3 11 h26" stroke="#3E68E6" stroke-width="0.5"/>
+            <circle cx="6.5" cy="8" r="1" fill="#FF6B6B"/>
+            <circle cx="10" cy="8" r="1" fill="#FFD93D"/>
+            <circle cx="13.5" cy="8" r="1" fill="#6BCB77"/>
+            <g fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="8,16 12,20 8,24"/>
+              <line x1="14" y1="24" x2="21" y2="24"/>
+            </g>
+          </svg>
+        </div><span class="sz">28</span></div>
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="48" height="48">
+            <rect x="3" y="5" width="26" height="22" rx="4" fill="#4C7CFF"/>
+            <rect x="3" y="5" width="26" height="6" rx="4" fill="#3E68E6"/>
+            <path d="M3 11 h26" stroke="#3E68E6" stroke-width="0.5"/>
+            <circle cx="6.5" cy="8" r="1" fill="#FF6B6B"/>
+            <circle cx="10" cy="8" r="1" fill="#FFD93D"/>
+            <circle cx="13.5" cy="8" r="1" fill="#6BCB77"/>
+            <g fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="8,16 12,20 8,24"/>
+              <line x1="14" y1="24" x2="21" y2="24"/>
+            </g>
+          </svg>
+        </div><span class="sz">48</span></div>
+        <div class="item"><div class="box">
+          <svg viewBox="0 0 32 32" width="96" height="96">
+            <rect x="3" y="5" width="26" height="22" rx="4" fill="#4C7CFF"/>
+            <rect x="3" y="5" width="26" height="6" rx="4" fill="#3E68E6"/>
+            <path d="M3 11 h26" stroke="#3E68E6" stroke-width="0.5"/>
+            <circle cx="6.5" cy="8" r="1" fill="#FF6B6B"/>
+            <circle cx="10" cy="8" r="1" fill="#FFD93D"/>
+            <circle cx="13.5" cy="8" r="1" fill="#6BCB77"/>
+            <g fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="8,16 12,20 8,24"/>
+              <line x1="14" y1="24" x2="21" y2="24"/>
+            </g>
+          </svg>
+        </div><span class="sz">96</span></div>
+      </div>
+      <div class="in-title">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <rect x="3" y="5" width="26" height="22" rx="4" fill="#4C7CFF"/>
+          <rect x="3" y="5" width="26" height="6" rx="4" fill="#3E68E6"/>
+          <circle cx="6.5" cy="8" r="1" fill="#FF6B6B"/>
+          <circle cx="10" cy="8" r="1" fill="#FFD93D"/>
+          <circle cx="13.5" cy="8" r="1" fill="#6BCB77"/>
+          <g fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="8,16 12,20 8,24"/>
+            <line x1="14" y1="24" x2="21" y2="24"/>
+          </g>
+        </svg>
+        <span class="name">ShellX</span>
+        <span class="ver">v0.15.0</span>
+      </div>
+      <div class="in-title dark">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <rect x="3" y="5" width="26" height="22" rx="4" fill="#4C7CFF"/>
+          <rect x="3" y="5" width="26" height="6" rx="4" fill="#3E68E6"/>
+          <circle cx="6.5" cy="8" r="1" fill="#FF6B6B"/>
+          <circle cx="10" cy="8" r="1" fill="#FFD93D"/>
+          <circle cx="13.5" cy="8" r="1" fill="#6BCB77"/>
+          <g fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="8,16 12,20 8,24"/>
+            <line x1="14" y1="24" x2="21" y2="24"/>
+          </g>
+        </svg>
+        <span class="name">ShellX</span>
+        <span class="ver">v0.15.0</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:32px; padding:16px 20px; background:var(--card); border:1px solid var(--border);
+              border-radius:12px; font-size:13px; color:var(--text-2);">
+    <strong style="color:var(--text-1);">选择建议：</strong>
+    <br><br>
+    <b>A</b> — 最克制、跟 Vercel/Linear/Cursor 同风格。适合"我们不想抢戏"。<br>
+    <b>B</b> — 现代 SaaS 感，容器 + 渐变有品牌记忆点。适合"我们是产品"。<br>
+    <b>C</b> — 抽象、独特，但辨识度需要培养。适合"我们不做终端做别的也能用"。<br>
+    <b>D</b> — 一眼看出是终端工具，具象。适合"我们就是终端 + SSH"。<br><br>
+    告诉我字母（A / B / C / D），我把 mockup 里的 logo 替换成对应的。
+  </div>
+</div>
+</body>
+</html>

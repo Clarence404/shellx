@@ -9,6 +9,7 @@ import {
   FILES_FONT_SIZE_MIN, FILES_FONT_SIZE_MAX,
 } from "../../types/settings";
 import type { Settings } from "../../types/settings";
+import { TERMINAL_PALETTES } from "../../types/terminal-palette";
 import { useT } from "../../i18n";
 
 // v0.5.4: every visible text size in this panel is derived from
@@ -318,8 +319,8 @@ function FilesPreview({ fontSize }: { fontSize: number }) {
   const rows: Array<{ name: string; Icon: typeof Folder; color: string; size: string | null }> = [
     { name: "documents",  Icon: Folder,   color: "var(--text-2)", size: null },
     { name: "server.log", Icon: FileIcon, color: "var(--text-3)", size: "128 KB" },
-    { name: "config.json", Icon: FileJson, color: "#a6e3a1", size: "4.2 KB" },
-    { name: "main.rs",    Icon: FileCode, color: "#f2c8a2", size: "9.8 KB" },
+    { name: "config.json", Icon: FileJson, color: "var(--success)", size: "4.2 KB" },
+    { name: "main.rs",    Icon: FileCode, color: "var(--warn)",    size: "9.8 KB" },
   ];
   return (
     <div style={{
@@ -352,9 +353,9 @@ function FilesPreview({ fontSize }: { fontSize: number }) {
 }
 
 // Mini terminal mock — kept intentionally static (no xterm, no PTY) so it
-// costs nothing to render and can't leak resources. Colours match the
-// TerminalView theme (`#1e1c24` bg / muted-sage green prompt / cyan path /
-// pastel text) so what you see here is what you get in the real tab.
+// costs nothing to render and can't leak resources. Reads TERMINAL_PALETTES
+// keyed by the current themeId so the preview always matches what the real
+// xterm tab will render.
 function TerminalPreview({
   fontFamily, fontSize, cursorStyle,
 }: {
@@ -362,49 +363,41 @@ function TerminalPreview({
   fontSize: number;
   cursorStyle: Settings["terminal"]["cursorStyle"];
 }) {
+  const themeId = useSettingsStore((s) => s.themeId);
+  const pal = TERMINAL_PALETTES[themeId];
   const cursorStyleMap: Record<Settings["terminal"]["cursorStyle"], {
-    width: string; height: string; verticalAlign: string; borderBottom?: string;
-    background: string;
+    width: string; height: string; verticalAlign: string; background: string;
   }> = {
-    block: {
-      width: "0.55em", height: "1em", verticalAlign: "text-bottom",
-      background: "#7c5cff",
-    },
-    underline: {
-      width: "0.55em", height: "0.12em", verticalAlign: "baseline",
-      background: "#7c5cff",
-    },
-    bar: {
-      width: "0.14em", height: "1em", verticalAlign: "text-bottom",
-      background: "#7c5cff",
-    },
+    block:     { width: "0.55em", height: "1em",    verticalAlign: "text-bottom", background: pal.cursor },
+    underline: { width: "0.55em", height: "0.12em", verticalAlign: "baseline",    background: pal.cursor },
+    bar:       { width: "0.14em", height: "1em",    verticalAlign: "text-bottom", background: pal.cursor },
   };
   return (
     <div style={{
-      background: "#1e1c24", borderRadius: 4,
+      background: pal.background, borderRadius: 4,
       padding: "10px 12px",
       fontFamily: FONT_MAP[fontFamily],
       fontSize, lineHeight: 1.4,
-      color: "#d4d0dc",
+      color: pal.foreground,
       maxWidth: 460,
       border: "0.5px solid var(--border)",
       overflow: "hidden",
     }}>
       <div>
-        <span style={{ color: "#7c9c80" }}>root@host</span>
-        <span style={{ color: "#8b869a" }}>:</span>
-        <span style={{ color: "#58d3fc" }}>~</span>
-        <span style={{ color: "#d4d0dc" }}>$ </span>
-        <span style={{ color: "#d4d0dc" }}>echo hi | grep hi</span>
+        <span style={{ color: pal.green }}>root@host</span>
+        <span style={{ color: pal.brightBlack }}>:</span>
+        <span style={{ color: pal.blue }}>~</span>
+        <span style={{ color: pal.foreground }}>$ </span>
+        <span style={{ color: pal.foreground }}>echo hi | grep hi</span>
       </div>
       <div>
-        <span style={{ color: "#d4d0dc" }}>hi</span>
+        <span style={{ color: pal.foreground }}>hi</span>
       </div>
       <div>
-        <span style={{ color: "#7c9c80" }}>root@host</span>
-        <span style={{ color: "#8b869a" }}>:</span>
-        <span style={{ color: "#58d3fc" }}>~</span>
-        <span style={{ color: "#d4d0dc" }}>$ </span>
+        <span style={{ color: pal.green }}>root@host</span>
+        <span style={{ color: pal.brightBlack }}>:</span>
+        <span style={{ color: pal.blue }}>~</span>
+        <span style={{ color: pal.foreground }}>$ </span>
         <span
           aria-hidden="true"
           style={{

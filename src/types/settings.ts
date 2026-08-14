@@ -16,7 +16,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  themeId: "warm-minimal",
+  themeId: "warm-light",
   density: "comfortable",
   systemFont: "system-default",
   systemFontSize: 13,
@@ -77,11 +77,11 @@ export const THEME_META: Array<{
   label: string;
   swatch: [string, string, string];
 }> = [
-  { id: "warm-minimal", label: "Warm Minimal", swatch: ["#1e1c24", "#7c5cff", "#322f3a"] },
-  { id: "warm-light",   label: "Warm Light",   swatch: ["#ffffff", "#6e4dff", "#dcd8d0"] },
+  { id: "warm-light",   label: "Light", swatch: ["#FFFFFF", "#4C7CFF", "#E7EAF0"] },
+  { id: "warm-minimal", label: "Dark",  swatch: ["#141824", "#7C9BFF", "#262B3A"] },
 ];
 
-export const VALID_THEMES: ReadonlyArray<Settings["themeId"]> = ["warm-minimal", "warm-light"];
+export const VALID_THEMES: ReadonlyArray<Settings["themeId"]> = ["warm-light", "warm-minimal"];
 
 export const DENSITY_META: Array<{ id: Settings["density"]; label: string }> = [
   { id: "compact", label: "Compact" },

@@ -11,6 +11,7 @@ import type { SessionId } from "../types/session";
 import { useSettingsStore } from "../state/settings";
 import { useSessions } from "../state/sessions";
 import { FONT_MAP } from "../types/settings";
+import { TERMINAL_PALETTES } from "../types/terminal-palette";
 import { useT } from "../i18n";
 
 export function TerminalView({ sessionId }: { sessionId: SessionId }) {
@@ -23,6 +24,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const terminal = useSettingsStore((s) => s.terminal);
+  const themeId = useSettingsStore((s) => s.themeId);
 
   function openSearch() {
     setSearchOpen(true);
@@ -59,6 +61,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     // when this effect re-runs relative to the settings store hydrating.
     const initialTerminal = useSettingsStore.getState().terminal;
 
+    const initialTheme = useSettingsStore.getState().themeId;
     const term = new Terminal({
       fontFamily: FONT_MAP[initialTerminal.fontFamily],
       fontSize: initialTerminal.fontSize,
@@ -68,39 +71,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       cursorInactiveStyle: "outline",
       convertEol: false,
       scrollback: 5000,
-      // v0.5.5: greens shifted to a muted sage. The prior pastel green
-      // (#a6e3a1 / #b8ecb0) doubles as a background for `ls`'s "other-
-      // writable directory" case (ANSI 42), and its high saturation +
-      // luminance washed blue foreground text out to near-invisibility.
-      // Sage green de-saturates the hue so both dark text (tw case,
-      // very readable — ~7:1) and blue text (ow case, ~2.4:1 but no
-      // longer painful thanks to the muted bg) sit legibly on it.
-      // Also matches warm-minimal's overall subdued palette better
-      // than the previous vivid pastel. Other colours unchanged; they
-      // don't hit the same fg/bg combo.
-      theme: {
-        background: "#1e1c24",
-        foreground: "#d4d0dc",
-        cursor: "#7c5cff",
-        cursorAccent: "#ffffff",
-        selectionBackground: "rgba(124,92,255,0.3)",
-        black: "#2a2830",
-        red: "#f28779",
-        green: "#7c9c80",
-        yellow: "#f2c8a2",
-        blue: "#58d3fc",
-        magenta: "#7c5cff",
-        cyan: "#89dceb",
-        white: "#d4d0dc",
-        brightBlack: "#8b869a",
-        brightRed: "#ff9080",
-        brightGreen: "#95b298",
-        brightYellow: "#f5d1af",
-        brightBlue: "#68dcf9",
-        brightMagenta: "#a08bff",
-        brightCyan: "#95e5f0",
-        brightWhite: "#eeeaef",
-      },
+      theme: TERMINAL_PALETTES[initialTheme],
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -264,18 +235,28 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     }
   }, [terminal.fontFamily, terminal.fontSize, terminal.cursorStyle]);
 
+  // Follow the app theme: swap xterm palette and the container gutter
+  // colour together so the 8px padding around xterm always matches its
+  // own theme.background rather than showing a stray strip of app bg.
+  useEffect(() => {
+    if (!termRef.current) return;
+    termRef.current.options.theme = TERMINAL_PALETTES[themeId];
+  }, [themeId]);
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div
         ref={hostRef}
-        // Background matches xterm's own theme.background (#1e1c24) rather
-        // than var(--panel-2). Under the light theme --panel-2 is #ffffff,
-        // which turns the 8px padding into a bright white gutter around
-        // the dark terminal — inconsistent with how the same padding
-        // reads as "extended dark bezel" in dark themes. Pinning it to
-        // the terminal palette's own background keeps the visual gap
-        // between drawer/toolbar and rendered text identical everywhere.
-        style={{ width: "100%", height: "100%", padding: 8, background: "#1e1c24", boxSizing: "border-box" }}
+        // Gutter (8px padding around xterm) matches the current xterm
+        // theme.background, so the padding reads as an extended bezel
+        // in either theme. Follows themeId so light-theme users get a
+        // white gutter and dark-theme users get a navy one — same
+        // terminal background either way.
+        style={{
+          width: "100%", height: "100%",
+          padding: "8px 8px 14px", boxSizing: "border-box",
+          background: TERMINAL_PALETTES[themeId].background,
+        }}
       />
       {searchOpen && (
         <div style={{
