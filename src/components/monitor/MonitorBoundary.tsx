@@ -1,4 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { translate } from "../../i18n";
+import { useSettingsStore } from "../../state/settings";
 
 interface State { error: Error | null }
 
@@ -15,13 +17,14 @@ export class MonitorBoundary extends Component<{ children: ReactNode }, State> {
 
   render() {
     if (this.state.error) {
+      const lang = useSettingsStore.getState().language;
       return (
         <div style={{
           height: "100%", display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center", gap: 10,
           background: "var(--panel-2)", color: "var(--error)", padding: 24,
         }}>
-          <span style={{ fontSize: 20 }}>⚠ 监控渲染错误</span>
+          <span style={{ fontSize: 20 }}>⚠ {translate(lang, "Monitor render error")}</span>
           <pre style={{
             fontSize: 11, color: "var(--text-2)", maxWidth: 480,
             overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all",

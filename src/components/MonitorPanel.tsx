@@ -5,6 +5,7 @@ import { HostInfoCard } from "./monitor/HostInfoCard";
 import { PerformanceTab } from "./monitor/PerformanceTab";
 import { ProcessTab } from "./monitor/ProcessTab";
 import { DiskTab } from "./monitor/DiskTab";
+import { useT } from "../i18n";
 
 type SubTab = "performance" | "process" | "disk";
 
@@ -12,12 +13,14 @@ const INTERVALS = [1, 2, 5, 10, 30] as const;
 type IntervalSecs = typeof INTERVALS[number];
 
 const EMPTY_SNAPSHOTS: never[] = [];
-const EMPTY_SYSTEM = { hostname: "", os: "", kernel: "", arch: "", uptimeSecs: 0 };
+const EMPTY_SYSTEM = { hostname: "", os: "", kernel: "", arch: "", uptimeSecs: 0, cpuModel: "", virt: "" };
 const EMPTY_DISK_IO = { readBytesPerSec: 0, writeBytesPerSec: 0 };
+const EMPTY_MEMORY = { totalKb: 0, usedKb: 0, cachedKb: 0, freeKb: 0, swapTotalKb: 0, swapUsedKb: 0 };
 
 interface Props { connectionId: string }
 
 export function MonitorPanel({ connectionId }: Props) {
+  const t = useT();
   const [subTab, setSubTab] = useState<SubTab>("performance");
   const [unsupported, setUnsupported] = useState(false);
   const [intervalSecs, setIntervalSecs] = useState<IntervalSecs>(2);
@@ -65,7 +68,7 @@ export function MonitorPanel({ connectionId }: Props) {
         background: "var(--panel-2)",
       }}>
         <span style={{ fontSize: 24 }}>&#9888;</span>
-        此主机不支持监控（仅支持 Linux）
+        {t("Monitoring is not supported on this host (Linux only)")}
       </div>
     );
   }
@@ -77,14 +80,18 @@ export function MonitorPanel({ connectionId }: Props) {
         color: "var(--text-3)", fontSize: 13,
         background: "var(--panel-2)",
       }}>
-        正在采集数据…
+        {t("Collecting data…")}
       </div>
     );
   }
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--panel-2)", overflow: "hidden" }}>
-      <HostInfoCard system={latest?.system ?? EMPTY_SYSTEM} />
+      <HostInfoCard
+        system={latest?.system ?? EMPTY_SYSTEM}
+        memory={latest?.memory ?? EMPTY_MEMORY}
+        connectionId={connectionId}
+      />
 
       {/* Sub-tab bar */}
       <div style={{
@@ -93,9 +100,9 @@ export function MonitorPanel({ connectionId }: Props) {
         flexShrink: 0,
       }}>
         {([
-          ["performance", "性能"],
-          ["process", "进程"],
-          ["disk", "磁盘"],
+          ["performance", t("Performance")],
+          ["process", t("Process")],
+          ["disk", t("Disk")],
         ] as [SubTab, string][]).map(([id, label]) => (
           <button
             key={id}
@@ -112,7 +119,7 @@ export function MonitorPanel({ connectionId }: Props) {
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 10, color: "var(--text-3)", marginRight: 4 }}>刷新</span>
+        <span style={{ fontSize: 10, color: "var(--text-3)", marginRight: 4 }}>{t("Refresh")}</span>
         <select
           value={intervalSecs}
           onChange={(e) => setIntervalSecs(Number(e.target.value) as IntervalSecs)}
@@ -130,7 +137,9 @@ export function MonitorPanel({ connectionId }: Props) {
 
       {/* Sub-tab content */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {subTab === "performance" && <PerformanceTab snapshots={snapshots} />}
+        {subTab === "performance" && (
+          <PerformanceTab snapshots={snapshots} diskIo={latest?.diskIo ?? EMPTY_DISK_IO} />
+        )}
         {subTab === "process" && <ProcessTab processes={latest?.processes ?? []} />}
         {subTab === "disk" && (
           <DiskTab

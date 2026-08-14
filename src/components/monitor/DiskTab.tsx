@@ -1,5 +1,7 @@
+import { HardDrive, Activity } from "lucide-react";
 import type { MonitorSnapshot, DiskMount } from "../../types/monitor";
 import { Sparkline } from "./Sparkline";
+import { useT } from "../../i18n";
 
 function fmtMb(mb: number): string {
   if (mb >= 1_048_576) return `${(mb / 1_048_576).toFixed(1)} TB`;
@@ -8,13 +10,14 @@ function fmtMb(mb: number): string {
 }
 
 function fmtBytes(n: number): string {
+  if (n >= 1_073_741_824) return `${(n / 1_073_741_824).toFixed(1)} GB/s`;
   if (n >= 1_048_576) return `${(n / 1_048_576).toFixed(1)} MB/s`;
   if (n >= 1024) return `${(n / 1024).toFixed(0)} KB/s`;
   return `${n} B/s`;
 }
 
 function diskColor(pct: number): string {
-  if (pct >= 80) return "var(--error)";
+  if (pct >= 85) return "var(--error)";
   if (pct >= 60) return "var(--warn)";
   return "var(--success)";
 }
@@ -26,89 +29,223 @@ interface Props {
 }
 
 export function DiskTab({ disks, diskIo, snapshots }: Props) {
+  const t = useT();
   const readHistory = snapshots.map((s) => s.diskIo.readBytesPerSec);
   const writeHistory = snapshots.map((s) => s.diskIo.writeBytesPerSec);
+  const ioMax = Math.max(...readHistory, ...writeHistory, 1);
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-      {/* Mount points */}
-      <div style={{
-        background: "var(--panel-1)", border: "1px solid var(--border)",
-        borderRadius: 6, overflow: "hidden",
-      }}>
-        <div style={{
-          padding: "8px 14px 6px",
-          fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5,
-          color: "var(--text-3)", borderBottom: "1px solid var(--border)",
-        }}>
-          挂载点
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        padding: 12,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      {/* Partitions — fills remaining space */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          background: "var(--panel-1)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div
+          style={{
+            padding: "12px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            borderBottom: "1px solid var(--border)",
+            flexShrink: 0,
+          }}
+        >
+          <HardDrive size={14} style={{ color: "var(--text-2)" }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)" }}>
+            {t("Partitions")}
+          </span>
+          <div style={{ flex: 1 }} />
+          {disks.length > 0 && (
+            <span style={{ fontSize: 11, color: "var(--text-3)" }}>
+              {disks.length} {t("mount points")}
+            </span>
+          )}
         </div>
-        {disks.length === 0 ? (
-          <div style={{ padding: "12px 14px", color: "var(--text-3)", fontSize: 13 }}>正在采集数据…</div>
-        ) : (
-          disks.map((d) => (
-            <div key={d.target} style={{
-              padding: "8px 14px",
-              borderBottom: "0.5px solid var(--border)",
-              display: "flex", alignItems: "center", gap: 12,
-            }}>
-              <div style={{ width: 120, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis",
-                whiteSpace: "nowrap", fontSize: "var(--font-ui-size)", color: "var(--text-1)" }}>
-                {d.target}
-              </div>
-              <div style={{ flex: 1, height: 6, background: "var(--border)", borderRadius: 3 }}>
-                <div style={{
-                  width: `${d.usePct}%`, height: "100%",
-                  background: diskColor(d.usePct), borderRadius: 3,
-                  transition: "width 0.5s ease",
-                }} />
-              </div>
-              <span style={{
-                width: 36, textAlign: "right", flexShrink: 0,
-                fontSize: "var(--font-ui-size)", color: "var(--text-2)",
-                fontVariantNumeric: "tabular-nums",
-              }}>
-                {d.usePct}%
-              </span>
-              <span style={{
-                flexShrink: 0, fontSize: "var(--font-ui-size)", color: "var(--text-3)",
-                fontVariantNumeric: "tabular-nums",
-              }}>
-                {fmtMb(d.usedMb)} / {fmtMb(d.sizeMb)}
-              </span>
+
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+          {disks.length === 0 ? (
+            <div style={{ padding: 24, color: "var(--text-3)", fontSize: 13 }}>
+              {t("Collecting data…")}
             </div>
-          ))
-        )}
+          ) : (
+            disks.map((d) => (
+              <div
+                key={d.target}
+                style={{
+                  padding: "10px 16px",
+                  borderBottom: "0.5px solid var(--border)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+                  <span
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontSize: "var(--font-ui-size)",
+                      color: "var(--text-1)",
+                      fontFamily: "var(--font-mono)",
+                    }}
+                    title={d.target}
+                  >
+                    {d.target}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "var(--text-3)",
+                      fontVariantNumeric: "tabular-nums",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {fmtMb(d.usedMb)} / {fmtMb(d.sizeMb)}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: diskColor(d.usePct),
+                      fontVariantNumeric: "tabular-nums",
+                      width: 42,
+                      textAlign: "right",
+                    }}
+                  >
+                    {d.usePct}%
+                  </span>
+                </div>
+                <div
+                  style={{
+                    height: 6,
+                    background: "var(--border)",
+                    borderRadius: 3,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${d.usePct}%`,
+                      height: "100%",
+                      background: diskColor(d.usePct),
+                      transition: "width 0.5s ease",
+                    }}
+                  />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
-      {/* Disk I/O */}
-      <div style={{
-        background: "var(--panel-1)", border: "1px solid var(--border)",
-        borderRadius: 6, padding: "12px 14px",
-      }}>
-        <div style={{
-          fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5,
-          color: "var(--text-3)", marginBottom: 10,
-        }}>
-          磁盘 I/O
+      {/* Disk I/O — fixed height at bottom */}
+      <div
+        style={{
+          background: "var(--panel-1)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          padding: "14px 16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Activity size={14} style={{ color: "var(--text-2)" }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)" }}>
+            {t("Disk I/O")}
+          </span>
         </div>
-        <div style={{ display: "flex", gap: 24 }}>
-          <div>
-            <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 4 }}>读取</div>
-            <div style={{ fontVariantNumeric: "tabular-nums", color: "var(--text-1)",
-              fontSize: 16, marginBottom: 6 }}>
+
+        <div style={{ display: "flex", gap: 32 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 3 }}>
+              {t("Read")}
+            </div>
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 300,
+                color: "var(--text-1)",
+                fontVariantNumeric: "tabular-nums",
+                lineHeight: 1,
+              }}
+            >
               {fmtBytes(diskIo.readBytesPerSec)}
             </div>
-            <Sparkline data={readHistory} color="var(--accent)" height={32} width={100} />
           </div>
-          <div>
-            <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 4 }}>写入</div>
-            <div style={{ fontVariantNumeric: "tabular-nums", color: "var(--text-1)",
-              fontSize: 16, marginBottom: 6 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 3 }}>
+              {t("Write")}
+            </div>
+            <div
+              style={{
+                fontSize: 22,
+                fontWeight: 300,
+                color: "var(--text-1)",
+                fontVariantNumeric: "tabular-nums",
+                lineHeight: 1,
+              }}
+            >
               {fmtBytes(diskIo.writeBytesPerSec)}
             </div>
-            <Sparkline data={writeHistory} color="var(--error)" height={32} width={100} />
           </div>
+        </div>
+
+        <div style={{ position: "relative", height: 72 }}>
+          <div style={{ position: "absolute", inset: 0 }}>
+            <Sparkline
+              data={readHistory}
+              color="var(--accent)"
+              fill="var(--accent-fade)"
+              fillContainer
+              max={ioMax}
+            />
+          </div>
+          <div style={{ position: "absolute", inset: 0 }}>
+            <Sparkline data={writeHistory} color="var(--error)" fillContainer max={ioMax} />
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 14,
+            fontSize: 10,
+            color: "var(--text-3)",
+            alignItems: "center",
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 2, background: "var(--accent)", borderRadius: 1 }} />
+            {t("Read")}
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 10, height: 2, background: "var(--error)", borderRadius: 1 }} />
+            {t("Write")}
+          </span>
         </div>
       </div>
     </div>
