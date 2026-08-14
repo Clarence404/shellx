@@ -242,6 +242,7 @@ const zh: Record<string, string> = {
   "processes · sorted by CPU": "个进程 · 按 CPU 排序",
   "Partitions": "分区使用",
   "mount points": "个挂载点",
+  "Avail": "可用",
   "Healthy": "正常",
   "Warning": "警告",
   "Critical": "危险",

@@ -218,14 +218,14 @@ export function HostInfoCard({ system, memory, connectionId }: Props) {
           rowGap: 6,
         }}
       >
-        <InfoColumn rows={leftRows} />
-        <InfoColumn rows={rightRows} />
+        <InfoColumn rows={leftRows} labelWidth={64} />
+        <InfoColumn rows={rightRows} labelWidth={96} />
       </div>
     </div>
   );
 }
 
-function InfoColumn({ rows }: { rows: Array<[string, React.ReactNode]> }) {
+function InfoColumn({ rows, labelWidth }: { rows: Array<[string, React.ReactNode]>; labelWidth: number }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
       {rows.map(([label, value]) => (
@@ -234,8 +234,11 @@ function InfoColumn({ rows }: { rows: Array<[string, React.ReactNode]> }) {
             style={{
               fontSize: 12,
               color: "var(--text-3)",
-              width: 56,
+              width: labelWidth,
               flexShrink: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
             }}
           >
             {label}

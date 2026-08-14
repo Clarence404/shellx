@@ -19,6 +19,9 @@ const POLL_CMD: &str = concat!(
     "echo '---PS---'; ps -eo pid,pcpu,pmem,comm --sort=-%cpu --no-headers 2>/dev/null | head -50; ",
     "echo '---DF---'; df -Pl 2>/dev/null; ",
     "echo '---DISKIO---'; cat /proc/diskstats; ",
+    "echo '---OSREL---'; cat /etc/os-release 2>/dev/null; ",
+    "echo '---CPUINFO---'; grep -m1 '^model name' /proc/cpuinfo 2>/dev/null; ",
+    "echo '---VIRT---'; (systemd-detect-virt 2>/dev/null || echo none); ",
     "echo '---UPTIME---'; cat /proc/uptime; uname -snrm; hostname"
 );
 
@@ -98,6 +101,8 @@ pub struct SystemInfo {
     pub kernel: String,
     pub arch: String,
     pub uptime_secs: u64,
+    pub cpu_model: String,
+    pub virt: String,
 }
 
 // ── Internal delta-tracking types ───────────────────────────────────────────
@@ -270,7 +275,6 @@ fn parse_df(section: &str) -> Vec<DiskMount> {
         .filter_map(|l| {
             let p: Vec<&str> = l.split_whitespace().collect();
             if p.len() < 6 { return None; }
-            if !p[0].starts_with("/dev/") { return None; }
             let use_pct: u32 = p[4].trim_end_matches('%').parse().unwrap_or(0);
             Some(DiskMount {
                 target: p[5].to_string(),
@@ -315,14 +319,42 @@ fn diskio_delta(prev: &DiskIoRaw, curr: &DiskIoRaw, elapsed_secs: f64) -> DiskIo
     }
 }
 
-fn parse_uptime_uname(section: &str) -> SystemInfo {
-    let mut lines = section.lines().filter(|l| !l.trim().is_empty());
+fn parse_os_release(section: &str) -> Option<String> {
+    let mut pretty: Option<String> = None;
+    let mut name: Option<String> = None;
+    for line in section.lines() {
+        if let Some(rest) = line.strip_prefix("PRETTY_NAME=") {
+            pretty = Some(rest.trim().trim_matches('"').to_string());
+        } else if let Some(rest) = line.strip_prefix("NAME=") {
+            name = Some(rest.trim().trim_matches('"').to_string());
+        }
+    }
+    pretty.or(name).filter(|s| !s.is_empty())
+}
+
+fn parse_cpu_model(section: &str) -> String {
+    section.lines().next()
+        .and_then(|l| l.split_once(':').map(|(_, v)| v.trim().to_string()))
+        .unwrap_or_default()
+}
+
+fn parse_virt(section: &str) -> String {
+    section.lines().next().unwrap_or("").trim().to_string()
+}
+
+fn parse_system_info(
+    uptime_section: &str,
+    osrel_section: &str,
+    cpuinfo_section: &str,
+    virt_section: &str,
+) -> SystemInfo {
+    let mut lines = uptime_section.lines().filter(|l| !l.trim().is_empty());
     let uptime_secs: u64 = lines.next()
         .and_then(|l| l.split_whitespace().next())
         .and_then(|s| s.split('.').next())
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
-    let (os, kernel, arch) = lines.next()
+    let (uname_os, kernel, arch) = lines.next()
         .map(|l| {
             let p: Vec<&str> = l.split_whitespace().collect();
             (
@@ -333,7 +365,10 @@ fn parse_uptime_uname(section: &str) -> SystemInfo {
         })
         .unwrap_or_default();
     let hostname = lines.next().unwrap_or("").trim().to_string();
-    SystemInfo { hostname, os, kernel, arch, uptime_secs }
+    let os = parse_os_release(osrel_section).unwrap_or(uname_os);
+    let cpu_model = parse_cpu_model(cpuinfo_section);
+    let virt = parse_virt(virt_section);
+    SystemInfo { hostname, os, kernel, arch, uptime_secs, cpu_model, virt }
 }
 
 // ── Poll loop ────────────────────────────────────────────────────────────────
@@ -403,7 +438,12 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
             processes: parse_ps(extract_section(&output, "PS")),
             disks:     parse_df(extract_section(&output, "DF")),
             disk_io,
-            system:    parse_uptime_uname(extract_section(&output, "UPTIME")),
+            system:    parse_system_info(
+                extract_section(&output, "UPTIME"),
+                extract_section(&output, "OSREL"),
+                extract_section(&output, "CPUINFO"),
+                extract_section(&output, "VIRT"),
+            ),
         };
 
         prev = Some(PrevState {

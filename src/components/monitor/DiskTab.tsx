@@ -34,6 +34,10 @@ export function DiskTab({ disks, diskIo, snapshots }: Props) {
   const writeHistory = snapshots.map((s) => s.diskIo.writeBytesPerSec);
   const ioMax = Math.max(...readHistory, ...writeHistory, 1);
 
+  const totalMb = disks.reduce((a, d) => a + d.sizeMb, 0);
+  const usedMb  = disks.reduce((a, d) => a + d.usedMb, 0);
+  const overallPct = totalMb > 0 ? Math.round((usedMb / totalMb) * 100) : 0;
+
   return (
     <div
       style={{
@@ -43,13 +47,13 @@ export function DiskTab({ disks, diskIo, snapshots }: Props) {
         display: "flex",
         flexDirection: "column",
         gap: 10,
+        overflowY: "auto",
       }}
     >
-      {/* Partitions — fills remaining space */}
+      {/* Partitions — natural height; outer DiskTab scrolls when needed */}
       <div
         style={{
-          flex: 1,
-          minHeight: 0,
+          flexShrink: 0,
           background: "var(--panel-1)",
           border: "1px solid var(--border)",
           borderRadius: 10,
@@ -74,13 +78,19 @@ export function DiskTab({ disks, diskIo, snapshots }: Props) {
           </span>
           <div style={{ flex: 1 }} />
           {disks.length > 0 && (
-            <span style={{ fontSize: 11, color: "var(--text-3)" }}>
-              {disks.length} {t("mount points")}
+            <span
+              style={{
+                fontSize: 11,
+                color: "var(--text-3)",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {fmtMb(usedMb)} / {fmtMb(totalMb)} · {overallPct}%
             </span>
           )}
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        <div>
           {disks.length === 0 ? (
             <div style={{ padding: 24, color: "var(--text-3)", fontSize: 13 }}>
               {t("Collecting data…")}
@@ -121,7 +131,7 @@ export function DiskTab({ disks, diskIo, snapshots }: Props) {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {fmtMb(d.usedMb)} / {fmtMb(d.sizeMb)}
+                    {fmtMb(d.usedMb)} / {fmtMb(d.sizeMb)} · {t("Avail")} {fmtMb(d.availMb)}
                   </span>
                   <span
                     style={{
@@ -165,10 +175,10 @@ export function DiskTab({ disks, diskIo, snapshots }: Props) {
           background: "var(--panel-1)",
           border: "1px solid var(--border)",
           borderRadius: 10,
-          padding: "14px 16px",
+          padding: "12px 16px",
           display: "flex",
           flexDirection: "column",
-          gap: 10,
+          gap: 8,
           flexShrink: 0,
         }}
       >
@@ -214,7 +224,7 @@ export function DiskTab({ disks, diskIo, snapshots }: Props) {
           </div>
         </div>
 
-        <div style={{ position: "relative", height: 72 }}>
+        <div style={{ position: "relative", height: 48 }}>
           <div style={{ position: "absolute", inset: 0 }}>
             <Sparkline
               data={readHistory}

@@ -44,6 +44,8 @@ export interface SystemInfo {
   kernel: string;
   arch: string;
   uptimeSecs: number;
+  cpuModel: string;
+  virt: string;
 }
 
 export interface MonitorSnapshot {
