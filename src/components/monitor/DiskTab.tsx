@@ -14,9 +14,9 @@ function fmtBytes(n: number): string {
 }
 
 function diskColor(pct: number): string {
-  if (pct >= 80) return "#e06c75";
-  if (pct >= 60) return "#e5c07b";
-  return "#4caf50";
+  if (pct >= 80) return "var(--error)";
+  if (pct >= 60) return "var(--warn)";
+  return "var(--success)";
 }
 
 interface Props {
@@ -99,7 +99,7 @@ export function DiskTab({ disks, diskIo, snapshots }: Props) {
               fontSize: 16, marginBottom: 6 }}>
               {fmtBytes(diskIo.readBytesPerSec)}
             </div>
-            <Sparkline data={readHistory} color="#6fa8dc" fill="rgba(111,168,220,0.15)" height={32} width={100} />
+            <Sparkline data={readHistory} color="var(--accent)" height={32} width={100} />
           </div>
           <div>
             <div style={{ fontSize: 10, color: "var(--text-3)", marginBottom: 4 }}>写入</div>
@@ -107,7 +107,7 @@ export function DiskTab({ disks, diskIo, snapshots }: Props) {
               fontSize: 16, marginBottom: 6 }}>
               {fmtBytes(diskIo.writeBytesPerSec)}
             </div>
-            <Sparkline data={writeHistory} color="#e06c75" fill="rgba(224,108,117,0.15)" height={32} width={100} />
+            <Sparkline data={writeHistory} color="var(--error)" height={32} width={100} />
           </div>
         </div>
       </div>

@@ -1,12 +1,12 @@
 interface SparklineProps {
   data: number[];
-  color: string;
-  fill: string;
+  color?: string;
+  fill?: string;
   height: number;
   width?: number;
 }
 
-export function Sparkline({ data, color, fill, height, width = 120 }: SparklineProps) {
+export function Sparkline({ data, color = "var(--accent)", fill = "transparent", height, width = 120 }: SparklineProps) {
   if (data.length < 2) {
     return <svg width={width} height={height} />;
   }

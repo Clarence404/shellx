@@ -13,9 +13,10 @@ function fmtBytes(n: number): string {
 }
 
 function fmtKb(kb: number): string {
-  if (kb >= 1_048_576) return `${(kb / 1_048_576).toFixed(1)} TB`;
-  if (kb >= 1024) return `${(kb / 1024).toFixed(1)} GB`;
-  return `${kb} MB`;
+  if (kb >= 1_073_741_824) return `${(kb / 1_073_741_824).toFixed(1)} TB`;
+  if (kb >= 1_048_576) return `${(kb / 1_048_576).toFixed(1)} GB`;
+  if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
+  return `${kb} KB`;
 }
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -96,12 +97,12 @@ export function PerformanceTab({ snapshots }: Props) {
           <span style={{ fontSize: 28, fontVariantNumeric: "tabular-nums", color: "var(--text-1)" }}>
             {fmt(memPct)}%
           </span>
-          <Sparkline data={memHistory} color="#4caf50" fill="rgba(76,175,80,0.15)" height={40} width={120} />
+          <Sparkline data={memHistory} color="var(--success)" height={40} width={120} />
         </div>
         <div style={{ height: 6, background: "var(--border)", borderRadius: 3 }}>
           <div style={{
             width: `${memPct.toFixed(1)}%`, height: "100%",
-            background: "#4caf50", borderRadius: 3, transition: "width 0.5s ease",
+            background: "var(--success)", borderRadius: 3, transition: "width 0.5s ease",
           }} />
         </div>
         <div style={{ fontSize: "var(--font-ui-size)", color: "var(--text-2)", display: "flex", gap: 16 }}>
@@ -135,14 +136,14 @@ export function PerformanceTab({ snapshots }: Props) {
                       <div style={{ fontVariantNumeric: "tabular-nums", color: "var(--text-1)" }}>
                         {fmtBytes(iface.rxBytesPerSec)}
                       </div>
-                      <Sparkline data={rxHistory} color="#6fa8dc" fill="rgba(111,168,220,0.15)" height={24} width={80} />
+                      <Sparkline data={rxHistory} color="var(--accent)" height={24} width={80} />
                     </div>
                     <div>
                       <div style={{ fontSize: 10, color: "var(--text-3)" }}>↑ 发送</div>
                       <div style={{ fontVariantNumeric: "tabular-nums", color: "var(--text-1)" }}>
                         {fmtBytes(iface.txBytesPerSec)}
                       </div>
-                      <Sparkline data={txHistory} color="#e06c75" fill="rgba(224,108,117,0.15)" height={24} width={80} />
+                      <Sparkline data={txHistory} color="var(--error)" height={24} width={80} />
                     </div>
                   </div>
                 </div>

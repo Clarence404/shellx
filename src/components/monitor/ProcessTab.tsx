@@ -59,7 +59,7 @@ export function ProcessTab({ processes }: Props) {
                   {p.pid === topCpuPid && (
                     <span style={{
                       fontSize: 9, padding: "1px 4px", borderRadius: 3,
-                      background: "rgba(100,149,237,0.2)", color: "#6495ed",
+                      background: "var(--accent-fade)", color: "var(--accent)",
                       textTransform: "uppercase",
                     }}>CPU</span>
                   )}
@@ -71,7 +71,7 @@ export function ProcessTab({ processes }: Props) {
                   {p.pid === topMemPid && (
                     <span style={{
                       fontSize: 9, padding: "1px 4px", borderRadius: 3,
-                      background: "rgba(76,175,80,0.2)", color: "#4caf50",
+                      background: "var(--accent-fade)", color: "var(--success)",
                       textTransform: "uppercase",
                     }}>MEM</span>
                   )}
