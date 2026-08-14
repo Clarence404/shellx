@@ -254,10 +254,10 @@ fn parse_size_mb(s: &str) -> u64 {
     let (num_s, unit) = s.split_at(s.len().saturating_sub(1));
     let n: f64 = num_s.parse().unwrap_or(0.0);
     match unit {
-        "T" => (n * 1_000_000.0) as u64,
-        "G" => (n * 1_000.0) as u64,
+        "T" => (n * 1_048_576.0) as u64,
+        "G" => (n * 1_024.0) as u64,
         "M" => n as u64,
-        "K" => (n / 1_000.0) as u64,
+        "K" => (n / 1_024.0) as u64,
         _ => num_s.parse::<f64>().unwrap_or(0.0) as u64 / 1_048_576,
     }
 }
