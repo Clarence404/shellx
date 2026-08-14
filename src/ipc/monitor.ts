@@ -3,11 +3,11 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { MonitorSnapshot } from "../types/monitor";
 
 export async function startMonitor(connId: string): Promise<void> {
-  await invoke("monitor_start", { connId });
+  await invoke("monitor_start", { conn_id: connId });
 }
 
 export async function stopMonitor(connId: string): Promise<void> {
-  await invoke("monitor_stop", { connId });
+  await invoke("monitor_stop", { conn_id: connId });
 }
 
 export function onMonitorSnapshot(
