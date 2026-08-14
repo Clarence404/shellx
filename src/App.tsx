@@ -8,6 +8,7 @@ import { ActivityToolbar } from "./components/ActivityToolbar";
 import { FileBrowserView } from "./components/FileBrowserView";
 import { TunnelsPanel } from "./components/TunnelsPanel";
 import { MonitorPanel } from "./components/MonitorPanel";
+import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
@@ -545,7 +546,9 @@ export function App() {
               )}
               {effectiveActivity === "monitor" && activeId && activeSession?.kind === "ssh" && (
                 <div key={activeId} style={{ position: "absolute", inset: 0 }}>
-                  <MonitorPanel connectionId={activeId} />
+                  <MonitorBoundary>
+                    <MonitorPanel connectionId={activeId} />
+                  </MonitorBoundary>
                 </div>
               )}
             </div>

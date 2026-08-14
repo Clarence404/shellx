@@ -10,14 +10,14 @@ use tokio::time::{sleep, Duration};
 pub const EV_SNAPSHOT: &str = "monitor:snapshot";
 pub const EV_UNSUPPORTED: &str = "monitor:unsupported";
 
-const POLL_INTERVAL: Duration = Duration::from_secs(3);
+const POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 const POLL_CMD: &str = concat!(
     "echo '---STAT---'; cat /proc/stat; ",
     "echo '---MEM---'; cat /proc/meminfo; ",
     "echo '---NET---'; cat /proc/net/dev; ",
     "echo '---PS---'; ps -eo pid,pcpu,pmem,comm --sort=-%cpu --no-headers 2>/dev/null | head -50; ",
-    "echo '---DF---'; df -Ph 2>/dev/null; ",
+    "echo '---DF---'; df -Pl 2>/dev/null; ",
     "echo '---DISKIO---'; cat /proc/diskstats; ",
     "echo '---UPTIME---'; cat /proc/uptime; uname -snrm; hostname"
 );
@@ -362,13 +362,12 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle) {
     let mut err_count: u8 = 0;
 
     loop {
-        sleep(POLL_INTERVAL).await;
-
         let output = match exec_cmd(&handle, POLL_CMD).await {
             Ok(o) => { err_count = 0; o }
             Err(_) => {
                 err_count += 1;
                 if err_count >= 3 { break; }
+                sleep(POLL_INTERVAL).await;
                 continue;
             }
         };
@@ -414,5 +413,6 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle) {
         });
 
         let _ = app.emit(EV_SNAPSHOT, &snapshot);
+        sleep(POLL_INTERVAL).await;
     }
 }

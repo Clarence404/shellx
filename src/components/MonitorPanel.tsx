@@ -8,6 +8,7 @@ import { DiskTab } from "./monitor/DiskTab";
 
 type SubTab = "performance" | "process" | "disk";
 
+const EMPTY_SNAPSHOTS: never[] = [];
 const EMPTY_SYSTEM = { hostname: "", os: "", kernel: "", arch: "", uptimeSecs: 0 };
 const EMPTY_DISK_IO = { readBytesPerSec: 0, writeBytesPerSec: 0 };
 
@@ -16,7 +17,7 @@ interface Props { connectionId: string }
 export function MonitorPanel({ connectionId }: Props) {
   const [subTab, setSubTab] = useState<SubTab>("performance");
   const [unsupported, setUnsupported] = useState(false);
-  const snapshots = useMonitorStore((s) => s.snapshots[connectionId] ?? []);
+  const snapshots = useMonitorStore((s) => s.snapshots[connectionId]) ?? EMPTY_SNAPSHOTS;
   const latest = snapshots[snapshots.length - 1];
 
   const unlistenSnapRef = useRef<(() => void) | undefined>(undefined);
