@@ -3,6 +3,7 @@
 
 use shellx::config_paths::resolve_config_dir;
 use shellx::ipc;
+use shellx::monitor::manager::MonitorManager;
 use shellx::session::manager::SessionManager;
 use shellx::settings::SettingsStore;
 use shellx::store::{HostStore, KeychainStore, TunnelStore};
@@ -39,6 +40,7 @@ fn main() {
         .manage(tunnel_store)
         .manage(keychain)
         .manage(settings_store)
+        .manage(MonitorManager::new())
         .manage(shellx::ipc::config::ConfigDir(config_dir.clone()))
         .manage(shellx::ipc::hostkeys::ChallengeRegistry::default())
         .invoke_handler(tauri::generate_handler![
@@ -101,6 +103,8 @@ fn main() {
             ipc::tunnels::tunnel_close,
             ipc::tunnels::tunnel_add_session,
             ipc::tunnels::tunnel_reorder,
+            ipc::monitor::monitor_start,
+            ipc::monitor::monitor_stop,
         ])
         .run(tauri::generate_context!())
         .expect("shellx failed to start");

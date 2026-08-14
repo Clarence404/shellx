@@ -1,3 +1,5 @@
+pub mod manager;
+
 use crate::protocol::ssh::exec_cmd;
 use crate::protocol::RusshHandle;
 use serde::Serialize;
