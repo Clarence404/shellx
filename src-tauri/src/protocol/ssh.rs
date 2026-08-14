@@ -45,6 +45,10 @@ impl SshConnection {
     pub fn handle_clone(&self) -> RusshHandle {
         Arc::clone(&self.handle)
     }
+
+    pub async fn exec(&self, cmd: &str) -> Result<String> {
+        exec_cmd(&self.handle, cmd).await
+    }
 }
 
 /// Maximum time the initial SSH connect (TCP handshake + KEX) is allowed to take before
@@ -168,6 +172,31 @@ impl Connection for SshConnection {
             .await
             .map_err(|e| Error::Protocol(format!("disconnect: {e}")))
     }
+}
+
+/// Runs a one-shot exec command on the given SSH connection handle and
+/// collects all stdout. Returns empty string on connection error (caller
+/// decides whether to retry).
+pub(crate) async fn exec_cmd(handle: &RusshHandle, cmd: &str) -> Result<String> {
+    let mut channel = handle
+        .channel_open_session()
+        .await
+        .map_err(|e| Error::Protocol(format!("exec open session: {e}")))?;
+    channel
+        .exec(true, cmd.as_bytes())
+        .await
+        .map_err(|e| Error::Protocol(format!("exec request: {e}")))?;
+    let mut buf: Vec<u8> = Vec::new();
+    loop {
+        match channel.wait().await {
+            Some(ChannelMsg::Data { data }) => buf.extend_from_slice(&data),
+            Some(ChannelMsg::ExtendedData { .. }) => {}
+            Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+            Some(ChannelMsg::ExitStatus { .. }) => {}
+            _ => {}
+        }
+    }
+    Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
 impl ShellHandle {
