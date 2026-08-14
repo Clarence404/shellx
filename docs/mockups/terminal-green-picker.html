@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Terminal 绿色候选（ANSI 42 · ow 目录背景）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #F7F8FA; color: #0F172A;
+    font-family: -apple-system, "Segoe UI Variable", "Segoe UI",
+                 "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+    padding: 32px 20px 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 20px; margin-bottom: 6px; }
+  .sub { color: #64748B; font-size: 13px; margin-bottom: 26px; max-width: 760px; }
+  .stage { max-width: 1160px; margin: 0 auto; }
+  h2 {
+    font-size: 12px; color: #94A3B8; text-transform: uppercase; letter-spacing: 1.4px;
+    margin: 32px 0 12px; font-weight: 600;
+  }
+  .grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  }
+  .opt {
+    background: #FFFFFF; border: 1px solid #E7EAF0; border-radius: 10px;
+    padding: 12px; display: flex; flex-direction: column; gap: 10px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .opt-head {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .opt-name { font-size: 12px; font-weight: 600; }
+  .opt-hex {
+    font-size: 10px; color: #64748B;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  /* Terminal-strip preview: bg = terminal bg, showing a line of ls output
+     with normal green text + one "ow" folder that has green bg + blue text. */
+  .strip {
+    padding: 10px 12px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, monospace; font-size: 12px;
+    line-height: 1.5;
+    white-space: nowrap; overflow: hidden;
+  }
+  .strip.dark  { background: #0E1220; color: #F1F5F9; }
+  .strip.light { background: #FAFBFD; color: #1E293B; }
+
+  .cell { padding: 0 2px; }
+  .cell.dir { color: #2563EB; } /* light theme blue text */
+  .strip.dark .cell.dir { color: #7C9BFF; }
+  .cell.ow-text {
+    /* the actual failing pair — blue text on green bg */
+    /* bg color set per-option via inline style */
+  }
+  .strip.dark .cell.ow-text { color: #7C9BFF; }
+  .strip.light .cell.ow-text { color: #2563EB; }
+
+  .cell.name { color: inherit; }
+
+  .num {
+    display: inline-block; width: 22px; height: 22px; border-radius: 6px;
+    background: #4C7CFF; color: white;
+    font-size: 11px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <h1>Terminal 绿色候选</h1>
+  <div class="sub">
+    问题：<code>ls</code> 里 "other-writable" 目录用绿背景 + 蓝文字（ANSI 42 + 34），当前 green 太亮，蓝字被吞。
+    每个卡片是一行终端预览：正常绿字目录 + 一个 <code>ow_folder</code> 用蓝字压绿背景。挑最看得清的一个。
+  </div>
+
+  <!-- ═════════ Dark ═════════ -->
+  <h2>暗色主题 · 终端背景 <code>#0E1220</code> · ow 蓝字 <code>#7C9BFF</code></h2>
+  <div class="grid">
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">1</span> Sage 淡 · 当前</span><span class="opt-hex">#7C9C80</span></div>
+      <div class="strip dark">
+        <span class="cell dir">documents</span>
+        <span class="cell dir">src</span>
+        <span class="cell ow-text" style="background:#7C9C80">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">2</span> Sage 中</span><span class="opt-hex">#6B8E75</span></div>
+      <div class="strip dark">
+        <span class="cell dir">documents</span>
+        <span class="cell dir">src</span>
+        <span class="cell ow-text" style="background:#6B8E75">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">3</span> Sage 深</span><span class="opt-hex">#4F7360</span></div>
+      <div class="strip dark">
+        <span class="cell dir">documents</span>
+        <span class="cell dir">src</span>
+        <span class="cell ow-text" style="background:#4F7360">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">4</span> Forest 深</span><span class="opt-hex">#2F5D42</span></div>
+      <div class="strip dark">
+        <span class="cell dir">documents</span>
+        <span class="cell dir">src</span>
+        <span class="cell ow-text" style="background:#2F5D42">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">5</span> Emerald 暗</span><span class="opt-hex">#1F5136</span></div>
+      <div class="strip dark">
+        <span class="cell dir">documents</span>
+        <span class="cell dir">src</span>
+        <span class="cell ow-text" style="background:#1F5136">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">6</span> Olive 亮</span><span class="opt-hex">#859900</span></div>
+      <div class="strip dark">
+        <span class="cell dir">documents</span>
+        <span class="cell dir">src</span>
+        <span class="cell ow-text" style="background:#859900">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">7</span> Solarized</span><span class="opt-hex">#657B83</span></div>
+      <div class="strip dark">
+        <span class="cell dir">documents</span>
+        <span class="cell dir">src</span>
+        <span class="cell ow-text" style="background:#657B83">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">8</span> Nord Frost</span><span class="opt-hex">#3F5061</span></div>
+      <div class="strip dark">
+        <span class="cell dir">documents</span>
+        <span class="cell dir">src</span>
+        <span class="cell ow-text" style="background:#3F5061">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir">bin</span>
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- ═════════ Light ═════════ -->
+  <h2>亮色主题 · 终端背景 <code>#FAFBFD</code> · ow 蓝字 <code>#2563EB</code></h2>
+  <div class="grid">
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">A</span> Sage 浅 · 当前</span><span class="opt-hex">#5F8A6B</span></div>
+      <div class="strip light">
+        <span class="cell dir" style="color:#16A34A">documents</span>
+        <span class="cell dir" style="color:#16A34A">src</span>
+        <span class="cell ow-text" style="background:#5F8A6B">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir" style="color:#16A34A">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">B</span> Sage 极浅</span><span class="opt-hex">#BBD5C2</span></div>
+      <div class="strip light">
+        <span class="cell dir" style="color:#16A34A">documents</span>
+        <span class="cell dir" style="color:#16A34A">src</span>
+        <span class="cell ow-text" style="background:#BBD5C2">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir" style="color:#16A34A">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">C</span> Mint 中</span><span class="opt-hex">#A7E1B8</span></div>
+      <div class="strip light">
+        <span class="cell dir" style="color:#16A34A">documents</span>
+        <span class="cell dir" style="color:#16A34A">src</span>
+        <span class="cell ow-text" style="background:#A7E1B8">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir" style="color:#16A34A">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">D</span> Cream Mint</span><span class="opt-hex">#D6EDE0</span></div>
+      <div class="strip light">
+        <span class="cell dir" style="color:#16A34A">documents</span>
+        <span class="cell dir" style="color:#16A34A">src</span>
+        <span class="cell ow-text" style="background:#D6EDE0">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir" style="color:#16A34A">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">E</span> Forest 中</span><span class="opt-hex">#65A385</span></div>
+      <div class="strip light">
+        <span class="cell dir" style="color:#16A34A">documents</span>
+        <span class="cell dir" style="color:#16A34A">src</span>
+        <span class="cell ow-text" style="background:#65A385">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir" style="color:#16A34A">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">F</span> Sage Warm</span><span class="opt-hex">#CDE0BE</span></div>
+      <div class="strip light">
+        <span class="cell dir" style="color:#16A34A">documents</span>
+        <span class="cell dir" style="color:#16A34A">src</span>
+        <span class="cell ow-text" style="background:#CDE0BE">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir" style="color:#16A34A">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">G</span> Pastel 蓝绿</span><span class="opt-hex">#BEE3E9</span></div>
+      <div class="strip light">
+        <span class="cell dir" style="color:#16A34A">documents</span>
+        <span class="cell dir" style="color:#16A34A">src</span>
+        <span class="cell ow-text" style="background:#BEE3E9">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir" style="color:#16A34A">bin</span>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="opt-head"><span class="opt-name"><span class="num">H</span> 极浅灰绿</span><span class="opt-hex">#E4EEE7</span></div>
+      <div class="strip light">
+        <span class="cell dir" style="color:#16A34A">documents</span>
+        <span class="cell dir" style="color:#16A34A">src</span>
+        <span class="cell ow-text" style="background:#E4EEE7">&nbsp;ow_folder&nbsp;</span>
+        <span class="cell dir" style="color:#16A34A">bin</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:32px; padding:16px 20px; background:#FFFFFF; border:1px solid #E7EAF0;
+              border-radius:12px; font-size:13px; color:#475569; max-width: 760px;">
+    <b>怎么挑：</b><br><br>
+    看那个 <code>ow_folder</code> 单词 —— 蓝字能不能一眼读出来。<br><br>
+    <b>暗色</b>：蓝字是 <code>#7C9BFF</code>（亮蓝），所以绿背景需要**足够深**才有对比 —— 越往下越暗。<br>
+    <b>亮色</b>：蓝字是 <code>#2563EB</code>（深蓝），所以绿背景需要**足够浅**才有对比 —— 越往下越浅。<br><br>
+    告诉我编号，比如 <code>3 + C</code>（暗色 3、亮色 C），我就落实到代码里。
+  </div>
+</div>
+</body>
+</html>
