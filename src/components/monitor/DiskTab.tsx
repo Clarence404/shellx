@@ -2,8 +2,8 @@ import type { MonitorSnapshot, DiskMount } from "../../types/monitor";
 import { Sparkline } from "./Sparkline";
 
 function fmtMb(mb: number): string {
-  if (mb >= 1_000_000) return `${(mb / 1_000_000).toFixed(1)} TB`;
-  if (mb >= 1000) return `${(mb / 1000).toFixed(1)} GB`;
+  if (mb >= 1_048_576) return `${(mb / 1_048_576).toFixed(1)} TB`;
+  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
   return `${mb} MB`;
 }
 

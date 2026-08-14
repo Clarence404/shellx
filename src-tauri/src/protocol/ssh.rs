@@ -175,8 +175,7 @@ impl Connection for SshConnection {
 }
 
 /// Runs a one-shot exec command on the given SSH connection handle and
-/// collects all stdout. Returns empty string on connection error (caller
-/// decides whether to retry).
+/// collects all stdout. Times out after 10 s to guard against a hung remote.
 pub(crate) async fn exec_cmd(handle: &RusshHandle, cmd: &str) -> Result<String> {
     let mut channel = handle
         .channel_open_session()
@@ -186,17 +185,23 @@ pub(crate) async fn exec_cmd(handle: &RusshHandle, cmd: &str) -> Result<String> 
         .exec(true, cmd.as_bytes())
         .await
         .map_err(|e| Error::Protocol(format!("exec request: {e}")))?;
-    let mut buf: Vec<u8> = Vec::new();
-    loop {
-        match channel.wait().await {
-            Some(ChannelMsg::Data { data }) => buf.extend_from_slice(&data),
-            Some(ChannelMsg::ExtendedData { .. }) => {}
-            Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
-            Some(ChannelMsg::ExitStatus { .. }) => {}
-            _ => {}
+    let collect = async {
+        let mut buf: Vec<u8> = Vec::new();
+        loop {
+            match channel.wait().await {
+                Some(ChannelMsg::Data { data }) => buf.extend_from_slice(&data),
+                Some(ChannelMsg::ExtendedData { .. }) => {}
+                Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                Some(ChannelMsg::ExitStatus { .. }) => {}
+                _ => {}
+            }
         }
+        buf
+    };
+    match tokio::time::timeout(tokio::time::Duration::from_secs(10), collect).await {
+        Ok(buf) => Ok(String::from_utf8_lossy(&buf).into_owned()),
+        Err(_) => Err(Error::Protocol("exec_cmd timed out".into())),
     }
-    Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
 impl ShellHandle {

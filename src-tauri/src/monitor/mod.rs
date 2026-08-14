@@ -137,7 +137,7 @@ fn extract_section<'a>(output: &'a str, tag: &str) -> &'a str {
         Some(i) => i + marker.len(),
         None => return "",
     };
-    let rest = &output[start..];
+    let rest = output[start..].trim_start_matches('\n');
     match rest.find("\n---") {
         Some(end) => &rest[..end],
         None => rest,
@@ -260,7 +260,7 @@ fn parse_size_mb(s: &str) -> u64 {
         "G" => (n * 1_024.0) as u64,
         "M" => n as u64,
         "K" => (n / 1_024.0) as u64,
-        _ => num_s.parse::<f64>().unwrap_or(0.0) as u64 / 1_048_576,
+        _ => s.parse::<f64>().unwrap_or(0.0) as u64 / 1_048_576,
     }
 }
 
@@ -270,6 +270,7 @@ fn parse_df(section: &str) -> Vec<DiskMount> {
         .filter_map(|l| {
             let p: Vec<&str> = l.split_whitespace().collect();
             if p.len() < 6 { return None; }
+            if !p[0].starts_with("/dev/") { return None; }
             let use_pct: u32 = p[4].trim_end_matches('%').parse().unwrap_or(0);
             Some(DiskMount {
                 target: p[5].to_string(),
@@ -358,13 +359,18 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle) {
     }
 
     let mut prev: Option<PrevState> = None;
+    let mut err_count: u8 = 0;
 
     loop {
         sleep(POLL_INTERVAL).await;
 
         let output = match exec_cmd(&handle, POLL_CMD).await {
-            Ok(o) => o,
-            Err(_) => continue,
+            Ok(o) => { err_count = 0; o }
+            Err(_) => {
+                err_count += 1;
+                if err_count >= 3 { break; }
+                continue;
+            }
         };
 
         let now = std::time::Instant::now();

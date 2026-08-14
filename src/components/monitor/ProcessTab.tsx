@@ -28,7 +28,7 @@ export function ProcessTab({ processes }: Props) {
         </colgroup>
         <thead>
           <tr style={{ background: "var(--panel-1)", position: "sticky", top: 0 }}>
-            {["PID", "CPU%", "MEM%", "进程"].map((h) => (
+            {["PID", "CPU%(avg)", "MEM%", "进程"].map((h) => (
               <th key={h} style={{
                 padding: "6px 10px", textAlign: "left",
                 fontSize: 10, textTransform: "uppercase", letterSpacing: 0.4,
