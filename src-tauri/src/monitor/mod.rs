@@ -12,6 +12,7 @@ pub const EV_UNSUPPORTED: &str = "monitor:unsupported";
 
 pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
+/// Dynamic data — polled on every tick.
 const POLL_CMD: &str = concat!(
     "echo '---STAT---'; cat /proc/stat; ",
     "echo '---MEM---'; cat /proc/meminfo; ",
@@ -19,10 +20,17 @@ const POLL_CMD: &str = concat!(
     "echo '---PS---'; ps -eo pid,pcpu,pmem,comm --sort=-%cpu --no-headers 2>/dev/null | head -50; ",
     "echo '---DF---'; df -Pl 2>/dev/null; ",
     "echo '---DISKIO---'; cat /proc/diskstats; ",
+    "echo '---UPTIME---'; cat /proc/uptime"
+);
+
+/// Static data — fetched once at session start. Doubles as the Linux
+/// platform check: if /proc/stat is empty the host is not Linux.
+const INIT_CMD: &str = concat!(
+    "echo '---STAT---'; cat /proc/stat 2>/dev/null | head -1; ",
     "echo '---OSREL---'; cat /etc/os-release 2>/dev/null; ",
     "echo '---CPUINFO---'; grep -m1 '^model name' /proc/cpuinfo 2>/dev/null; ",
     "echo '---VIRT---'; (systemd-detect-virt 2>/dev/null || echo none); ",
-    "echo '---UPTIME---'; cat /proc/uptime; uname -snrm; hostname"
+    "echo '---UNAME---'; uname -snrm; hostname"
 );
 
 // ── Serializable snapshot types ─────────────────────────────────────────────
@@ -342,18 +350,8 @@ fn parse_virt(section: &str) -> String {
     section.lines().next().unwrap_or("").trim().to_string()
 }
 
-fn parse_system_info(
-    uptime_section: &str,
-    osrel_section: &str,
-    cpuinfo_section: &str,
-    virt_section: &str,
-) -> SystemInfo {
-    let mut lines = uptime_section.lines().filter(|l| !l.trim().is_empty());
-    let uptime_secs: u64 = lines.next()
-        .and_then(|l| l.split_whitespace().next())
-        .and_then(|s| s.split('.').next())
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
+fn parse_uname_hostname(section: &str) -> (String, String, String, String) {
+    let mut lines = section.lines().filter(|l| !l.trim().is_empty());
     let (uname_os, kernel, arch) = lines.next()
         .map(|l| {
             let p: Vec<&str> = l.split_whitespace().collect();
@@ -365,10 +363,15 @@ fn parse_system_info(
         })
         .unwrap_or_default();
     let hostname = lines.next().unwrap_or("").trim().to_string();
-    let os = parse_os_release(osrel_section).unwrap_or(uname_os);
-    let cpu_model = parse_cpu_model(cpuinfo_section);
-    let virt = parse_virt(virt_section);
-    SystemInfo { hostname, os, kernel, arch, uptime_secs, cpu_model, virt }
+    (uname_os, kernel, arch, hostname)
+}
+
+fn parse_uptime_secs(section: &str) -> u64 {
+    section.lines().next()
+        .and_then(|l| l.split_whitespace().next())
+        .and_then(|s| s.split('.').next())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
 }
 
 // ── Poll loop ────────────────────────────────────────────────────────────────
@@ -386,13 +389,23 @@ pub fn start_poll_loop(
 }
 
 async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, interval: Duration) {
-    // Platform check
-    let check = exec_cmd(&handle, "test -f /proc/stat && echo ok").await
-        .unwrap_or_default();
-    if check.trim() != "ok" {
+    // One-time init: static system info + Linux platform check in one round trip.
+    let init = match exec_cmd(&handle, INIT_CMD).await {
+        Ok(o) => o,
+        Err(_) => {
+            let _ = app.emit(EV_UNSUPPORTED, &conn_id);
+            return;
+        }
+    };
+    if extract_section(&init, "STAT").trim().is_empty() {
         let _ = app.emit(EV_UNSUPPORTED, &conn_id);
         return;
     }
+    let (uname_os, kernel, arch, hostname) =
+        parse_uname_hostname(extract_section(&init, "UNAME"));
+    let os = parse_os_release(extract_section(&init, "OSREL")).unwrap_or(uname_os);
+    let cpu_model = parse_cpu_model(extract_section(&init, "CPUINFO"));
+    let virt = parse_virt(extract_section(&init, "VIRT"));
 
     let mut prev: Option<PrevState> = None;
     let mut err_count: u8 = 0;
@@ -438,12 +451,15 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
             processes: parse_ps(extract_section(&output, "PS")),
             disks:     parse_df(extract_section(&output, "DF")),
             disk_io,
-            system:    parse_system_info(
-                extract_section(&output, "UPTIME"),
-                extract_section(&output, "OSREL"),
-                extract_section(&output, "CPUINFO"),
-                extract_section(&output, "VIRT"),
-            ),
+            system:    SystemInfo {
+                hostname:    hostname.clone(),
+                os:          os.clone(),
+                kernel:      kernel.clone(),
+                arch:        arch.clone(),
+                uptime_secs: parse_uptime_secs(extract_section(&output, "UPTIME")),
+                cpu_model:   cpu_model.clone(),
+                virt:        virt.clone(),
+            },
         };
 
         prev = Some(PrevState {
