@@ -19,10 +19,11 @@ interface Props {
   onNewLocalTerminal?: () => void;
 }
 
-// v0.6.3: cap the quick-connect list so a large saved-hosts inventory
-// doesn't spill the popover off-screen. Same six-item ceiling used by
-// the file-manager's "recent folders" affordance.
-const QUICK_CONNECT_LIMIT = 6;
+// v0.16: no hard cap — the quick-connect list scrolls internally so a
+// user with 100 saved hosts can reach any of them via the + menu.
+// The popover header ("New local terminal") and footer ("New SSH
+// connection…") stay pinned; only the middle list scrolls.
+const QUICK_CONNECT_MAX_HEIGHT = 320;
 
 export function TabBar({
   tabs, activeTabId, onSelect, onClose, onCloseTabs, onNewConnection, onConnectHost, onNewLocalTerminal,
@@ -376,7 +377,7 @@ function PlusMenu({
   const rect = anchor?.getBoundingClientRect();
   const top = (rect?.bottom ?? 32) + 2;
   const left = rect?.left ?? 0;
-  const quick = savedHosts.slice(0, QUICK_CONNECT_LIMIT);
+  const quick = savedHosts;
 
   return (
     <div
@@ -401,17 +402,25 @@ function PlusMenu({
         <>
           <MenuDivider />
           <MenuHeading>{t("Quick connect")}</MenuHeading>
-          {quick.map((h) => (
-            <MenuItem
-              key={h.id}
-              icon={<span style={{
-                display: "inline-block", width: 6, height: 6, borderRadius: 3,
-                background: "var(--success, #7c9c80)",
-              }} />}
-              label={h.label || h.host}
-              onClick={() => onQuickConnect(h)}
-            />
-          ))}
+          <div style={{
+            maxHeight: QUICK_CONNECT_MAX_HEIGHT,
+            overflowY: "auto",
+            // Reserve gutter for the scrollbar so labels don't jump
+            // between hover states as the scrollbar appears/disappears.
+            scrollbarGutter: "stable",
+          }}>
+            {quick.map((h) => (
+              <MenuItem
+                key={h.id}
+                icon={<span style={{
+                  display: "inline-block", width: 6, height: 6, borderRadius: 3,
+                  background: "var(--success, #7c9c80)",
+                }} />}
+                label={h.label || h.host}
+                onClick={() => onQuickConnect(h)}
+              />
+            ))}
+          </div>
         </>
       )}
       <MenuDivider />
