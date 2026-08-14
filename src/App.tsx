@@ -7,6 +7,7 @@ import { TerminalView } from "./components/TerminalView";
 import { ActivityToolbar } from "./components/ActivityToolbar";
 import { FileBrowserView } from "./components/FileBrowserView";
 import { TunnelsPanel } from "./components/TunnelsPanel";
+import { MonitorPanel } from "./components/MonitorPanel";
 import { RailFilesView } from "./components/RailFilesView";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
@@ -85,10 +86,12 @@ export function App() {
           { id: "terminal", label: "Terminal" },
           { id: "files", label: "Files" },
           { id: "tunnel", label: "Tunnels" },
+          { id: "monitor", label: "Monitor" },
         ]
       : [
           { id: "terminal", label: "Terminal" },
           { id: "files", label: "Files" },
+          { id: "monitor", label: "Monitor" },
         ];
 
   // Clamp activeActivity to a valid tab for the current session.
@@ -538,6 +541,11 @@ export function App() {
                     hostId={activeSession.host_id ?? null}
                     connectionMode={mode}
                   />
+                </div>
+              )}
+              {effectiveActivity === "monitor" && activeId && activeSession?.kind === "ssh" && (
+                <div style={{ position: "absolute", inset: 0 }}>
+                  <MonitorPanel connectionId={activeId} />
                 </div>
               )}
             </div>
