@@ -7,6 +7,8 @@ import { TerminalView } from "./components/TerminalView";
 import { ActivityToolbar } from "./components/ActivityToolbar";
 import { FileBrowserView } from "./components/FileBrowserView";
 import { TunnelsPanel } from "./components/TunnelsPanel";
+import { MonitorPanel } from "./components/MonitorPanel";
+import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
@@ -25,6 +27,8 @@ import { getHostPassword, getHostPassphrase, setHostPassphrase } from "./ipc/hos
 import { onConnectionClosed } from "./ipc/events";
 import { onHostkeyChallenge } from "./ipc/hostkeys";
 import { useChallenges } from "./state/challenges";
+import { usePassphrase } from "./state/passphrase";
+import { parseConnectError } from "./types/connect-error";
 import { HostKeyDialog } from "./components/HostKeyDialog";
 import { PassphraseDialog } from "./components/PassphraseDialog";
 import { AuthFailedDialog } from "./components/AuthFailedDialog";
@@ -83,10 +87,12 @@ export function App() {
           { id: "terminal", label: "Terminal" },
           { id: "files", label: "Files" },
           { id: "tunnel", label: "Tunnels" },
+          { id: "monitor", label: "Monitor" },
         ]
       : [
           { id: "terminal", label: "Terminal" },
           { id: "files", label: "Files" },
+          { id: "monitor", label: "Monitor" },
         ];
 
   // Clamp activeActivity to a valid tab for the current session.
@@ -110,11 +116,7 @@ export function App() {
   // native positioning (WebView2 opens it at the top-left of the app
   // window on Windows, floating disconnected from shellx's chrome).
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [passphraseReq, setPassphraseReq] = useState<{
-    host: HostInfo;
-    attempt: number;
-    error: string | null;
-  } | null>(null);
+  const passphraseReq = usePassphrase((s) => s.req);
   const [authFailed, setAuthFailed] = useState<{ host: HostInfo; message: string } | null>(null);
 
   useEffect(() => { void loadHosts(); }, [loadHosts]);
@@ -356,7 +358,7 @@ export function App() {
       if (opts.passphrase && opts.rememberPassphrase) {
         void setHostPassphrase(host.id, opts.passphrase);
       }
-      setPassphraseReq(null);
+      usePassphrase.getState().clear();
       setPendingConnectHostId(null);
       addSession(info);
       // Set default activity based on connection_mode so tunnels_only sessions
@@ -365,26 +367,21 @@ export function App() {
     } catch (e) {
       useSessions.getState().endConnecting(host.id);
       setPendingConnectHostId(null);
-      const msg = String(e);
-      if (msg.includes("passphrase-needed")) {
-        setPassphraseReq((prev) => {
-          const nextAttempt = (prev?.attempt ?? 0) + 1;
-          if (nextAttempt > 3) {
-            setAuthFailed({ host, message: "passphrase 三次输入错误" });
-            return null;
-          }
-          return {
-            host,
-            attempt: nextAttempt,
-            error: prev ? "passphrase 不正确，请重新输入" : null,
-          };
-        });
-      } else if (msg.includes("key-rejected")) {
-        setAuthFailed({ host, message: msg });
-      } else if (msg.includes("hostkey-declined")) {
+      const err = parseConnectError(e);
+      if (err.kind === "passphrase-needed") {
+        const nextAttempt = (usePassphrase.getState().req?.attempt ?? 0) + 1;
+        if (nextAttempt > 3) {
+          usePassphrase.getState().clear();
+          setAuthFailed({ host, message: "passphrase 三次输入错误" });
+        } else {
+          usePassphrase.getState().push(host);
+        }
+      } else if (err.kind === "key-rejected") {
+        setAuthFailed({ host, message: `Key rejected: ${err.detail}` });
+      } else if (err.kind === "hostkey-declined") {
         // user declined fingerprint dialog — silent
       } else {
-        setErrorMsg(`Connection failed: ${e}`);
+        setErrorMsg(`Connection failed: ${err.message}`);
       }
     }
   }
@@ -547,6 +544,13 @@ export function App() {
                   />
                 </div>
               )}
+              {effectiveActivity === "monitor" && activeId && activeSession?.kind === "ssh" && (
+                <div key={activeId} style={{ position: "absolute", inset: 0 }}>
+                  <MonitorBoundary>
+                    <MonitorPanel connectionId={activeId} />
+                  </MonitorBoundary>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -607,7 +611,7 @@ export function App() {
           }
           onCancel={() => {
             useSessions.getState().endConnecting(passphraseReq.host.id);
-            setPassphraseReq(null);
+            usePassphrase.getState().clear();
           }}
         />
       )}

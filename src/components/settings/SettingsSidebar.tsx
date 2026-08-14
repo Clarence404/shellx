@@ -50,11 +50,11 @@ export function SettingsSidebar({ active, onSelect }: Props) {
         onClick={() => onSelect("appearance")} />
       <Row id="shortcuts" label={t("Shortcuts")} Icon={Keyboard}
         onClick={() => onSelect("shortcuts")} />
-      <Row id="about" label={t("About")} Icon={Info}
-        onClick={() => onSelect("about")} />
       <Row id="trusted-servers" label={t("Known hosts")} Icon={Shield}
         onClick={() => onSelect("trusted-servers")} />
       <Row id="advanced" label={t("Advanced")} Icon={Wrench} dim />
+      <Row id="about" label={t("About")} Icon={Info}
+        onClick={() => onSelect("about")} />
       <div style={{ flex: 1 }} />
       <button
         onClick={() => {

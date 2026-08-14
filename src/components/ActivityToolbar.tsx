@@ -1,4 +1,4 @@
-import { Monitor, Folder, Network } from "lucide-react";
+import { Monitor, Folder, Network, Activity } from "lucide-react";
 import type { ActivityKind } from "../types/connection";
 import { useT } from "../i18n";
 
@@ -6,6 +6,7 @@ const ACTIVITY_ICONS: Record<ActivityKind, React.ReactNode> = {
   terminal: <Monitor size={12} />,
   files: <Folder size={12} />,
   tunnel: <Network size={12} />,
+  monitor: <Activity size={12} />,
 };
 
 const DEFAULT_TABS: { id: ActivityKind; label: string }[] = [
