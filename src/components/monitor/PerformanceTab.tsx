@@ -60,7 +60,7 @@ export function PerformanceTab({ snapshots }: Props) {
           <span style={{ fontSize: 28, fontVariantNumeric: "tabular-nums", color: "var(--text-1)" }}>
             {latest.cpu ? `${fmt(latest.cpu.totalPct)}%` : "—"}
           </span>
-          <Sparkline data={cpuHistory} color="var(--accent)" fill="rgba(100,149,237,0.15)" height={40} width={120} />
+          <Sparkline data={cpuHistory} color="var(--accent)" fill="var(--accent-fade)" height={40} width={120} />
         </div>
         {latest.cpu && latest.cpu.corePct.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
