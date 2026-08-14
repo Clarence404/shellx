@@ -1,11 +1,14 @@
 use crate::error::{Error, Result};
 use crate::monitor::manager::MonitorManager;
+use crate::monitor::DEFAULT_POLL_INTERVAL;
 use crate::session::manager::SessionManager;
 use tauri::{AppHandle, State};
+use tokio::time::Duration;
 
 #[tauri::command]
 pub async fn monitor_start(
     conn_id: String,
+    interval_secs: Option<u64>,
     mgr_state: State<'_, MonitorManager>,
     session_mgr: State<'_, SessionManager>,
     app: AppHandle,
@@ -16,7 +19,10 @@ pub async fn monitor_start(
         .get_ssh_handle(id)
         .await
         .ok_or_else(|| Error::Protocol("session not found or not SSH".into()))?;
-    mgr_state.start(id, ssh_handle, app).await;
+    let interval = interval_secs
+        .map(|s| Duration::from_secs(s.max(1)))
+        .unwrap_or(DEFAULT_POLL_INTERVAL);
+    mgr_state.start(id, ssh_handle, app, interval).await;
     Ok(())
 }
 

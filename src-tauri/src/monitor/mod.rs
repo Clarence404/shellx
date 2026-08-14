@@ -10,7 +10,7 @@ use tokio::time::{sleep, Duration};
 pub const EV_SNAPSHOT: &str = "monitor:snapshot";
 pub const EV_UNSUPPORTED: &str = "monitor:unsupported";
 
-const POLL_INTERVAL: Duration = Duration::from_secs(2);
+pub const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 const POLL_CMD: &str = concat!(
     "echo '---STAT---'; cat /proc/stat; ",
@@ -342,14 +342,15 @@ pub fn start_poll_loop(
     conn_id: String,
     handle: RusshHandle,
     app: AppHandle,
+    interval: Duration,
 ) -> tokio::task::AbortHandle {
     let jh = tokio::spawn(async move {
-        run_monitor(conn_id, handle, app).await;
+        run_monitor(conn_id, handle, app, interval).await;
     });
     jh.abort_handle()
 }
 
-async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle) {
+async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, interval: Duration) {
     // Platform check
     let check = exec_cmd(&handle, "test -f /proc/stat && echo ok").await
         .unwrap_or_default();
@@ -367,7 +368,7 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle) {
             Err(_) => {
                 err_count += 1;
                 if err_count >= 3 { break; }
-                sleep(POLL_INTERVAL).await;
+                sleep(interval).await;
                 continue;
             }
         };
@@ -413,6 +414,6 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle) {
         });
 
         let _ = app.emit(EV_SNAPSHOT, &snapshot);
-        sleep(POLL_INTERVAL).await;
+        sleep(interval).await;
     }
 }

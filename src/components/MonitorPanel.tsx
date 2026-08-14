@@ -8,6 +8,9 @@ import { DiskTab } from "./monitor/DiskTab";
 
 type SubTab = "performance" | "process" | "disk";
 
+const INTERVALS = [1, 2, 5, 10, 30] as const;
+type IntervalSecs = typeof INTERVALS[number];
+
 const EMPTY_SNAPSHOTS: never[] = [];
 const EMPTY_SYSTEM = { hostname: "", os: "", kernel: "", arch: "", uptimeSecs: 0 };
 const EMPTY_DISK_IO = { readBytesPerSec: 0, writeBytesPerSec: 0 };
@@ -17,6 +20,7 @@ interface Props { connectionId: string }
 export function MonitorPanel({ connectionId }: Props) {
   const [subTab, setSubTab] = useState<SubTab>("performance");
   const [unsupported, setUnsupported] = useState(false);
+  const [intervalSecs, setIntervalSecs] = useState<IntervalSecs>(2);
   const snapshots = useMonitorStore((s) => s.snapshots[connectionId]) ?? EMPTY_SNAPSHOTS;
   const latest = snapshots[snapshots.length - 1];
 
@@ -26,7 +30,7 @@ export function MonitorPanel({ connectionId }: Props) {
   useEffect(() => {
     let cancelled = false;
 
-    void startMonitor(connectionId).catch(() => {});
+    void startMonitor(connectionId, intervalSecs).catch(() => {});
 
     onMonitorSnapshot(connectionId, (snap) => {
       useMonitorStore.getState().push(snap);
@@ -51,7 +55,7 @@ export function MonitorPanel({ connectionId }: Props) {
       unlistenUnsupRef.current = undefined;
       useMonitorStore.getState().clear(connectionId);
     };
-  }, [connectionId]);
+  }, [connectionId, intervalSecs]);
 
   if (unsupported) {
     return (
@@ -107,6 +111,21 @@ export function MonitorPanel({ connectionId }: Props) {
             {label}
           </button>
         ))}
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 10, color: "var(--text-3)", marginRight: 4 }}>刷新</span>
+        <select
+          value={intervalSecs}
+          onChange={(e) => setIntervalSecs(Number(e.target.value) as IntervalSecs)}
+          style={{
+            fontSize: 11, background: "var(--panel-2)", color: "var(--text-2)",
+            border: "1px solid var(--border)", borderRadius: 4, padding: "2px 4px",
+            cursor: "pointer",
+          }}
+        >
+          {INTERVALS.map((s) => (
+            <option key={s} value={s}>{s}s</option>
+          ))}
+        </select>
       </div>
 
       {/* Sub-tab content */}
