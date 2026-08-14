@@ -544,7 +544,7 @@ export function App() {
                 </div>
               )}
               {effectiveActivity === "monitor" && activeId && activeSession?.kind === "ssh" && (
-                <div style={{ position: "absolute", inset: 0 }}>
+                <div key={activeId} style={{ position: "absolute", inset: 0 }}>
                   <MonitorPanel connectionId={activeId} />
                 </div>
               )}
