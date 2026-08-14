@@ -13,7 +13,7 @@ export function Wordmark({ size = "md" }: { size?: Size }) {
       <div style={{
         width: s.box, height: s.box, borderRadius: s.box * 0.22,
         border: "1.5px solid var(--accent)",
-        background: "rgba(124, 92, 255, 0.1)",
+        background: "var(--accent-fade)",
         display: "flex", alignItems: "center", justifyContent: "center",
         color: "var(--accent)",
       }}>
@@ -28,7 +28,7 @@ export function Wordmark({ size = "md" }: { size?: Size }) {
         fontFamily: '"JetBrains Mono", var(--font-mono)',
         fontWeight: 700, fontSize: s.font,
         letterSpacing: "-0.5px", color: "var(--text-1)",
-      }}>shellx</span>
+      }}>ShellX</span>
     </div>
   );
 }
