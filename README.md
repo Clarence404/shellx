@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.15.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.16.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -18,6 +18,7 @@ ShellX is a desktop app that gives you:
 - **SFTP file browser** — WinSCP-style dual-pane (local ↔ remote) with drag-and-drop upload / download, folder transfers, pause / resume / cancel
 - **Session monitor** — live CPU / memory / network / disk / process view for any Linux host over the same SSH connection; adjustable 1–30 s poll interval
 - **Saved hosts + keychain** — store your servers once, quick-connect from the sidebar or the `+` menu; passwords live in the OS keychain, not a plaintext config
+- **Light or dark theme** — Light is default; toggle to Dark in Settings and the whole app (including the terminal palette) follows
 - **Bilingual interface** — switch the whole UI between English and Chinese in Settings, applied live
 - **Auto-update** — checks for new releases on startup (can be disabled), shows a banner in Settings → About with a one-click download and relaunch; releases are signed with a Minisign key
 
