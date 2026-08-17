@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Minus, Square, X, Copy as Restore } from "lucide-react";
+import { Minus, Square, X, Copy as Restore, Search, Sun, Moon } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { TabBar, type Tab } from "./TabBar";
 import type { HostInfo } from "../types/host";
+import { useSettingsStore } from "../state/settings";
+import { useT } from "../i18n";
 
 interface Props {
   tabs: Tab[];
@@ -13,7 +15,12 @@ interface Props {
   onNewConnection?: () => void;
   onNewLocalTerminal?: () => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
+  onOpenPalette?: () => void;
 }
+
+const IS_MAC = typeof navigator !== "undefined" &&
+  /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+const MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
 
 /**
  * Custom titlebar. `tauri.conf.json` sets `decorations: false` +
@@ -25,8 +32,12 @@ interface Props {
  * the window by any non-interactive area; TabBar / logo / controls are
  * interactive and NOT drag regions.
  */
-export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection, onNewLocalTerminal, onConnectHost }: Props) {
+export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection, onNewLocalTerminal, onConnectHost, onOpenPalette }: Props) {
   const [maximized, setMaximized] = useState(false);
+  const t = useT();
+  const themeId = useSettingsStore((s) => s.themeId);
+  const setTheme = useSettingsStore((s) => s.setTheme);
+  const isDark = themeId === "warm-minimal";
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -94,8 +105,20 @@ export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClo
       <div
         data-tauri-drag-region
         onDoubleClick={() => void win().toggleMaximize()}
-        style={{ flexShrink: 0, width: 24, height: "100%" }}
+        style={{ flexShrink: 0, width: 16, height: "100%" }}
       />
+      {onOpenPalette && (
+        <SearchButton onClick={onOpenPalette} label={t("Search")} />
+      )}
+      <ThemeToggle
+        isDark={isDark}
+        onToggle={() => setTheme(isDark ? "warm-light" : "warm-minimal")}
+        label={t(isDark ? "Switch to light theme" : "Switch to dark theme")}
+      />
+      <div style={{
+        flexShrink: 0, width: 8, height: 14,
+        borderLeft: "1px solid var(--border)", margin: "0 4px",
+      }} />
       <div style={{ display: "flex", height: "100%" }}>
         <TitleButton onClick={() => void win().minimize()} label="Minimize">
           <Minus size={14} />
@@ -135,5 +158,66 @@ function TitleButton({
         border: "none", padding: 0, cursor: "pointer",
       }}
     >{children}</button>
+  );
+}
+
+// Pill button that opens the command palette. Shows the shortcut so
+// discoverability doesn't rely on users guessing Ctrl+K.
+function SearchButton({ onClick, label }: { onClick: () => void; label: string }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={`${label}  (${MOD_LABEL}+K)`}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        height: 22, padding: "0 8px 0 8px", marginRight: 4,
+        border: "1px solid var(--border)",
+        background: hover ? "var(--panel-2)" : "var(--panel-1)",
+        color: hover ? "var(--text-1)" : "var(--text-3)",
+        borderRadius: 6, cursor: "pointer",
+        fontSize: 11,
+      }}
+    >
+      <Search size={12} />
+      <span>{label}</span>
+      <span style={{
+        marginLeft: 12,
+        color: "var(--text-4, var(--text-3))",
+      }}>{MOD_LABEL}+K</span>
+    </button>
+  );
+}
+
+// Icon-only theme toggle. Shows Sun in dark (click → light) and Moon in
+// light (click → dark) so the icon hints where you're going, not where
+// you are.
+function ThemeToggle({
+  isDark, onToggle, label,
+}: {
+  isDark: boolean; onToggle: () => void; label: string;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={label}
+      title={label}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: 32, height: 22, marginRight: 4,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        background: hover ? "var(--panel-2)" : "transparent",
+        color: "var(--text-2)",
+        border: "1px solid transparent",
+        borderRadius: 6, cursor: "pointer",
+      }}
+    >
+      {isDark ? <Sun size={13} /> : <Moon size={13} />}
+    </button>
   );
 }

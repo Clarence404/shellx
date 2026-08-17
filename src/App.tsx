@@ -471,6 +471,7 @@ export function App() {
       <AppShell
         tabs={tabs}
         activeTabId={activeId}
+        onOpenPalette={() => setPaletteOpen(true)}
         onTabSelect={setActive}
         onTabClose={(id) => { void closeSession(id); removeSession(id); }}
         onTabsClose={(ids) => {

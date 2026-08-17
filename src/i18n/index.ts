@@ -195,6 +195,8 @@ const zh: Record<string, string> = {
   "Connecting": "连接中",
   "Close": "关闭",
   "OK": "确定",
+  "Switch to light theme": "切换到亮色主题",
+  "Switch to dark theme": "切换到深色主题",
 
   // Monitor
   "Monitor": "监控",

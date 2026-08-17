@@ -16,6 +16,7 @@ interface Props {
   onNewLocalTerminal?: () => void;
   onEditHost?: (host: HostInfo) => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
+  onOpenPalette?: () => void;
   children?: ReactNode;
 }
 
@@ -34,6 +35,7 @@ export function AppShell({
   onNewLocalTerminal,
   onEditHost,
   onConnectHost,
+  onOpenPalette,
   children,
 }: Props) {
   const view = useSessions((s) => s.railView);
@@ -46,6 +48,7 @@ export function AppShell({
         onNewConnection={onNewConnection}
         onNewLocalTerminal={onNewLocalTerminal}
         onConnectHost={onConnectHost}
+        onOpenPalette={onOpenPalette}
       />
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
         <ActivityRail />
