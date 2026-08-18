@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>ShellX · 日志面板 + 隧道自动重连 · mockup</title>
+<style>
+  :root {
+    --bg:        #F7F8FA;
+    --card:      #FFFFFF;
+    --card-2:    #F5F7FB;
+    --border:    #E7EAF0;
+    --border-2:  #EEF2F8;
+    --shadow:    0 1px 2px rgba(15, 23, 42, 0.04);
+
+    --text-1:    #0F172A;
+    --text-2:    #475569;
+    --text-3:    #94A3B8;
+    --text-4:    #CBD5E1;
+
+    --accent:      #4C7CFF;
+    --accent-fade: #EBF1FF;
+
+    --success:     #22C55E;
+    --success-fade:#E9FBEF;
+    --warn:        #F59E0B;
+    --warn-fade:   #FFF7E6;
+    --error:       #EF4444;
+    --error-fade:  #FEECEC;
+
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg); color: var(--text-1);
+    font-family: -apple-system, "Segoe UI Variable", "Segoe UI",
+                 "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+    font-size: 13px; line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  h2 { font-size: 13px; font-weight: 600; color: var(--text-2);
+       text-transform: uppercase; letter-spacing: 0.6px;
+       margin: 26px 20px 10px; }
+
+  .app {
+    display: grid;
+    grid-template-columns: 56px 220px 1fr;
+    grid-template-rows: 40px 1fr;
+    height: 100vh; min-height: 780px;
+    background: var(--card);
+  }
+
+  /* Titlebar */
+  .titlebar {
+    grid-column: 1 / -1;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 12px;
+    gap: 10px; font-size: 12px; color: var(--text-3);
+  }
+  .titlebar .brand { display: inline-flex; align-items: center; gap: 8px;
+                     font-weight: 700; color: var(--text-1); font-size: 13px; }
+  .titlebar .spacer { flex: 1; }
+
+  /* Rail */
+  .rail {
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 12px 0 12px;
+  }
+  .rail-item {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 8px 4px; margin: 2px 6px;
+    gap: 3px; border-radius: 8px;
+    color: var(--text-3); cursor: pointer;
+    background: transparent; border: none;
+    font-size: 10px;
+  }
+  .rail-item:hover { background: var(--card-2); color: var(--text-2); }
+  .rail-item.active { color: var(--accent); background: var(--accent-fade); }
+  .rail-item svg { width: 18px; height: 18px; }
+  .rail-spacer { flex: 1; }
+
+  /* Settings sidebar */
+  .settings-side {
+    background: var(--card-2);
+    border-right: 1px solid var(--border);
+    padding: 14px 8px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .settings-side .side-title {
+    padding: 4px 12px 10px;
+    font-size: 12px; font-weight: 600; color: var(--text-2);
+  }
+  .settings-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: 6px; cursor: pointer;
+    color: var(--text-2); font-size: 12px;
+  }
+  .settings-item:hover { background: rgba(76,124,255,0.06); }
+  .settings-item.active {
+    background: var(--accent); color: white; font-weight: 500;
+  }
+  .settings-item svg { width: 14px; height: 14px; opacity: 0.8; }
+
+  /* Main body */
+  .main { overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Logs panel */
+  .logs-header {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card); flex-shrink: 0;
+  }
+  .logs-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+  .logs-title svg { width: 16px; height: 16px; color: var(--text-2); }
+  .stat-pill {
+    background: var(--card-2); color: var(--text-3); border-radius: 999px;
+    padding: 2px 10px; font-size: 11px; font-variant-numeric: tabular-nums;
+  }
+
+  /* Filter bar */
+  .filter-bar {
+    padding: 10px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    background: var(--card-2); flex-shrink: 0;
+  }
+  .search {
+    flex: 1; min-width: 160px;
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 30px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--card); color: var(--text-3);
+  }
+  .search input {
+    border: none; outline: none; background: transparent;
+    font-size: 12px; color: var(--text-1); flex: 1;
+  }
+  .filter-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 30px; padding: 0 12px;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--card); color: var(--text-2);
+    font-size: 12px; white-space: nowrap;
+  }
+  .filter-btn.active { background: var(--accent-fade); color: var(--accent); border-color: var(--accent); }
+  .filter-btn svg { width: 12px; height: 12px; }
+  .filter-btn .caret { color: var(--text-4); }
+  .live-toggle {
+    display: inline-flex; align-items: center; gap: 8px;
+    height: 30px; padding: 0 12px;
+    border: 1px solid var(--success);
+    background: var(--success-fade); color: var(--success);
+    border-radius: 6px; font-size: 12px; font-weight: 500;
+  }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success);
+              animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* Table */
+  .table-wrap { flex: 1; overflow: auto; }
+  table.log-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+  }
+  .log-table thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: var(--card); border-bottom: 1px solid var(--border);
+    text-align: left; padding: 8px 14px;
+    font-size: 11px; font-weight: 600; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .log-table tbody tr {
+    border-bottom: 1px solid var(--border-2);
+  }
+  .log-table tbody tr:hover { background: var(--card-2); }
+  .log-table td {
+    padding: 9px 14px; vertical-align: top;
+  }
+  .col-time { color: var(--text-3); font-family: var(--mono); white-space: nowrap; width: 108px; }
+  .col-level { width: 76px; }
+  .col-cat { width: 100px; }
+  .col-msg { color: var(--text-1); }
+
+  .level-pill {
+    display: inline-block; padding: 1px 8px; border-radius: 4px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .level-pill.info { background: var(--card-2); color: var(--text-2); }
+  .level-pill.warn { background: var(--warn-fade); color: var(--warn); }
+  .level-pill.error { background: var(--error-fade); color: var(--error); }
+  .level-pill.debug { background: #F1F5F9; color: #64748B; }
+
+  .cat-pill {
+    display: inline-block; padding: 1px 8px; border-radius: 4px;
+    background: #EEF2F8; color: var(--text-2);
+    font-size: 10px; font-weight: 500; font-family: var(--mono);
+  }
+  .cat-pill.tunnel { background: #E0E7FF; color: #4338CA; }
+  .cat-pill.session { background: #DCFCE7; color: #166534; }
+  .cat-pill.host { background: #FEF3C7; color: #92400E; }
+  .cat-pill.updater { background: #FCE7F3; color: #9D174D; }
+
+  .fields { color: var(--text-3); font-family: var(--mono); font-size: 11px; }
+  .fields b { color: var(--text-2); font-weight: 500; }
+
+  .row-expanded td {
+    background: var(--card-2);
+    padding: 12px 14px; border-top: 1px dashed var(--border);
+  }
+  .row-expanded pre {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 12px;
+    font-family: var(--mono); font-size: 11px; color: var(--text-2);
+    white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* Callouts (side annotations) */
+  .callouts { padding: 24px 20px 40px; background: var(--bg); border-top: 1px solid var(--border); }
+  .callout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .callout {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; box-shadow: var(--shadow);
+  }
+  .callout h3 { font-size: 12px; font-weight: 600; color: var(--text-3);
+                text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+
+  /* Tunnel card demo */
+  .tunnel-card {
+    background: var(--card); border: 1px solid var(--warn);
+    border-radius: 10px; padding: 12px 14px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .tunnel-card.error { border-color: var(--error); }
+  .badge {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: #4C7CFF; color: white; font-weight: 700; font-size: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .tunnel-body { flex: 1; min-width: 0; }
+  .tunnel-title { display: flex; align-items: center; gap: 8px;
+                  font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 500; white-space: nowrap;
+  }
+  .status-pill.reconnecting { background: var(--warn-fade); color: var(--warn); }
+  .status-pill.reconnecting .dot { animation: pulse 1.4s ease-in-out infinite; }
+  .status-pill.auth-fail { background: var(--error-fade); color: var(--error); }
+  .status-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .tunnel-route {
+    font-size: 11px; color: var(--text-3); font-family: var(--mono);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .tunnel-route .via { color: var(--accent); }
+  .retry-hint { font-size: 11px; color: var(--warn); margin-top: 6px; }
+  .icon-btn {
+    width: 30px; height: 30px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--card);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text-2); cursor: pointer;
+  }
+  .icon-btn svg { width: 12px; height: 12px; }
+
+  /* Toggle row */
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-top: 1px solid var(--border-2);
+  }
+  .toggle-row:first-child { border-top: none; }
+  .toggle-row .label { font-size: 13px; color: var(--text-1); }
+  .toggle-row .hint { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .switch {
+    width: 34px; height: 20px; border-radius: 999px;
+    background: var(--text-4); position: relative; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%; background: white;
+    transition: left 0.15s;
+  }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { left: 16px; }
+
+  /* Legend at the very bottom */
+  .legend { padding: 12px 20px; font-size: 11px; color: var(--text-3);
+            border-top: 1px solid var(--border); background: var(--card-2); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="titlebar">
+    <span class="brand">ShellX</span>
+    <span class="spacer"></span>
+    <span>Settings · Logs · mockup</span>
+  </div>
+
+  <div class="rail">
+    <button class="rail-item" title="Hosts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="8" rx="1"/><rect x="3" y="13" width="18" height="8" rx="1"/></svg>
+      Hosts
+    </button>
+    <button class="rail-item" title="Files">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+      Files
+    </button>
+    <button class="rail-item" title="Tunnels">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12a10 10 0 0 1 20 0"/><path d="M2 12a10 10 0 0 0 20 0"/></svg>
+      Tunnels
+    </button>
+    <button class="rail-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+      Serial
+    </button>
+    <div class="rail-spacer"></div>
+    <button class="rail-item active" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </button>
+  </div>
+
+  <!-- Settings sidebar -->
+  <div class="settings-side">
+    <div class="side-title">Settings</div>
+    <div class="settings-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+      Appearance
+    </div>
+    <div class="settings-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h4"/><path d="M6 12h4"/></svg>
+      Terminal
+    </div>
+    <div class="settings-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20"/><path d="m2 12 10-10 10 10"/></svg>
+      Updates
+    </div>
+    <div class="settings-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 9h1"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>
+      Logs
+    </div>
+    <div class="settings-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      About
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="logs-header">
+      <div class="logs-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>
+        <span>Logs</span>
+      </div>
+      <span class="stat-pill">1 warn · 2 error · 158 total · 保留 7 天</span>
+      <div style="flex: 1"></div>
+      <button class="filter-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>导出 jsonl</button>
+    </div>
+
+    <div class="filter-bar">
+      <div class="search">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input placeholder="搜索消息 / rule_id / host_id …" value="tunnel">
+      </div>
+      <button class="filter-btn active">级别 · info+ <span class="caret">▾</span></button>
+      <button class="filter-btn active">类别 · tunnel <span class="caret">▾</span></button>
+      <div class="live-toggle">
+        <span class="live-dot"></span>
+        实时
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="log-table">
+        <thead>
+          <tr>
+            <th class="col-time">时间</th>
+            <th class="col-level">级别</th>
+            <th class="col-cat">类别</th>
+            <th class="col-msg">消息</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="col-time">18:23:47.312</td>
+            <td><span class="level-pill info">info</span></td>
+            <td><span class="cat-pill tunnel">tunnel</span></td>
+            <td>
+              tunnel started via saved host
+              <span class="fields"> · <b>rule</b>=acucloud-test-db <b>local</b>=0.0.0.0:15432 <b>via</b>=161.189.146.253 <b>session</b>=8f2a…</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="col-time">18:26:12.008</td>
+            <td><span class="level-pill warn">warn</span></td>
+            <td><span class="cat-pill tunnel">tunnel</span></td>
+            <td>
+              keepalive probe timed out, transport marked dead
+              <span class="fields"> · <b>rule</b>=acucloud-test-db <b>session</b>=8f2a… <b>reason</b>=timeout(10s)</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="col-time">18:26:12.011</td>
+            <td><span class="level-pill error">error</span></td>
+            <td><span class="cat-pill tunnel">tunnel</span></td>
+            <td>
+              tunnel channel closed
+              <span class="fields"> · <b>rule</b>=acucloud-test-db <b>auto_reconnect</b>=on <b>next_retry_in</b>=2s</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="col-time">18:26:14.019</td>
+            <td><span class="level-pill info">info</span></td>
+            <td><span class="cat-pill tunnel">tunnel</span></td>
+            <td>
+              reconnect attempt <b>#1</b> · dial ssh transport
+              <span class="fields"> · <b>rule</b>=acucloud-test-db <b>backoff</b>=2s</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="col-time">18:26:14.891</td>
+            <td><span class="level-pill warn">warn</span></td>
+            <td><span class="cat-pill tunnel">tunnel</span></td>
+            <td>
+              reconnect attempt <b>#1</b> failed: connection refused
+              <span class="fields"> · <b>rule</b>=acucloud-test-db <b>next_retry_in</b>=5s</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="col-time">18:26:19.905</td>
+            <td><span class="level-pill info">info</span></td>
+            <td><span class="cat-pill tunnel">tunnel</span></td>
+            <td>
+              reconnect attempt <b>#2</b> · dial ssh transport
+              <span class="fields"> · <b>rule</b>=acucloud-test-db <b>backoff</b>=5s</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="col-time">18:26:21.226</td>
+            <td><span class="level-pill info">info</span></td>
+            <td><span class="cat-pill tunnel">tunnel</span></td>
+            <td>
+              reconnect attempt <b>#2</b> succeeded, tunnel restored
+              <span class="fields"> · <b>rule</b>=acucloud-test-db <b>local</b>=0.0.0.0:15432 <b>via</b>=161.189.146.253 <b>session</b>=c19d…</span>
+            </td>
+          </tr>
+          <tr class="row-expanded">
+            <td colspan="4">
+<pre>{
+  "ts": "2026-08-18T18:26:21.226+08:00",
+  "level": "info",
+  "category": "tunnel",
+  "msg": "reconnect attempt #2 succeeded, tunnel restored",
+  "fields": {
+    "rule_id": "d7c3e1b9-…",
+    "rule_label": "acucloud-test-db",
+    "host_id": "1a4f-…",
+    "via_host": "161.189.146.253",
+    "local": "0.0.0.0:15432",
+    "remote": "acucloud-test-db.chu0q20em0u2.rds.cn-northwest-1.amazonaws.com.cn:5432",
+    "session": "c19d…",
+    "attempt": 2,
+    "elapsed_ms": 9214
+  }
+}</pre>
+            </td>
+          </tr>
+          <tr>
+            <td class="col-time">18:31:04.712</td>
+            <td><span class="level-pill error">error</span></td>
+            <td><span class="cat-pill tunnel">tunnel</span></td>
+            <td>
+              reconnect aborted: auth failure — credentials revoked?
+              <span class="fields"> · <b>rule</b>=prod-jump-db <b>host</b>=18.209.62.16 <b>hint</b>=打开 Hosts 面板编辑该主机后重试</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="col-time">18:31:04.755</td>
+            <td><span class="level-pill debug">debug</span></td>
+            <td><span class="cat-pill session">session</span></td>
+            <td>
+              transport closed after auth abort
+              <span class="fields"> · <b>session</b>=44e2… <b>bytes_up</b>=0 <b>bytes_down</b>=0</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Bottom callouts -->
+    <div class="callouts">
+      <h2 style="margin: 0 0 12px">相关 UX 变化</h2>
+      <div class="callout-grid">
+
+        <!-- 1. StatusPill reconnecting -->
+        <div class="callout">
+          <h3>Tunnels 视图 · 卡片状态</h3>
+          <div class="tunnel-card">
+            <div class="badge">L</div>
+            <div class="tunnel-body">
+              <div class="tunnel-title">
+                <span>acucloud-test-db</span>
+                <span class="status-pill reconnecting">
+                  <span class="dot"></span>
+                  Reconnecting…
+                </span>
+              </div>
+              <div class="tunnel-route">
+                <span style="color: var(--text-2)">0.0.0.0:15432</span>
+                <span style="color: var(--text-4)"> → </span>
+                <span class="via">via 161.189.146.253</span>
+              </div>
+              <div class="retry-hint">第 2 次重试 · 下次 5s 后</div>
+            </div>
+            <button class="icon-btn" title="Stop">
+              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+            </button>
+            <button class="icon-btn" title="Copy">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+            <button class="icon-btn" title="Delete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+            </button>
+          </div>
+          <div style="margin-top: 10px">
+            <div class="tunnel-card error">
+              <div class="badge" style="background: #F97316">L</div>
+              <div class="tunnel-body">
+                <div class="tunnel-title">
+                  <span>prod-jump-db</span>
+                  <span class="status-pill auth-fail">
+                    <span class="dot"></span>
+                    凭证失效
+                  </span>
+                </div>
+                <div class="tunnel-route">
+                  <span style="color: var(--text-2)">127.0.0.1:25432</span>
+                  <span style="color: var(--text-4)"> → </span>
+                  <span class="via">via 18.209.62.16</span>
+                </div>
+                <div class="retry-hint" style="color: var(--error)">
+                  已停止重试 · 请在 Hosts 面板更新密码或密钥
+                </div>
+              </div>
+              <button class="icon-btn" title="Retry manually">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Edit drawer toggle -->
+        <div class="callout">
+          <h3>Edit Tunnel · 抽屉底部新增开关</h3>
+          <div class="toggle-row">
+            <div>
+              <div class="label">自动重连</div>
+              <div class="hint">断开后按 2s → 5s → 15s → 60s 退避自动重连；auth 失败会停止</div>
+            </div>
+            <div class="switch on"></div>
+          </div>
+          <div class="toggle-row">
+            <div>
+              <div class="label">开机自动启动</div>
+              <div class="hint">应用启动时自动拉起后台 SSH transport 并开通道</div>
+            </div>
+            <div class="switch"></div>
+          </div>
+          <div style="margin-top: 14px; padding: 10px 12px; background: var(--card-2); border-radius: 6px; font-size: 11px; color: var(--text-3); line-height: 1.55;">
+            <b style="color: var(--text-2)">Tip</b> · 想追踪某条隧道的完整生命周期？在 Logs 面板搜 <span style="font-family: var(--mono); background: var(--card); padding: 0 4px; border-radius: 3px;">rule=acucloud-test-db</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="legend">
+      配色对照 · <span class="level-pill debug">debug</span> 白名单诊断 · <span class="level-pill info">info</span> 常规事件 · <span class="level-pill warn">warn</span> 预警但可恢复 · <span class="level-pill error">error</span> 已失败/需干预 · 类别：tunnel · session · sftp · monitor · host · updater · keychain
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -19,11 +19,15 @@ fn main() {
     let tunnel_store = TunnelStore::new(host_store.conn_arc());
     let keychain = KeychainStore::open();
     let settings_store = SettingsStore::open(&config_dir);
+    // Logs subsystem lives here (ring buffer + file writer). Requires a
+    // Tokio runtime for the file-writer background task, so we defer
+    // actual init to the tauri setup hook below.
+    let logs_config_dir = config_dir.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .setup(|app| {
+        .setup(move |app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -31,6 +35,12 @@ fn main() {
                         .build(),
                 )?;
             }
+            // Structured logs subsystem — ring buffer + jsonl file writer.
+            // Managed here (not up in the pre-Builder block) because the
+            // background writer task needs the Tauri Tokio runtime.
+            let logs_store = shellx::logs::init(logs_config_dir.clone());
+            use tauri::Manager;
+            app.handle().manage(logs_store);
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
@@ -106,6 +116,13 @@ fn main() {
             ipc::tunnels::tunnel_reorder,
             ipc::monitor::monitor_start,
             ipc::monitor::monitor_stop,
+            ipc::logs::logs_snapshot,
+            ipc::logs::logs_subscribe,
+            ipc::logs::logs_unsubscribe,
+            ipc::logs::logs_export,
+            ipc::logs::logs_set_disk_enabled,
+            ipc::logs::logs_disk_enabled,
+            ipc::logs::logs_push,
         ])
         .run(tauri::generate_context!())
         .expect("shellx failed to start");

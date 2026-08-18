@@ -111,6 +111,33 @@ impl HostStore {
             )
             .map_err(|e| Error::Protocol(format!("apply bind_all migration: {e}")))?;
         }
+        // Idempotent migration: add auto_reconnect + autostart columns to
+        // tunnels if not present (upgrades pre-v0.18 databases). Existing
+        // tunnels get auto_reconnect=1 (default on) and autostart=0.
+        let has_ar: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('tunnels') WHERE name='auto_reconnect'")
+            .map_err(|e| Error::Protocol(format!("prepare migration check: {e}")))?
+            .exists([])
+            .map_err(|e| Error::Protocol(format!("migration check: {e}")))?;
+        if !has_ar {
+            conn.execute(
+                "ALTER TABLE tunnels ADD COLUMN auto_reconnect INTEGER NOT NULL DEFAULT 1",
+                [],
+            )
+            .map_err(|e| Error::Protocol(format!("apply auto_reconnect migration: {e}")))?;
+        }
+        let has_autostart: bool = conn
+            .prepare("SELECT 1 FROM pragma_table_info('tunnels') WHERE name='autostart'")
+            .map_err(|e| Error::Protocol(format!("prepare migration check: {e}")))?
+            .exists([])
+            .map_err(|e| Error::Protocol(format!("migration check: {e}")))?;
+        if !has_autostart {
+            conn.execute(
+                "ALTER TABLE tunnels ADD COLUMN autostart INTEGER NOT NULL DEFAULT 0",
+                [],
+            )
+            .map_err(|e| Error::Protocol(format!("apply autostart migration: {e}")))?;
+        }
         Ok(Self { conn: Arc::new(Mutex::new(conn)) })
     }
 

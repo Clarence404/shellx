@@ -4,6 +4,7 @@ pub mod hostkeys;
 pub mod keys;
 pub mod ipc;
 pub mod local;
+pub mod logs;
 pub mod protocol;
 pub mod session;
 pub mod settings;

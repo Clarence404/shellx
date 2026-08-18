@@ -8,6 +8,7 @@ pub mod hosts;
 pub mod keys;
 pub mod local;
 pub mod local_pty;
+pub mod logs;
 pub mod monitor;
 pub mod settings;
 pub mod sftp;

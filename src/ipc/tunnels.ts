@@ -15,6 +15,8 @@ export async function addTunnel(rule: {
   remote_port: number;
   enabled?: boolean;
   bind_all?: boolean;
+  auto_reconnect?: boolean;
+  autostart?: boolean;
 }): Promise<TunnelRule> {
   return invoke("tunnel_add", { rule });
 }
@@ -28,6 +30,8 @@ export async function updateTunnel(rule: {
   remote_port?: number;
   enabled?: boolean;
   bind_all?: boolean;
+  auto_reconnect?: boolean;
+  autostart?: boolean;
   sort_order?: number;
 }): Promise<void> {
   return invoke("tunnel_update", { rule });
