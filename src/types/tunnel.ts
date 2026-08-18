@@ -7,6 +7,8 @@ export interface TunnelRule {
   remote_port: number;
   enabled: boolean;
   bind_all: boolean;
+  auto_reconnect: boolean;
+  autostart: boolean;
   sort_order: number;
   created_at: number;
 }

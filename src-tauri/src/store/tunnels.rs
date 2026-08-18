@@ -16,6 +16,8 @@ pub struct TunnelRule {
     pub remote_port: u16,
     pub enabled: bool,
     pub bind_all: bool,
+    pub auto_reconnect: bool,
+    pub autostart: bool,
     pub sort_order: i32,
     pub created_at: i64,
 }
@@ -29,6 +31,8 @@ pub struct NewTunnelRule {
     pub remote_port: u16,
     pub enabled: Option<bool>,
     pub bind_all: Option<bool>,
+    pub auto_reconnect: Option<bool>,
+    pub autostart: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -41,11 +45,32 @@ pub struct UpdateTunnelRule {
     pub remote_port: Option<u16>,
     pub enabled: Option<bool>,
     pub bind_all: Option<bool>,
+    pub auto_reconnect: Option<bool>,
+    pub autostart: Option<bool>,
     pub sort_order: Option<i32>,
 }
 
 pub struct TunnelStore {
     conn: Arc<Mutex<Connection>>,
+}
+
+fn row_to_rule(row: &rusqlite::Row<'_>) -> rusqlite::Result<TunnelRule> {
+    Ok(TunnelRule {
+        id: row.get::<_, String>(0)?
+            .parse().map_err(|_| rusqlite::Error::InvalidQuery)?,
+        host_id: row.get::<_, String>(1)?
+            .parse().map_err(|_| rusqlite::Error::InvalidQuery)?,
+        label: row.get(2)?,
+        local_port: row.get::<_, i64>(3)? as u16,
+        remote_host: row.get(4)?,
+        remote_port: row.get::<_, i64>(5)? as u16,
+        enabled: row.get::<_, i64>(6)? != 0,
+        bind_all: row.get::<_, i64>(7)? != 0,
+        auto_reconnect: row.get::<_, i64>(8)? != 0,
+        autostart: row.get::<_, i64>(9)? != 0,
+        sort_order: row.get::<_, i64>(10)? as i32,
+        created_at: row.get(11)?,
+    })
 }
 
 impl TunnelStore {
@@ -57,34 +82,51 @@ impl TunnelStore {
         let conn = self.conn.lock().await;
         let mut stmt = conn
             .prepare(
-                "SELECT id,host_id,label,local_port,remote_host,remote_port,enabled,bind_all,sort_order,created_at \
+                "SELECT id,host_id,label,local_port,remote_host,remote_port,enabled,bind_all,auto_reconnect,autostart,sort_order,created_at \
                  FROM tunnels WHERE host_id=?1 ORDER BY sort_order,created_at",
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
         let rows = stmt
-            .query_map(params![host_id.to_string()], |row| {
-                Ok(TunnelRule {
-                    id: row
-                        .get::<_, String>(0)?
-                        .parse()
-                        .map_err(|_| rusqlite::Error::InvalidQuery)?,
-                    host_id: row
-                        .get::<_, String>(1)?
-                        .parse()
-                        .map_err(|_| rusqlite::Error::InvalidQuery)?,
-                    label: row.get(2)?,
-                    local_port: row.get::<_, i64>(3)? as u16,
-                    remote_host: row.get(4)?,
-                    remote_port: row.get::<_, i64>(5)? as u16,
-                    enabled: row.get::<_, i64>(6)? != 0,
-                    bind_all: row.get::<_, i64>(7)? != 0,
-                    sort_order: row.get::<_, i64>(8)? as i32,
-                    created_at: row.get(9)?,
-                })
-            })
+            .query_map(params![host_id.to_string()], row_to_rule)
             .map_err(|e| Error::Protocol(e.to_string()))?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
             .map_err(|e| Error::Protocol(e.to_string()))
+    }
+
+    /// All tunnels across every host. Used at app startup to find the
+    /// rules with `autostart=1` that should be brought up automatically.
+    pub async fn list_all(&self) -> Result<Vec<TunnelRule>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id,host_id,label,local_port,remote_host,remote_port,enabled,bind_all,auto_reconnect,autostart,sort_order,created_at \
+                 FROM tunnels ORDER BY host_id,sort_order,created_at",
+            )
+            .map_err(|e| Error::Protocol(e.to_string()))?;
+        let rows = stmt
+            .query_map([], row_to_rule)
+            .map_err(|e| Error::Protocol(e.to_string()))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(|e| Error::Protocol(e.to_string()))
+    }
+
+    /// Fetch a single rule by id.
+    pub async fn get(&self, id: Uuid) -> Result<Option<TunnelRule>> {
+        let conn = self.conn.lock().await;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id,host_id,label,local_port,remote_host,remote_port,enabled,bind_all,auto_reconnect,autostart,sort_order,created_at \
+                 FROM tunnels WHERE id=?1",
+            )
+            .map_err(|e| Error::Protocol(e.to_string()))?;
+        let mut rows = stmt
+            .query_map(params![id.to_string()], row_to_rule)
+            .map_err(|e| Error::Protocol(e.to_string()))?;
+        match rows.next() {
+            Some(Ok(r)) => Ok(Some(r)),
+            Some(Err(e)) => Err(Error::Protocol(e.to_string())),
+            None => Ok(None),
+        }
     }
 
     pub async fn insert(&self, r: NewTunnelRule) -> Result<TunnelRule> {
@@ -95,10 +137,12 @@ impl TunnelStore {
             .as_secs() as i64;
         let enabled = r.enabled.unwrap_or(true);
         let bind_all = r.bind_all.unwrap_or(false);
+        let auto_reconnect = r.auto_reconnect.unwrap_or(true);
+        let autostart = r.autostart.unwrap_or(false);
         let conn = self.conn.lock().await;
         conn.execute(
-            "INSERT INTO tunnels (id,host_id,label,local_port,remote_host,remote_port,enabled,bind_all,sort_order,created_at) \
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,0,?9)",
+            "INSERT INTO tunnels (id,host_id,label,local_port,remote_host,remote_port,enabled,bind_all,auto_reconnect,autostart,sort_order,created_at) \
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,0,?11)",
             params![
                 id.to_string(),
                 r.host_id.to_string(),
@@ -108,6 +152,8 @@ impl TunnelStore {
                 r.remote_port as i64,
                 enabled as i64,
                 bind_all as i64,
+                auto_reconnect as i64,
+                autostart as i64,
                 now,
             ],
         )
@@ -121,6 +167,8 @@ impl TunnelStore {
             remote_port: r.remote_port,
             enabled,
             bind_all,
+            auto_reconnect,
+            autostart,
             sort_order: 0,
             created_at: now,
         })
@@ -176,6 +224,20 @@ impl TunnelStore {
         if let Some(v) = u.bind_all {
             tx.execute(
                 "UPDATE tunnels SET bind_all=?1 WHERE id=?2",
+                params![v as i64, u.id.to_string()],
+            )
+            .map_err(|e| Error::Protocol(e.to_string()))?;
+        }
+        if let Some(v) = u.auto_reconnect {
+            tx.execute(
+                "UPDATE tunnels SET auto_reconnect=?1 WHERE id=?2",
+                params![v as i64, u.id.to_string()],
+            )
+            .map_err(|e| Error::Protocol(e.to_string()))?;
+        }
+        if let Some(v) = u.autostart {
+            tx.execute(
+                "UPDATE tunnels SET autostart=?1 WHERE id=?2",
                 params![v as i64, u.id.to_string()],
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
@@ -245,6 +307,8 @@ mod tests {
                 remote_port: 5432,
                 enabled: None,
                 bind_all: None,
+                auto_reconnect: None,
+                autostart: None,
             })
             .await
             .unwrap();
@@ -271,6 +335,8 @@ mod tests {
                 remote_port: 80,
                 enabled: None,
                 bind_all: None,
+                auto_reconnect: None,
+                autostart: None,
             })
             .await
             .unwrap();
@@ -284,6 +350,8 @@ mod tests {
                 remote_host: None,
                 remote_port: None,
                 bind_all: None,
+                auto_reconnect: None,
+                autostart: None,
                 sort_order: None,
             })
             .await
@@ -305,6 +373,8 @@ mod tests {
                 remote_port: 80,
                 enabled: None,
                 bind_all: None,
+                auto_reconnect: None,
+                autostart: None,
             })
             .await
             .unwrap();

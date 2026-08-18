@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Waypoints, Play, Square, Copy, Search, Plus, X, Database, Monitor, Server,
-  GripVertical, Trash2, Check, Terminal, ChevronDown,
+  GripVertical, Trash2, Check, Terminal, ChevronDown, RotateCw,
 } from "lucide-react";
 import { useT } from "../i18n";
 import { useHostsStore } from "../state/hosts";
@@ -10,8 +10,32 @@ import {
   listTunnelsForHost, openTunnelViaHost, closeTunnel,
   addTunnel, updateTunnel, deleteTunnel, reorderTunnels,
 } from "../ipc/tunnels";
+import { logPush } from "../ipc/logs";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
 import type { HostInfo } from "../types/host";
+
+/** Per-rule retry state kept in a ref. `attempt` increases per failure;
+ *  `nextRetryAt` is a wall-clock ms timestamp for the countdown UI;
+ *  `authFailed` short-circuits so we don't spam a locked-out host. */
+type RetryState = {
+  attempt: number;
+  nextRetryAt: number;
+  authFailed: boolean;
+  timer: number | null;
+};
+
+/** Exponential-ish backoff: 2s → 5s → 15s → 60s (then 60s forever). */
+function backoffMs(attempt: number): number {
+  if (attempt <= 1) return 2000;
+  if (attempt === 2) return 5000;
+  if (attempt === 3) return 15000;
+  return 60000;
+}
+
+function isAuthError(msg: string): boolean {
+  const s = msg.toLowerCase();
+  return s.includes("auth") || s.includes("passphrase") || s.includes("password");
+}
 
 type EditingState =
   | { mode: "new"; presetHostId?: string }
@@ -59,6 +83,14 @@ export function GlobalTunnelsView(_props: Props = {} as Props) {
   const [importOpen, setImportOpen] = useState(false);
   // rule_id → session_id returned by tunnel_open_via_host.
   const [ruleSessions, setRuleSessions] = useState<Record<string, string>>({});
+  // Per-rule retry state — separate state so the pill can render "第 N 次
+  // 重试, Xs 后" without needing to re-render on every unrelated status
+  // event. Timers are tracked so we can cancel on unmount / stop.
+  const [retries, setRetries] = useState<Record<string, RetryState>>({});
+  // rule_id -> true means the last close was user-initiated (Stop / Delete),
+  // suppressing auto-reconnect. Cleared once the retry decision is made.
+  const stopIntents = useRef<Record<string, boolean>>({});
+
   const registerRuleSession = (ruleId: string, sid: string) =>
     setRuleSessions((s) => (s[ruleId] === sid ? s : { ...s, [ruleId]: sid }));
   const forgetRuleSession = (ruleId: string) =>
@@ -67,6 +99,176 @@ export function GlobalTunnelsView(_props: Props = {} as Props) {
       const { [ruleId]: _drop, ...rest } = s;
       return rest;
     });
+  const markStopIntent = (ruleId: string) => {
+    stopIntents.current[ruleId] = true;
+  };
+
+  // Look up the current rule by id — read on demand so we always see the
+  // freshest auto_reconnect flag (the user may have toggled it in the
+  // drawer between failures).
+  const findRule = useCallback((ruleId: string): TunnelRule | null => {
+    for (const arr of Object.values(tunnelsByHost)) {
+      const r = arr.find((x) => x.id === ruleId);
+      if (r) return r;
+    }
+    return null;
+  }, [tunnelsByHost]);
+
+  const cancelRetry = useCallback((ruleId: string) => {
+    setRetries((prev) => {
+      const cur = prev[ruleId];
+      if (!cur) return prev;
+      if (cur.timer !== null) window.clearTimeout(cur.timer);
+      const { [ruleId]: _drop, ...rest } = prev;
+      return rest;
+    });
+  }, []);
+
+  const attemptReconnect = useCallback(async (ruleId: string) => {
+    const rule = findRule(ruleId);
+    if (!rule) { cancelRetry(ruleId); return; }
+    // Fetch the current attempt count from state at execution time.
+    let currentAttempt = 0;
+    setRetries((prev) => {
+      const cur = prev[ruleId];
+      currentAttempt = (cur?.attempt ?? 0) + 1;
+      return { ...prev, [ruleId]: { attempt: currentAttempt, nextRetryAt: 0, authFailed: false, timer: null } };
+    });
+    void logPush({
+      level: "info", category: "tunnel",
+      message: `reconnect attempt #${currentAttempt} · dial ssh transport`,
+      fields: { rule_id: ruleId, rule_label: rule.label, attempt: currentAttempt },
+    });
+    try {
+      const { session_id } = await openTunnelViaHost({
+        host_id: rule.host_id,
+        rule_id: rule.id,
+        local_port: rule.local_port,
+        remote_host: rule.remote_host,
+        remote_port: rule.remote_port,
+        bind_all: rule.bind_all,
+      });
+      registerRuleSession(rule.id, session_id);
+      cancelRetry(ruleId);
+      void logPush({
+        level: "info", category: "tunnel",
+        message: `reconnect attempt #${currentAttempt} succeeded, tunnel restored`,
+        fields: { rule_id: ruleId, rule_label: rule.label, session_id, attempt: currentAttempt },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (isAuthError(msg)) {
+        setRetries((prev) => ({
+          ...prev,
+          [ruleId]: { attempt: currentAttempt, nextRetryAt: 0, authFailed: true, timer: null },
+        }));
+        void logPush({
+          level: "error", category: "tunnel",
+          message: "reconnect aborted: auth failure — credentials revoked?",
+          fields: { rule_id: ruleId, rule_label: rule.label, error: msg },
+        });
+        return;
+      }
+      const delay = backoffMs(currentAttempt);
+      const nextRetryAt = Date.now() + delay;
+      const timer = window.setTimeout(() => attemptReconnect(ruleId), delay);
+      setRetries((prev) => ({
+        ...prev,
+        [ruleId]: { attempt: currentAttempt, nextRetryAt, authFailed: false, timer },
+      }));
+      void logPush({
+        level: "warn", category: "tunnel",
+        message: `reconnect attempt #${currentAttempt} failed: ${msg}`,
+        fields: { rule_id: ruleId, rule_label: rule.label, next_retry_in_ms: delay },
+      });
+    }
+  }, [findRule, cancelRetry]);
+
+  // Watch tunnel statuses — a rule that goes error/closed while its
+  // session was registered triggers the retry state machine when the
+  // close wasn't user-initiated and the rule has auto_reconnect=on.
+  const prevStatusRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const nextStatus: Record<string, string> = {};
+    for (const [sid, list] of Object.entries(tunnelStatusesAll)) {
+      for (const st of list) {
+        nextStatus[`${sid}::${st.rule_id}`] = st.status;
+      }
+    }
+    // Flag rules whose known session just transitioned to closed/error.
+    for (const [ruleId, sid] of Object.entries(ruleSessions)) {
+      const key = `${sid}::${ruleId}`;
+      const prev = prevStatusRef.current[key];
+      const now = nextStatus[key];
+      if (now && now !== prev && (now === "closed" || now === "error")) {
+        // User-initiated stop? Skip; clear the intent for next time.
+        if (stopIntents.current[ruleId]) {
+          delete stopIntents.current[ruleId];
+          forgetRuleSession(ruleId);
+          continue;
+        }
+        const rule = findRule(ruleId);
+        if (!rule || !rule.auto_reconnect) {
+          forgetRuleSession(ruleId);
+          continue;
+        }
+        // Arm a retry only if we don't already have one going.
+        setRetries((prev) => {
+          if (prev[ruleId]) return prev;
+          const delay = backoffMs(1);
+          const nextRetryAt = Date.now() + delay;
+          const timer = window.setTimeout(() => attemptReconnect(ruleId), delay);
+          void logPush({
+            level: "warn", category: "tunnel",
+            message: "tunnel closed unexpectedly, auto-reconnect armed",
+            fields: { rule_id: ruleId, rule_label: rule.label, next_retry_in_ms: delay },
+          });
+          return { ...prev, [ruleId]: { attempt: 0, nextRetryAt, authFailed: false, timer } };
+        });
+      }
+    }
+    prevStatusRef.current = nextStatus;
+  }, [tunnelStatusesAll, ruleSessions, findRule, attemptReconnect]);
+
+  // Autostart-on-app-launch: once, after hosts + tunnels are loaded, kick
+  // off openTunnelViaHost for every rule marked autostart=1.
+  const autostartRanRef = useRef(false);
+  useEffect(() => {
+    if (autostartRanRef.current) return;
+    if (hosts.length === 0) return;
+    // Wait until we've loaded at least one host's tunnels to be sure the
+    // tunnelsByHost snapshot is real (initial render has {}).
+    if (Object.keys(tunnelsByHost).length === 0) return;
+    autostartRanRef.current = true;
+    const startups: TunnelRule[] = [];
+    for (const arr of Object.values(tunnelsByHost)) {
+      for (const r of arr) if (r.autostart) startups.push(r);
+    }
+    if (startups.length === 0) return;
+    void logPush({
+      level: "info", category: "tunnel",
+      message: `autostart: opening ${startups.length} tunnel(s) on app launch`,
+      fields: { count: startups.length },
+    });
+    for (const rule of startups) {
+      openTunnelViaHost({
+        host_id: rule.host_id,
+        rule_id: rule.id,
+        local_port: rule.local_port,
+        remote_host: rule.remote_host,
+        remote_port: rule.remote_port,
+        bind_all: rule.bind_all,
+      }).then(({ session_id }) => {
+        registerRuleSession(rule.id, session_id);
+      }).catch((e) => {
+        void logPush({
+          level: "error", category: "tunnel",
+          message: `autostart failed for ${rule.label || rule.remote_host}: ${e}`,
+          fields: { rule_id: rule.id, rule_label: rule.label },
+        });
+      });
+    }
+  }, [hosts, tunnelsByHost]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +324,12 @@ export function GlobalTunnelsView(_props: Props = {} as Props) {
       transition: "grid-template-columns 180ms ease",
       background: "var(--bg)", overflow: "hidden",
     }}>
+    <style>{`
+      @keyframes shx-pulse {
+        0%, 100% { opacity: 1; }
+        50%      { opacity: 0.35; }
+      }
+    `}</style>
     <div style={{
       display: "flex", flexDirection: "column",
       overflow: "hidden", minWidth: 0,
@@ -228,9 +436,13 @@ export function GlobalTunnelsView(_props: Props = {} as Props) {
             sessionId={g.sessionId}
             statusesBySession={tunnelStatusesAll}
             ruleSessions={ruleSessions}
+            retries={retries}
             onEditRule={(rule) => setEditing({ mode: "edit", rule })}
             onRegisterRuleSession={registerRuleSession}
             onForgetRuleSession={forgetRuleSession}
+            onMarkStopIntent={markStopIntent}
+            onCancelRetry={cancelRetry}
+            onManualRetry={attemptReconnect}
             onDeletedRule={() => bumpRulesVersion(g.host.id)}
             onLocalReorder={(nextRules) =>
               setTunnelsByHost((prev) => ({ ...prev, [g.host.id]: nextRules }))
@@ -407,8 +619,9 @@ function ImportBar({
 
 // ─── Host group with drag reorder ───────────────────────────────────────
 function HostGroup({
-  host, rules, sessionId, statusesBySession, ruleSessions,
+  host, rules, sessionId, statusesBySession, ruleSessions, retries,
   onEditRule, onRegisterRuleSession, onForgetRuleSession,
+  onMarkStopIntent, onCancelRetry, onManualRetry,
   onDeletedRule, onLocalReorder,
 }: {
   host: HostInfo;
@@ -416,9 +629,13 @@ function HostGroup({
   sessionId: string | null;
   statusesBySession: Record<string, TunnelStatus[]>;
   ruleSessions: Record<string, string>;
+  retries: Record<string, RetryState>;
   onEditRule: (rule: TunnelRule) => void;
   onRegisterRuleSession: (ruleId: string, sessionId: string) => void;
   onForgetRuleSession: (ruleId: string) => void;
+  onMarkStopIntent: (ruleId: string) => void;
+  onCancelRetry: (ruleId: string) => void;
+  onManualRetry: (ruleId: string) => Promise<void> | void;
   onDeletedRule: () => void;
   onLocalReorder: (rules: TunnelRule[]) => void;
 }) {
@@ -536,6 +753,7 @@ function HostGroup({
               host={host}
               sessionId={attachedSid}
               status={status}
+              retry={retries[rule.id]}
               isDragging={draggingId === rule.id}
               isDragOver={dragOverId === rule.id && draggingId !== rule.id}
               onGripPointerDown={(e) => onGripPointerDown(e, rule.id)}
@@ -546,6 +764,9 @@ function HostGroup({
               onEdit={() => onEditRule(rule)}
               onRegisterRuleSession={onRegisterRuleSession}
               onForgetRuleSession={onForgetRuleSession}
+              onMarkStopIntent={onMarkStopIntent}
+              onCancelRetry={onCancelRetry}
+              onManualRetry={onManualRetry}
               onDeleted={() => onDeletedRule()}
             />
           );
@@ -567,14 +788,16 @@ function badgeColorFor(id: string): string {
 }
 
 function TunnelCard({
-  rule, host, sessionId, status, isDragging, isDragOver,
+  rule, host, sessionId, status, retry, isDragging, isDragOver,
   onGripPointerDown, rowRef,
-  onEdit, onRegisterRuleSession, onForgetRuleSession, onDeleted,
+  onEdit, onRegisterRuleSession, onForgetRuleSession,
+  onMarkStopIntent, onCancelRetry, onManualRetry, onDeleted,
 }: {
   rule: TunnelRule;
   host: HostInfo;
   sessionId: string | null;
   status: TunnelStatus | undefined;
+  retry: RetryState | undefined;
   isDragging: boolean;
   isDragOver: boolean;
   onGripPointerDown: (e: React.PointerEvent) => void;
@@ -582,6 +805,9 @@ function TunnelCard({
   onEdit: () => void;
   onRegisterRuleSession: (ruleId: string, sessionId: string) => void;
   onForgetRuleSession: (ruleId: string) => void;
+  onMarkStopIntent: (ruleId: string) => void;
+  onCancelRetry: (ruleId: string) => void;
+  onManualRetry: (ruleId: string) => Promise<void> | void;
   onDeleted: () => void;
 }) {
   const t = useT();
@@ -639,6 +865,10 @@ function TunnelCard({
 
   async function handleStop() {
     if (!sessionId) return;
+    // Signal the retry watcher that the imminent close is intentional
+    // so it doesn't spawn a reconnect loop the moment we succeed.
+    onMarkStopIntent(rule.id);
+    onCancelRetry(rule.id);
     setLocalErr(null);
     setBusy(true);
     try {
@@ -664,6 +894,8 @@ function TunnelCard({
 
   async function handleConfirmDelete() {
     disarmDelete();
+    onMarkStopIntent(rule.id);
+    onCancelRetry(rule.id);
     setBusy(true);
     try {
       if (isRunning && sessionId) {
@@ -677,6 +909,14 @@ function TunnelCard({
     } finally { setBusy(false); }
   }
 
+  const isReconnecting = !!retry && !retry.authFailed;
+  const isAuthFailed = !!retry?.authFailed;
+  const borderColor = isRunning ? "var(--success)"
+    : isAuthFailed ? "var(--error)"
+    : isReconnecting ? "var(--warn, #F59E0B)"
+    : isError ? "var(--error)"
+    : isDragOver ? "var(--accent)"
+    : "var(--border)";
   return (
     <div
       ref={rowRef}
@@ -686,7 +926,7 @@ function TunnelCard({
         display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12,
         padding: "12px 14px", margin: "4px 0",
         background: "var(--panel-1)",
-        border: `1px solid ${(isRunning || isError) ? (isRunning ? "var(--success)" : "var(--error)") : (isDragOver ? "var(--accent)" : "var(--border)")}`,
+        border: `1px solid ${borderColor}`,
         borderRadius: 10, cursor: "pointer",
         userSelect: "none",
         transition: "opacity 0.18s ease, box-shadow 0.18s ease, background 0.18s ease",
@@ -729,7 +969,7 @@ function TunnelCard({
             flex: 1, minWidth: 0,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>{rule.label || `${rule.remote_host}:${rule.remote_port}`}</span>
-          <StatusPill status={status} />
+          <StatusPill status={status} retry={retry} />
         </div>
         <div style={{
           fontSize: 11, color: "var(--text-3)",
@@ -742,6 +982,7 @@ function TunnelCard({
           <span style={{ color: "var(--text-4)" }}> → </span>
           <span style={{ color: "var(--text-2)" }}>{rule.remote_host}:{rule.remote_port}</span>
         </div>
+        {retry && <RetryHint retry={retry} />}
       </div>
       <div
         onClick={(e) => e.stopPropagation()}
@@ -768,6 +1009,16 @@ function TunnelCard({
         >
           {copied ? <Check size={12} strokeWidth={3} /> : <Copy size={12} />}
         </IconButton>
+        {isAuthFailed && (
+          <IconButton
+            onClick={() => { onCancelRetry(rule.id); void onManualRetry(rule.id); }}
+            disabled={busy}
+            title={t("Retry manually")}
+            tone="danger"
+          >
+            <RotateCw size={12} />
+          </IconButton>
+        )}
         {confirmDelete && (
           <button
             type="button"
@@ -811,13 +1062,36 @@ function TunnelCard({
   );
 }
 
-function StatusPill({ status }: { status: TunnelStatus | undefined }) {
+function StatusPill({ status, retry }: { status: TunnelStatus | undefined; retry?: RetryState }) {
   const t = useT();
   const base = {
     padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 500,
     display: "inline-flex", alignItems: "center", gap: 4,
     whiteSpace: "nowrap", flexShrink: 0,
   } as const;
+  // Retry states take precedence over the raw status because the tunnel
+  // is technically "closed" but the app is actively working to bring it
+  // back.
+  if (retry?.authFailed) {
+    return (
+      <span style={{ ...base, background: "color-mix(in srgb, var(--error) 15%, transparent)", color: "var(--error)" }}>
+        <Dot color="var(--error)" />
+        {t("Credentials revoked")}
+      </span>
+    );
+  }
+  if (retry) {
+    return (
+      <span style={{ ...base, background: "color-mix(in srgb, var(--warn, #F59E0B) 18%, transparent)", color: "var(--warn, #F59E0B)" }}>
+        <span style={{
+          width: 6, height: 6, borderRadius: "50%",
+          background: "currentColor",
+          animation: "shx-pulse 1.4s ease-in-out infinite",
+        }} />
+        {t("Reconnecting…")}
+      </span>
+    );
+  }
   if (!status) {
     return (
       <span style={{ ...base, background: "var(--panel-2)", color: "var(--text-3)" }}>
@@ -852,6 +1126,37 @@ function StatusPill({ status }: { status: TunnelStatus | undefined }) {
 
 function Dot({ color }: { color: string }) {
   return <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />;
+}
+
+function RetryHint({ retry }: { retry: RetryState }) {
+  const t = useT();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (retry.authFailed || retry.nextRetryAt === 0) return;
+    const id = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(id);
+  }, [retry.authFailed, retry.nextRetryAt]);
+  if (retry.authFailed) {
+    return (
+      <div style={{ fontSize: 11, color: "var(--error)", marginTop: 4 }}>
+        {t("Reconnect stopped · update credentials in Hosts and retry")}
+      </div>
+    );
+  }
+  if (retry.nextRetryAt === 0) {
+    return (
+      <div style={{ fontSize: 11, color: "var(--warn, #F59E0B)", marginTop: 4 }}>
+        {t("Attempt")} #{retry.attempt} · {t("dialing…")}
+      </div>
+    );
+  }
+  const remainingMs = Math.max(0, retry.nextRetryAt - now);
+  const remainingS = Math.ceil(remainingMs / 1000);
+  return (
+    <div style={{ fontSize: 11, color: "var(--warn, #F59E0B)", marginTop: 4 }}>
+      {t("Attempt")} #{retry.attempt} {t("failed")} · {t("next in")} {remainingS}s
+    </div>
+  );
 }
 
 function IconButton({
@@ -919,6 +1224,8 @@ function EditDrawer({
   });
   const [remoteHost, setRemoteHost] = useState(initial?.remote_host ?? "");
   const [remotePort, setRemotePort] = useState(String(initial?.remote_port ?? ""));
+  const [autoReconnect, setAutoReconnect] = useState(initial?.auto_reconnect ?? true);
+  const [autostart, setAutostart] = useState(initial?.autostart ?? false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -947,6 +1254,8 @@ function EditDrawer({
           remote_host: remoteHost.trim(),
           remote_port: parseInt(remotePort, 10),
           bind_all: bindAll,
+          auto_reconnect: autoReconnect,
+          autostart: autostart,
         });
       } else {
         const hostChanged = hostId !== state.rule.host_id;
@@ -958,6 +1267,8 @@ function EditDrawer({
           remote_host: remoteHost.trim(),
           remote_port: parseInt(remotePort, 10),
           bind_all: bindAll,
+          auto_reconnect: autoReconnect,
+          autostart: autostart,
         });
         // If the rule moved to a different host, the previous host's
         // rule list also needs to be refetched.
@@ -1073,6 +1384,20 @@ function EditDrawer({
             style={{ ...inputStyle, fontFamily: "var(--font-mono)", maxWidth: 160 }}
           />
         </Field>
+
+        <Section title={t("Behavior")} />
+        <ToggleRow
+          value={autoReconnect}
+          onChange={setAutoReconnect}
+          label={t("Auto reconnect")}
+          hint={t("On disconnect, retry with 2s → 5s → 15s → 60s backoff. Auth failure stops retries.")}
+        />
+        <ToggleRow
+          value={autostart}
+          onChange={setAutostart}
+          label={t("Autostart on app launch")}
+          hint={t("Open a background SSH transport and this tunnel when shellx starts.")}
+        />
 
         {err && (
           <div style={{
@@ -1237,6 +1562,47 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
         }}>{label}</label>
       )}
       {children}
+    </div>
+  );
+}
+
+function ToggleRow({ value, onChange, label, hint }: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  hint?: string;
+}) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "10px 0", borderTop: "1px solid var(--border)",
+      gap: 12,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, color: "var(--text-1)" }}>{label}</div>
+        {hint && (
+          <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{hint}</div>
+        )}
+      </div>
+      <div
+        role="switch"
+        aria-checked={value}
+        onClick={() => onChange(!value)}
+        style={{
+          width: 34, height: 20, borderRadius: 999,
+          background: value ? "var(--accent)" : "var(--text-4)",
+          position: "relative", cursor: "pointer",
+          transition: "background 0.15s", flexShrink: 0,
+        }}
+      >
+        <span style={{
+          position: "absolute", top: 2,
+          left: value ? 16 : 2,
+          width: 16, height: 16, borderRadius: "50%",
+          background: "white",
+          transition: "left 0.15s",
+        }} />
+      </div>
     </div>
   );
 }

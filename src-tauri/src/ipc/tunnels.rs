@@ -136,18 +136,32 @@ pub async fn tunnel_open_via_host(
     keychain: State<'_, KeychainStore>,
     app: AppHandle,
 ) -> Result<TunnelOpenViaHostResult> {
+    let bind_addr = if args.bind_all.unwrap_or(false) { "0.0.0.0" } else { "127.0.0.1" };
+    let local = format!("{bind_addr}:{}", args.local_port);
+    let remote = format!("{}:{}", args.remote_host, args.remote_port);
+
     // Path 1: piggy-back on an already-open SSH session for the host.
     if let Some(session_id) = mgr.find_ssh_by_host(args.host_id).await {
         mgr.open_tunnel(
             session_id,
-            args.rule_id,
+            args.rule_id.clone(),
             args.local_port,
-            args.remote_host,
+            args.remote_host.clone(),
             args.remote_port,
             args.bind_all.unwrap_or(false),
             app,
         )
         .await?;
+        crate::log_info!(
+            crate::logs::categories::TUNNEL,
+            "tunnel started on existing ssh session",
+            "rule_id": args.rule_id,
+            "host_id": args.host_id.to_string(),
+            "local": local,
+            "remote": remote,
+            "session": session_id.to_string(),
+            "reused_session": true,
+        );
         return Ok(TunnelOpenViaHostResult { session_id, reused_session: true });
     }
 
@@ -238,14 +252,25 @@ pub async fn tunnel_open_via_host(
 
     mgr.open_tunnel(
         info.id,
-        args.rule_id,
+        args.rule_id.clone(),
         args.local_port,
-        args.remote_host,
+        args.remote_host.clone(),
         args.remote_port,
         args.bind_all.unwrap_or(false),
         app,
     )
     .await?;
+
+    crate::log_info!(
+        crate::logs::categories::TUNNEL,
+        "tunnel started via saved host",
+        "rule_id": args.rule_id,
+        "host_id": args.host_id.to_string(),
+        "local": local,
+        "remote": remote,
+        "session": info.id.to_string(),
+        "reused_session": false,
+    );
 
     Ok(TunnelOpenViaHostResult { session_id: info.id, reused_session: false })
 }
