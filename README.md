@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.17.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.18.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -14,7 +14,8 @@ ShellX is a desktop app that gives you:
 
 - **SSH terminal** in tabs — connect to Linux / BSD / macOS servers, get a working shell with themes, custom fonts, cursor style; public-key (Ed25519/RSA/ECDSA) or password auth, host-key verification against `~/.ssh/known_hosts`
 - **Local terminal** — open a shell on your own machine (PowerShell by default on Windows; any shell via Settings) in a tab right next to your SSH sessions
-- **SSH tunnels (port forwarding)** — a dedicated Tunnels view lists every saved forward across every host in one place; start any rule directly (shellx opens the SSH transport silently when the host isn't already connected), drag rows to reorder, move a rule between hosts without recreating, share on the LAN (bind 0.0.0.0), or paste an `ssh -L …` command to bulk-import rules
+- **SSH tunnels (port forwarding)** — a dedicated Tunnels view lists every saved forward across every host in one place; start any rule directly (shellx opens the SSH transport silently when the host isn't already connected), auto-reconnect with backoff when a tunnel drops, autostart selected rules on app launch, drag rows to reorder, move a rule between hosts without recreating, share on the LAN (bind 0.0.0.0), or paste an `ssh -L …` command to bulk-import rules
+- **Structured logs** — Settings → Logs shows a real-time stream of every event across tunnels, sessions, sftp, host-key checks, updater and more. Filter by level / category / free-text, click any row for full JSON, and export a jsonl dump for bug reports; daily-rotated files at `~/.shellx/logs/` with 7-day retention
 - **SFTP file browser** — WinSCP-style dual-pane (local ↔ remote) with drag-and-drop upload / download, folder transfers, pause / resume / cancel
 - **Session monitor** — live CPU / memory / network / disk / process view for any Linux host over the same SSH connection; adjustable 1–30 s poll interval
 - **Saved hosts + keychain** — store your servers once, quick-connect from the sidebar or the `+` menu; passwords live in the OS keychain, not a plaintext config
