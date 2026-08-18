@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>ShellX · 全局隧道视图 · mockup</title>
+<style>
+  :root {
+    --bg:        #F7F8FA;
+    --card:      #FFFFFF;
+    --card-2:    #F5F7FB;
+    --border:    #E7EAF0;
+    --border-2:  #EEF2F8;
+    --shadow:    0 1px 2px rgba(15, 23, 42, 0.04);
+    --shadow-h:  0 2px 8px rgba(15, 23, 42, 0.07);
+
+    --text-1:    #0F172A;
+    --text-2:    #475569;
+    --text-3:    #94A3B8;
+    --text-4:    #CBD5E1;
+
+    --accent:      #4C7CFF;
+    --accent-2:    #6B8FFF;
+    --accent-fade: #EBF1FF;
+
+    --success:     #22C55E;
+    --success-fade:#E9FBEF;
+    --warn:        #F59E0B;
+    --warn-fade:   #FFF7E6;
+    --error:       #EF4444;
+    --error-fade:  #FEECEC;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg); color: var(--text-1); height: 100vh;
+    font-family: -apple-system, "Segoe UI Variable", "Segoe UI",
+                 "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+    font-size: 13px; line-height: 1.4;
+    -webkit-font-smoothing: antialiased; overflow: hidden;
+  }
+  button { font: inherit; cursor: pointer; }
+
+  .app {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    grid-template-rows: 40px 1fr;
+    height: 100vh;
+  }
+
+  /* Titlebar */
+  .titlebar {
+    grid-column: 1 / -1;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 12px;
+    gap: 10px; font-size: 12px;
+  }
+  .titlebar .brand {
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .titlebar .brand svg { display: block; }
+  .titlebar .brand .name { font-weight: 700; font-size: 13px; }
+  .titlebar .spacer { flex: 1; }
+
+  /* Left activity rail */
+  .rail {
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: 12px 0; gap: 4px;
+  }
+  .rail-item {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 8px 4px; margin: 0 6px;
+    gap: 3px; border-radius: 8px;
+    color: var(--text-3); cursor: pointer;
+    background: transparent; border: none;
+  }
+  .rail-item:hover { background: var(--card-2); color: var(--text-2); }
+  .rail-item.active { color: var(--accent); background: var(--accent-fade); }
+  .rail-item svg { width: 18px; height: 18px; }
+  .rail-item .lbl { font-size: 10px; }
+  .rail-spacer { flex: 1; }
+
+  /* Main body: sidebar (list) + editor drawer */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .list-pane {
+    display: flex; flex-direction: column;
+    background: var(--card); overflow: hidden;
+    border-right: 1px solid var(--border);
+  }
+  .list-head {
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .list-head h1 { font-size: 15px; font-weight: 600; }
+  .list-head .count {
+    font-size: 11px; color: var(--text-3);
+    background: var(--card-2); padding: 2px 8px; border-radius: 999px;
+  }
+  .list-head .spacer { flex: 1; }
+  .search {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 26px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text-3); background: var(--card-2);
+    font-size: 12px;
+  }
+  .search svg { width: 12px; height: 12px; }
+
+  .add-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; background: var(--accent); color: white;
+    border: none; border-radius: 6px; font-size: 12px; font-weight: 500;
+  }
+  .add-btn:hover { background: var(--accent-2); }
+  .add-btn svg { width: 12px; height: 12px; }
+
+  .list-body { flex: 1; overflow: auto; padding: 8px 12px 20px; }
+
+  /* Group header (per host) */
+  .group {
+    margin-top: 10px;
+  }
+  .group-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px 6px; font-size: 11px;
+    color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .group-head .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--success);
+    box-shadow: 0 0 0 2px rgba(34,197,94,.18);
+  }
+  .group-head .dot.off { background: var(--text-4); box-shadow: none; }
+  .group-head .host-label { color: var(--text-2); font-weight: 600;
+                            text-transform: none; letter-spacing: 0; font-size: 12px; }
+  .group-head .meta { color: var(--text-3); font-size: 11px;
+                      text-transform: none; letter-spacing: 0; }
+  .group-head .spacer { flex: 1; }
+  .btn-mini {
+    padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border);
+    background: var(--card-2); color: var(--text-2); font-size: 11px;
+  }
+  .btn-mini:hover { background: var(--card); color: var(--text-1); }
+
+  /* Tunnel card */
+  .card {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; margin: 4px 0;
+    background: var(--card);
+    border: 1px solid var(--border); border-radius: 10px;
+    cursor: pointer;
+  }
+  .card:hover { border-color: var(--accent); box-shadow: var(--shadow); }
+  .card.active { border-color: var(--accent); background: var(--accent-fade); }
+
+  .badge {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: var(--accent); color: white;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  .badge.b-pink   { background: #EC4899; }
+  .badge.b-teal   { background: #14B8A6; }
+  .badge.b-orange { background: #F97316; }
+  .badge.b-violet { background: #8B5CF6; }
+
+  .card-body { flex: 1; min-width: 0; }
+  .card-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 600; color: var(--text-1);
+    margin-bottom: 4px;
+  }
+  .card-path {
+    font-size: 11px; color: var(--text-3);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .card-path .seg { color: var(--text-2); }
+  .card-path .via { color: var(--accent); }
+  .card-path .arrow { color: var(--text-4); margin: 0 4px; }
+
+  .pill {
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 4px;
+    flex-shrink: 0;
+  }
+  .pill.on  { background: var(--success-fade); color: var(--success); }
+  .pill.off { background: var(--card-2); color: var(--text-3); }
+  .pill.err { background: var(--error-fade); color: var(--error); }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .card-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .action-btn {
+    width: 30px; height: 30px; display: inline-flex;
+    align-items: center; justify-content: center;
+    border: 1px solid var(--border); background: var(--card);
+    border-radius: 6px; color: var(--text-2);
+  }
+  .action-btn:hover { color: var(--text-1); background: var(--card-2); }
+  .action-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .action-btn.primary:hover { background: var(--accent-2); }
+  .action-btn svg { width: 12px; height: 12px; }
+
+  /* Edit drawer */
+  .edit {
+    background: var(--card); overflow-y: auto;
+    padding: 0;
+  }
+  .edit-head {
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .edit-head h2 { font-size: 14px; font-weight: 600; flex: 1; }
+  .edit-head button {
+    width: 28px; height: 28px; border-radius: 6px;
+    color: var(--text-3); background: transparent; border: none;
+  }
+  .edit-head button:hover { background: var(--card-2); color: var(--text-1); }
+
+  .edit-body { padding: 20px; }
+
+  /* Flow diagram */
+  .flow {
+    background: var(--card-2); border-radius: 12px;
+    padding: 20px 16px; margin-bottom: 18px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: relative; overflow: hidden;
+  }
+  .flow-node {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    z-index: 2;
+  }
+  .flow-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: var(--card); border: 1px solid var(--border);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text-2); box-shadow: var(--shadow);
+  }
+  .flow-icon.local  { color: var(--accent); background: var(--accent-fade); border-color: var(--accent-fade); }
+  .flow-icon.via    { color: var(--success); background: var(--success-fade); border-color: var(--success-fade); }
+  .flow-icon.target { color: var(--text-2); }
+  .flow-icon.wall   { color: var(--error); background: var(--error-fade); border-color: var(--error-fade); }
+  .flow-icon svg { width: 22px; height: 22px; }
+  .flow-node .lbl {
+    font-size: 10px; color: var(--text-3);
+    font-family: "SF Mono", monospace;
+  }
+
+  /* SVG arrows layer */
+  .flow-arrows {
+    position: absolute; inset: 0; pointer-events: none;
+  }
+  .flow-arrows path.tunnel {
+    stroke: var(--success); stroke-width: 2; fill: none;
+    stroke-dasharray: 4 3;
+  }
+  .flow-arrows path.blocked {
+    stroke: var(--error); stroke-width: 2; fill: none;
+    stroke-dasharray: 2 3;
+  }
+  .flow-arrows .caption {
+    font-size: 10px; fill: var(--text-3); font-family: "SF Mono", monospace;
+  }
+
+  /* Form */
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block; font-size: 11px; color: var(--text-3);
+    margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .field input, .field select {
+    width: 100%; padding: 7px 10px; font-size: 13px;
+    background: var(--card); color: var(--text-1);
+    border: 1px solid var(--border); border-radius: 6px;
+    outline: none; font-family: inherit;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field.mono input { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+  .field .row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  }
+  .field .hint {
+    font-size: 11px; color: var(--text-3); margin-top: 4px;
+  }
+
+  .section-title {
+    font-size: 11px; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.4px;
+    margin: 22px 0 10px; font-weight: 500;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .section-title svg { width: 12px; height: 12px; }
+
+  .actions-row {
+    display: flex; gap: 10px; margin-top: 24px;
+    padding-top: 20px; border-top: 1px solid var(--border);
+  }
+  .btn-primary {
+    flex: 1; padding: 8px 14px; background: var(--accent); color: white;
+    border: none; border-radius: 6px; font-weight: 500; font-size: 13px;
+  }
+  .btn-primary:hover { background: var(--accent-2); }
+  .btn-secondary {
+    padding: 8px 14px; background: var(--card-2); color: var(--text-2);
+    border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+  }
+  .btn-secondary:hover { background: var(--card); color: var(--text-1); }
+  .btn-danger {
+    padding: 8px 14px; background: transparent; color: var(--error);
+    border: 1px solid var(--error-fade); border-radius: 6px; font-size: 13px;
+  }
+  .btn-danger:hover { background: var(--error-fade); }
+
+  .checkbox-row {
+    display: flex; align-items: center; gap: 8px; padding: 8px 0;
+    color: var(--text-2); font-size: 12px;
+  }
+  .checkbox-row input { width: 14px; height: 14px; accent-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Titlebar -->
+  <div class="titlebar">
+    <div class="brand">
+      <svg viewBox="0 0 512 512" width="22" height="22">
+        <rect x="56" y="56" width="400" height="400" rx="88" fill="#161824"/>
+        <g fill="none" stroke="#4C7CFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="140,320 220,240 140,160"/>
+          <line x1="260" y1="360" x2="380" y2="360"/>
+        </g>
+      </svg>
+      <span class="name">ShellX</span>
+    </div>
+    <div class="spacer"></div>
+  </div>
+
+  <!-- Rail -->
+  <div class="rail">
+    <button class="rail-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span class="lbl">主机</span>
+    </button>
+    <button class="rail-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="lbl">文件</span>
+    </button>
+    <button class="rail-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 12h6"/>
+        <path d="M16 12h6"/>
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v3"/>
+        <path d="M12 19v3"/>
+      </svg>
+      <span class="lbl">隧道</span>
+    </button>
+    <button class="rail-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><line x1="7" y1="10" x2="7" y2="14"/><line x1="11" y1="10" x2="11" y2="14"/></svg>
+      <span class="lbl">串口</span>
+    </button>
+    <div class="rail-spacer"></div>
+    <button class="rail-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/></svg>
+      <span class="lbl">设置</span>
+    </button>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Left: global tunnel list -->
+    <div class="list-pane">
+      <div class="list-head">
+        <h1>隧道</h1>
+        <span class="count">3 activate · 5 total</span>
+        <div class="spacer"></div>
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>搜索</span>
+        </div>
+        <button class="add-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          新建
+        </button>
+      </div>
+
+      <div class="list-body">
+
+        <!-- Group: prod-web-01 -->
+        <div class="group">
+          <div class="group-head">
+            <span class="dot"></span>
+            <span class="host-label">chen.han@161.189.146.253</span>
+            <span class="meta">· 2 tunnels</span>
+            <div class="spacer"></div>
+            <button class="btn-mini">全部启动</button>
+          </div>
+
+          <div class="card active">
+            <div class="badge">L</div>
+            <div class="card-body">
+              <div class="card-title">
+                RDS Postgres
+                <span class="pill on"><span class="dot"></span>已连接 · 12 分钟</span>
+              </div>
+              <div class="card-path">
+                <span class="seg">0.0.0.0:15432</span>
+                <span class="arrow">→</span>
+                <span class="via">via 161.189.146.253</span>
+                <span class="arrow">→</span>
+                <span class="seg">acucloud-test-db.chu0q20em0u2.rds.cn-north-1:5432</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="action-btn primary" title="停止">
+                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+              </button>
+              <button class="action-btn" title="复制端口">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="badge b-pink">L</div>
+            <div class="card-body">
+              <div class="card-title">
+                Redis
+                <span class="pill on"><span class="dot"></span>已连接 · 12 分钟</span>
+              </div>
+              <div class="card-path">
+                <span class="seg">127.0.0.1:16379</span>
+                <span class="arrow">→</span>
+                <span class="via">via 161.189.146.253</span>
+                <span class="arrow">→</span>
+                <span class="seg">redis-prod.internal:6379</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="action-btn primary" title="停止">
+                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+              </button>
+              <button class="action-btn" title="复制端口">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group: prod-app-02 -->
+        <div class="group">
+          <div class="group-head">
+            <span class="dot off"></span>
+            <span class="host-label">chen.han@prod-app-02</span>
+            <span class="meta">· 2 tunnels · 未连接</span>
+            <div class="spacer"></div>
+            <button class="btn-mini">连接并启动</button>
+          </div>
+
+          <div class="card">
+            <div class="badge b-teal">L</div>
+            <div class="card-body">
+              <div class="card-title">
+                Grafana
+                <span class="pill off"><span class="dot"></span>已停止</span>
+              </div>
+              <div class="card-path">
+                <span class="seg">127.0.0.1:13000</span>
+                <span class="arrow">→</span>
+                <span class="via">via prod-app-02</span>
+                <span class="arrow">→</span>
+                <span class="seg">grafana.internal:3000</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="action-btn" title="启动">
+                <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </button>
+              <button class="action-btn" title="复制端口">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="badge b-orange">L</div>
+            <div class="card-body">
+              <div class="card-title">
+                Prometheus
+                <span class="pill err"><span class="dot"></span>启动失败 · 端口占用</span>
+              </div>
+              <div class="card-path">
+                <span class="seg">127.0.0.1:19090</span>
+                <span class="arrow">→</span>
+                <span class="via">via prod-app-02</span>
+                <span class="arrow">→</span>
+                <span class="seg">prom.internal:9090</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="action-btn" title="启动">
+                <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </button>
+              <button class="action-btn" title="复制端口">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group: stage.acu -->
+        <div class="group">
+          <div class="group-head">
+            <span class="dot"></span>
+            <span class="host-label">deploy@stage.acu</span>
+            <span class="meta">· 1 tunnel</span>
+            <div class="spacer"></div>
+            <button class="btn-mini">全部启动</button>
+          </div>
+
+          <div class="card">
+            <div class="badge b-violet">L</div>
+            <div class="card-body">
+              <div class="card-title">
+                MongoDB
+                <span class="pill on"><span class="dot"></span>已连接 · 3 小时</span>
+              </div>
+              <div class="card-path">
+                <span class="seg">127.0.0.1:17017</span>
+                <span class="arrow">→</span>
+                <span class="via">via stage.acu</span>
+                <span class="arrow">→</span>
+                <span class="seg">mongo-stage.internal:27017</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="action-btn primary" title="停止">
+                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+              </button>
+              <button class="action-btn" title="复制端口">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Right: edit drawer -->
+    <div class="edit">
+      <div class="edit-head">
+        <div class="badge">L</div>
+        <h2>编辑隧道</h2>
+        <button title="关闭">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="edit-body">
+
+        <!-- Flow diagram -->
+        <div class="flow">
+          <div class="flow-node">
+            <div class="flow-icon local">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </div>
+            <span class="lbl">本地 :15432</span>
+          </div>
+
+          <div class="flow-node">
+            <div class="flow-icon wall">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 4h20v4H2z"/><path d="M2 12h20v4H2z"/><path d="M2 20h20"/>
+                <path d="M8 4v4M14 4v4M6 12v4M12 12v4M18 12v4"/>
+              </svg>
+            </div>
+            <span class="lbl">防火墙</span>
+          </div>
+
+          <div class="flow-node">
+            <div class="flow-icon target">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
+              </svg>
+            </div>
+            <span class="lbl">RDS :5432</span>
+          </div>
+
+          <!-- SVG arrows: dashed red blocked line + dashed green tunneled line -->
+          <svg class="flow-arrows" viewBox="0 0 380 130" preserveAspectRatio="none">
+            <!-- Red blocked line: local -> wall (dashed red) -->
+            <path class="blocked" d="M 68 30 Q 130 30, 190 30" />
+            <!-- Green tunnel arc: local → down → via → up → target -->
+            <path class="tunnel" d="M 68 40 C 68 90, 130 100, 190 100 C 250 100, 312 90, 312 40" />
+            <text class="caption" x="180" y="120" text-anchor="middle">SSH 加密隧道 · via 161.189.146.253</text>
+          </svg>
+
+        </div>
+
+        <!-- Fields -->
+        <div class="section-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
+          基础信息
+        </div>
+
+        <div class="field">
+          <label>名称</label>
+          <input type="text" value="RDS Postgres" />
+        </div>
+
+        <div class="section-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          本地
+        </div>
+
+        <div class="field mono">
+          <div class="row">
+            <div>
+              <label>本地端口</label>
+              <input type="text" value="15432" />
+            </div>
+            <div>
+              <label>绑定地址</label>
+              <select>
+                <option>127.0.0.1（仅本机）</option>
+                <option selected>0.0.0.0（局域网）</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12h6"/><path d="M16 12h6"/><circle cx="12" cy="12" r="4"/>
+          </svg>
+          经由（SSH 主机）
+        </div>
+
+        <div class="field">
+          <select>
+            <option>chen.han@161.189.146.253</option>
+            <option>chen.han@prod-app-02</option>
+            <option>deploy@stage.acu</option>
+          </select>
+          <div class="hint">选择哪台已保存的 SSH 主机作为跳板</div>
+        </div>
+
+        <div class="section-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
+          </svg>
+          目标
+        </div>
+
+        <div class="field mono">
+          <label>目标地址</label>
+          <input type="text" value="acucloud-test-db.chu0q20em0u2.rds.cn-north-1.amazonaws.com.cn" />
+        </div>
+        <div class="field mono">
+          <label>目标端口</label>
+          <input type="text" value="5432" style="max-width: 160px;" />
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" checked id="auto">
+          <label for="auto">连接此主机时自动启动此隧道</label>
+        </div>
+
+        <div class="actions-row">
+          <button class="btn-primary">保存</button>
+          <button class="btn-secondary">取消</button>
+          <button class="btn-danger">删除</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

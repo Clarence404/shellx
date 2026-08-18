@@ -100,6 +100,7 @@ fn main() {
             ipc::tunnels::tunnel_update,
             ipc::tunnels::tunnel_delete,
             ipc::tunnels::tunnel_open,
+            ipc::tunnels::tunnel_open_via_host,
             ipc::tunnels::tunnel_close,
             ipc::tunnels::tunnel_add_session,
             ipc::tunnels::tunnel_reorder,

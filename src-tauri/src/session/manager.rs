@@ -328,6 +328,25 @@ impl SessionManager {
         }
     }
 
+    /// Return the id of any active SSH session for this saved-host id, if
+    /// one exists in the map. Used by `tunnel_open_via_host` to reuse an
+    /// already-open handshake instead of opening a second transport just
+    /// for a tunnel. Returns the first match; there is usually at most
+    /// one per host since App.tsx dedups on click.
+    pub async fn find_ssh_by_host(&self, host_id: uuid::Uuid) -> Option<ConnectionId> {
+        let arcs: Vec<_> = self.inner.lock().await.values().cloned().collect();
+        for a in arcs {
+            let live = a.lock().await;
+            if live.info.host_id == Some(host_id)
+                && matches!(live.info.kind, ConnectionKind::Ssh)
+                && matches!(live.info.state, ConnectionState::Active)
+            {
+                return Some(live.info.id);
+            }
+        }
+        None
+    }
+
     pub async fn list(&self) -> Vec<ConnectionInfo> {
         let arcs: Vec<_> = self.inner.lock().await.values().cloned().collect();
         let mut result = Vec::with_capacity(arcs.len());

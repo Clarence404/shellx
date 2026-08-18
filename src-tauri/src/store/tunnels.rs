@@ -34,6 +34,7 @@ pub struct NewTunnelRule {
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateTunnelRule {
     pub id: Uuid,
+    pub host_id: Option<Uuid>,
     pub label: Option<String>,
     pub local_port: Option<u16>,
     pub remote_host: Option<String>,
@@ -130,6 +131,13 @@ impl TunnelStore {
         let tx = conn
             .unchecked_transaction()
             .map_err(|e| Error::Protocol(e.to_string()))?;
+        if let Some(v) = u.host_id {
+            tx.execute(
+                "UPDATE tunnels SET host_id=?1 WHERE id=?2",
+                params![v.to_string(), u.id.to_string()],
+            )
+            .map_err(|e| Error::Protocol(e.to_string()))?;
+        }
         if let Some(v) = u.label {
             tx.execute(
                 "UPDATE tunnels SET label=?1 WHERE id=?2",
@@ -269,6 +277,7 @@ mod tests {
         store
             .update(UpdateTunnelRule {
                 id: rule.id,
+                host_id: None,
                 enabled: Some(false),
                 label: None,
                 local_port: None,

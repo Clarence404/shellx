@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ActivityKind, ConnectionId, ConnectionInfo } from "../types/connection";
 import type { TunnelStatus } from "../types/tunnel";
 
-export type RailView = "hosts" | "files" | "serial" | "settings";
+export type RailView = "hosts" | "files" | "tunnels" | "serial" | "settings";
 
 interface SessionsState {
   sessions: ConnectionInfo[];

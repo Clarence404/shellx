@@ -10,6 +10,7 @@ import { TunnelsPanel } from "./components/TunnelsPanel";
 import { MonitorPanel } from "./components/MonitorPanel";
 import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
+import { GlobalTunnelsView } from "./components/GlobalTunnelsView";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsView } from "./components/settings/SettingsView";
@@ -578,6 +579,7 @@ export function App() {
         {railView === "files" && (
           <RailFilesView onConnectSavedHost={(host) => void handleConnectSavedHost(host)} />
         )}
+        {railView === "tunnels" && <GlobalTunnelsView />}
         {railView === "settings" && <SettingsView />}
         {railView === "serial" && (
           <div style={{

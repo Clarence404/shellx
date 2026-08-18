@@ -21,6 +21,7 @@ export async function addTunnel(rule: {
 
 export async function updateTunnel(rule: {
   id: Uuid;
+  host_id?: Uuid;
   label?: string;
   local_port?: number;
   remote_host?: string;
@@ -45,6 +46,25 @@ export async function openTunnel(args: {
   bind_all?: boolean;
 }): Promise<void> {
   return invoke("tunnel_open", { args });
+}
+
+/** Open a tunnel through a saved host regardless of whether there's an
+ *  interactive terminal session for it. Backend reuses an existing SSH
+ *  handshake or opens a fresh "silent" transport using stored credentials.
+ *  Returns { session_id, reused_session } so the caller can address later
+ *  tunnel:status events and closeTunnel calls. */
+export async function openTunnelViaHost(args: {
+  host_id: Uuid;
+  rule_id: string;
+  local_port: number;
+  remote_host: string;
+  remote_port: number;
+  bind_all?: boolean;
+}): Promise<{ session_id: Uuid; reused_session: boolean }> {
+  const raw = await invoke<{ session_id: Uuid; reused_session: boolean }>(
+    "tunnel_open_via_host", { args },
+  );
+  return raw;
 }
 
 export async function closeTunnel(session_id: Uuid, rule_id: string): Promise<void> {
