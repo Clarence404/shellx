@@ -1,8 +1,10 @@
-use crate::error::Result;
+use crate::error::{Error, Result};
+use crate::protocol::{AuthConfig, AuthMethod};
 use crate::session::manager::SessionManager;
-use crate::store::{NewTunnelRule, TunnelRule, TunnelStore, UpdateTunnelRule};
+use crate::store::{HostStore, KeychainStore, NewTunnelRule, TunnelRule, TunnelStore, UpdateTunnelRule};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 #[tauri::command]
@@ -100,6 +102,152 @@ pub async fn tunnel_reorder(
     store: State<'_, TunnelStore>,
 ) -> Result<()> {
     store.reorder(args.host_id, &args.rule_ids).await
+}
+
+/// Open a tunnel for a saved host without requiring an interactive
+/// terminal session. If a live SSH session already exists for the host
+/// (from the Hosts panel) the tunnel rides on it; otherwise this command
+/// opens a fresh SSH transport (using stored credentials from the
+/// keychain), attaches a keepalive monitor, then opens the tunnel
+/// channel. Returns the session id so the frontend can address later
+/// close / status lookups. The tunnel-only session is NOT emitted to
+/// the frontend sessions list, matching Termius' independent-tunnel UX.
+#[derive(Deserialize)]
+pub struct TunnelOpenViaHostArgs {
+    pub host_id: Uuid,
+    pub rule_id: String,
+    pub local_port: u16,
+    pub remote_host: String,
+    pub remote_port: u16,
+    pub bind_all: Option<bool>,
+}
+
+#[derive(Serialize)]
+pub struct TunnelOpenViaHostResult {
+    pub session_id: Uuid,
+    pub reused_session: bool,
+}
+
+#[tauri::command]
+pub async fn tunnel_open_via_host(
+    args: TunnelOpenViaHostArgs,
+    mgr: State<'_, SessionManager>,
+    host_store: State<'_, HostStore>,
+    keychain: State<'_, KeychainStore>,
+    app: AppHandle,
+) -> Result<TunnelOpenViaHostResult> {
+    // Path 1: piggy-back on an already-open SSH session for the host.
+    if let Some(session_id) = mgr.find_ssh_by_host(args.host_id).await {
+        mgr.open_tunnel(
+            session_id,
+            args.rule_id,
+            args.local_port,
+            args.remote_host,
+            args.remote_port,
+            args.bind_all.unwrap_or(false),
+            app,
+        )
+        .await?;
+        return Ok(TunnelOpenViaHostResult { session_id, reused_session: true });
+    }
+
+    // Path 2: no live session — open a fresh tunnel-only SSH transport.
+    let host = host_store
+        .get(args.host_id)
+        .await
+        .map_err(|e| Error::Protocol(format!("host lookup failed: {e}")))?
+        .ok_or_else(|| Error::Protocol("saved host not found".into()))?;
+
+    let auth = match host.auth_method.as_str() {
+        "publickey" => {
+            let path = host
+                .key_path
+                .clone()
+                .ok_or_else(|| Error::Protocol("host is publickey-auth but has no key_path".into()))?;
+            let passphrase = keychain.get_passphrase(args.host_id).ok().flatten();
+            AuthConfig {
+                username: host.username.clone(),
+                method: AuthMethod::Key { path, passphrase },
+            }
+        }
+        _ => {
+            let password = keychain
+                .get_password(args.host_id)
+                .ok()
+                .flatten()
+                .ok_or_else(|| Error::Protocol(
+                    "no saved password for host; connect from the Hosts panel once so the credentials are cached".into()
+                ))?;
+            AuthConfig {
+                username: host.username.clone(),
+                method: AuthMethod::Password(password),
+            }
+        }
+    };
+
+    let policy: Arc<dyn crate::protocol::HostKeyPolicy> =
+        Arc::new(crate::ipc::hostkeys::TofuPolicy { app: app.clone() });
+    let info = mgr
+        .open_connection(&host.host, host.port, auth, host.label.clone(), Some(args.host_id), policy)
+        .await?;
+
+    // Subscribe so a transport-side close reaches App.tsx as an EV_CLOSED
+    // event; without this the silent session would linger forever after
+    // the SSH transport drops. App.tsx already ignores closed events for
+    // ids not in its own sessions list, so this is safe for tunnel-only.
+    if let Ok(mut rx) = mgr.subscribe(info.id).await {
+        let app_close = app.clone();
+        let id = info.id;
+        tokio::spawn(async move {
+            // Silently drain until the channel closes; nothing to render.
+            while rx.recv().await.is_some() {}
+            let _ = app_close.emit(
+                "connection:closed",
+                serde_json::json!({ "id": id, "reason": "eof" }),
+            );
+        });
+    }
+
+    // Same 15s keepalive probe used by tunnels_only mode in
+    // ipc::open_connection — if the transport dies mid-tunnel, kick
+    // the SessionManager so it emits EV_CLOSED and cleans up.
+    let mgr_monitor: SessionManager = (*mgr).clone();
+    if let Some(ssh_handle) = mgr.get_ssh_handle(info.id).await {
+        let monitor_id = info.id;
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+                if mgr_monitor.get_ssh_handle(monitor_id).await.is_none() {
+                    break;
+                }
+                let probe = tokio::time::timeout(
+                    tokio::time::Duration::from_secs(10),
+                    ssh_handle.channel_open_session(),
+                )
+                .await;
+                match probe {
+                    Ok(Ok(ch)) => { let _ = ch.close().await; }
+                    _ => {
+                        let _ = mgr_monitor.close(monitor_id).await;
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    mgr.open_tunnel(
+        info.id,
+        args.rule_id,
+        args.local_port,
+        args.remote_host,
+        args.remote_port,
+        args.bind_all.unwrap_or(false),
+        app,
+    )
+    .await?;
+
+    Ok(TunnelOpenViaHostResult { session_id: info.id, reused_session: false })
 }
 
 /// Add a session-only tunnel (not persisted to DB).

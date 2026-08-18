@@ -1,15 +1,20 @@
 import { useState } from "react";
-import { Server, Files, Cable, Settings, type LucideIcon } from "lucide-react";
+import { Server, Files, Waypoints, Cable, Settings, type LucideIcon } from "lucide-react";
 import { useSessions, type RailView } from "../state/sessions";
 import { useT } from "../i18n";
 import { useUpdater } from "../state/updater";
 
 export type { RailView };
 
-const ITEMS: { id: RailView; label: string; Icon: LucideIcon }[] = [
+// Primary items live in the top cluster; footer items (Settings) sit at
+// the bottom of the rail so they're never confused with feature entries.
+const PRIMARY_ITEMS: { id: RailView; label: string; Icon: LucideIcon }[] = [
   { id: "hosts", label: "Hosts", Icon: Server },
   { id: "files", label: "Files", Icon: Files },
+  { id: "tunnels", label: "Tunnels", Icon: Waypoints },
   { id: "serial", label: "Serial", Icon: Cable },
+];
+const FOOTER_ITEMS: { id: RailView; label: string; Icon: LucideIcon }[] = [
   { id: "settings", label: "Settings", Icon: Settings },
 ];
 
@@ -18,21 +23,24 @@ export function ActivityRail() {
   const setView = useSessions((s) => s.setRailView);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
   const updateAvailable = useUpdater((s) => s.status === "available");
+  const renderItem = (item: { id: RailView; label: string; Icon: LucideIcon }) => (
+    <RailButton
+      key={item.id}
+      item={item}
+      active={activeView === item.id}
+      onClick={() => (activeView === item.id ? toggleDrawer() : setView(item.id))}
+      showDot={item.id === "settings" && updateAvailable}
+    />
+  );
   return (
     <nav aria-label="activity rail" style={{
       width: "var(--rail-w)", flexShrink: 0, background: "var(--panel-1)",
       borderRight: "1px solid var(--border)", display: "flex",
       flexDirection: "column", alignItems: "stretch", gap: 2, padding: "8px 4px",
     }}>
-      {ITEMS.map((item) => (
-        <RailButton
-          key={item.id}
-          item={item}
-          active={activeView === item.id}
-          onClick={() => (activeView === item.id ? toggleDrawer() : setView(item.id))}
-          showDot={item.id === "settings" && updateAvailable}
-        />
-      ))}
+      {PRIMARY_ITEMS.map(renderItem)}
+      <div style={{ flex: 1 }} />
+      {FOOTER_ITEMS.map(renderItem)}
     </nav>
   );
 }

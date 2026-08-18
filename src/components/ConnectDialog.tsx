@@ -1,7 +1,5 @@
 import { useRef } from "react";
 import { useSessions } from "../state/sessions";
-import { useHostsStore } from "../state/hosts";
-import { openShell } from "../ipc/commands";
 import { HostForm } from "./HostForm";
 import type { HostInfo } from "../types/host";
 
@@ -40,26 +38,6 @@ export function ConnectDialog({ open, mode = "create", initial, onClose }: Props
               id: session.id, label: session.label,
               kind: "ssh", host_id: session.host_id, state: "active",
             });
-          }
-          if (action === "saved" && mode === "edit" && initial) {
-            // A session opened while the host was tunnels-only has no shell
-            // channel. If the edit switched the host to a terminal-capable
-            // mode, retrofit the shell onto its live sessions — open_shell
-            // is idempotent, so sessions that already have one are no-ops.
-            const saved = useHostsStore.getState().hosts.find((h) => h.id === initial.id);
-            if (saved && saved.connection_mode !== "tunnels_only") {
-              useSessions.getState().sessions
-                .filter((s) => s.host_id === initial.id && s.kind === "ssh" && s.state === "active")
-                .forEach((s) => {
-                  void openShell(s.id)
-                    .then(() => {
-                      // Late-opened PTYs start at 80x24 — tell the mounted
-                      // TerminalView to push its real dimensions.
-                      window.dispatchEvent(new CustomEvent("shellx:refit", { detail: s.id }));
-                    })
-                    .catch(() => {});
-                });
-            }
           }
           onClose();
         }} />

@@ -3,12 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { HostForm } from "./HostForm";
 
-vi.mock("../ipc/tunnels", () => ({
-  listTunnelsForHost: vi.fn().mockResolvedValue([]),
-  addTunnel: vi.fn(),
-  deleteTunnel: vi.fn(),
-}));
-
 vi.mock("../state/hosts", () => ({
   useHostsStore: Object.assign(
     () => ({
@@ -90,11 +84,6 @@ describe("HostForm", () => {
       ),
     }));
     vi.doMock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
-    vi.doMock("../ipc/tunnels", () => ({
-      listTunnelsForHost: vi.fn().mockResolvedValue([]),
-      addTunnel: vi.fn(),
-      deleteTunnel: vi.fn(),
-    }));
     const { HostForm: HostFormReloaded } = await import("./HostForm");
 
     const onDone = vi.fn();
@@ -131,11 +120,6 @@ describe("HostForm", () => {
       ),
     }));
     vi.doMock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
-    vi.doMock("../ipc/tunnels", () => ({
-      listTunnelsForHost: vi.fn().mockResolvedValue([]),
-      addTunnel: vi.fn(),
-      deleteTunnel: vi.fn(),
-    }));
     const { HostForm: HostFormReloaded } = await import("./HostForm");
     render(<HostFormReloaded
       mode="edit"
