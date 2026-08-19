@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>ShellX · 隧道连接中 · 边框流动效果对比</title>
+<style>
+  :root {
+    --bg:          #F7F8FA;
+    --card:        #FFFFFF;
+    --card-2:      #F5F7FB;
+    --border:      #E7EAF0;
+    --text-1:      #0F172A;
+    --text-2:      #475569;
+    --text-3:      #94A3B8;
+    --accent:      #4C7CFF;
+    --accent-2:    #6B8FFF;
+    --accent-fade: #EBF1FF;
+    --warn:        #F59E0B;
+    --warn-2:      #FBBF24;
+    --warn-fade:   #FFF7E6;
+    --success:     #22C55E;
+    --shadow:      0 1px 2px rgba(15,23,42,.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg); color: var(--text-1); min-height: 100vh;
+    font-family: -apple-system, "Segoe UI Variable", "Segoe UI",
+                 "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+    font-size: 13px; line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    padding: 32px 40px 80px;
+  }
+  h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  h1 small { font-weight: 400; color: var(--text-3); font-size: 12px; margin-left: 8px; }
+  p.lead { color: var(--text-2); margin-bottom: 28px; max-width: 720px; }
+
+  .variant {
+    margin-bottom: 36px;
+  }
+  .variant-head {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 10px;
+  }
+  .variant-head .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 6px;
+    background: var(--accent-fade); color: var(--accent);
+    font-weight: 700; font-size: 12px;
+  }
+  .variant-head h2 { font-size: 14px; font-weight: 600; }
+  .variant-head .desc { color: var(--text-3); font-size: 12px; }
+
+  /* ================================================================
+     Base tunnel card, matches the real Tunnels view.
+     ================================================================ */
+  .card-wrap {
+    position: relative;
+    border-radius: 12px;
+    padding: 2px;                    /* room for the flowing border */
+    max-width: 860px;
+    background: transparent;
+  }
+  .card {
+    position: relative;
+    background: var(--card);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    padding: 14px 16px;
+    display: grid;
+    grid-template-columns: 20px 40px 1fr auto auto;
+    gap: 12px;
+    align-items: center;
+  }
+  .drag {
+    color: var(--text-3); font-size: 14px; user-select: none;
+    display: flex; align-items: center; justify-content: center;
+    height: 100%;
+  }
+  .avatar {
+    width: 40px; height: 40px; border-radius: 8px;
+    background: linear-gradient(135deg, #60A5FA, #3B82F6);
+    color: #fff; font-weight: 700; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .meta { min-width: 0; }
+  .meta .title {
+    font-weight: 600; font-size: 14px; color: var(--text-1);
+    margin-bottom: 2px;
+  }
+  .meta .row {
+    color: var(--text-2); font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .meta .row .via { color: var(--text-3); }
+  .meta .row .link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .meta .note {
+    margin-top: 4px; color: var(--warn); font-size: 12px;
+  }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge.warn { background: var(--warn-fade); color: #B45309; }
+  .badge.warn .dot {
+    width: 6px; height: 6px; border-radius: 999px; background: var(--warn);
+    box-shadow: 0 0 0 0 rgba(245,158,11,.55);
+    animation: dotPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes dotPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(245,158,11,.55); }
+    70%  { box-shadow: 0 0 0 6px rgba(245,158,11,0); }
+    100% { box-shadow: 0 0 0 0 rgba(245,158,11,0); }
+  }
+
+  .actions {
+    display: flex; gap: 4px;
+  }
+  .actions button {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: transparent; border: none; color: var(--text-2);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .actions button:hover { background: var(--card-2); color: var(--text-1); }
+
+  /* ================================================================
+     Variant A — Marching ants (subtle dashed slide)
+     ================================================================ */
+  .v-ants .card {
+    border: 1.5px dashed var(--warn);
+    background:
+      linear-gradient(var(--card), var(--card)) padding-box,
+      repeating-linear-gradient(
+        45deg,
+        var(--warn) 0 8px,
+        transparent 8px 16px
+      ) border-box;
+    border: 1.5px solid transparent;
+    animation: ants 0.7s linear infinite;
+  }
+  @keyframes ants {
+    to { background-position: 0 0, 22.6px 0; }
+  }
+
+  /* ================================================================
+     Variant B — Sweep glow (single bright segment orbiting)
+     ================================================================ */
+  .v-sweep {
+    border-radius: 12px;
+    background: conic-gradient(
+      from var(--angle, 0deg),
+      var(--warn) 0deg,
+      var(--warn-2) 30deg,
+      rgba(245,158,11,0.15) 90deg,
+      rgba(245,158,11,0.15) 360deg
+    );
+    animation: sweep 2.4s linear infinite;
+  }
+  @property --angle {
+    syntax: "<angle>";
+    inherits: false;
+    initial-value: 0deg;
+  }
+  @keyframes sweep {
+    to { --angle: 360deg; }
+  }
+  .v-sweep .card { border-radius: 10px; }
+
+  /* ================================================================
+     Variant C — Conic full rainbow-warn rotate (more visible)
+     ================================================================ */
+  .v-conic {
+    border-radius: 12px;
+    background: conic-gradient(
+      from var(--angle, 0deg),
+      var(--warn),
+      #FCD34D,
+      var(--warn),
+      #F97316,
+      var(--warn)
+    );
+    animation: sweep 3s linear infinite;
+  }
+  .v-conic .card { border-radius: 10px; }
+
+  /* ================================================================
+     Variant D — Breathing glow (whole border pulses)
+     ================================================================ */
+  .v-breath .card {
+    border: 1.5px solid var(--warn);
+    animation: breath 1.8s ease-in-out infinite;
+  }
+  @keyframes breath {
+    0%, 100% {
+      box-shadow:
+        0 0 0 0 rgba(245,158,11,0),
+        var(--shadow);
+      border-color: rgba(245,158,11,0.9);
+    }
+    50% {
+      box-shadow:
+        0 0 0 4px rgba(245,158,11,0.18),
+        0 0 14px rgba(245,158,11,0.35);
+      border-color: rgba(251,191,36,1);
+    }
+  }
+
+  /* ================================================================
+     Variant E — First-connect (accent blue instead of warn)
+     for comparing first-connect vs reconnect signalling
+     ================================================================ */
+  .first-block {
+    margin-top: 40px;
+    padding-top: 28px;
+    border-top: 1px dashed var(--border);
+  }
+  .v-first-sweep {
+    border-radius: 12px;
+    background: conic-gradient(
+      from var(--angle, 0deg),
+      var(--accent) 0deg,
+      var(--accent-2) 30deg,
+      rgba(76,124,255,0.15) 90deg,
+      rgba(76,124,255,0.15) 360deg
+    );
+    animation: sweep 2.4s linear infinite;
+  }
+  .v-first-sweep .card { border-radius: 10px; }
+  .v-first-sweep .badge.warn { background: var(--accent-fade); color: var(--accent); }
+  .v-first-sweep .badge.warn .dot {
+    background: var(--accent);
+    box-shadow: 0 0 0 0 rgba(76,124,255,.55);
+    animation: dotPulseBlue 1.4s ease-in-out infinite;
+  }
+  @keyframes dotPulseBlue {
+    0%   { box-shadow: 0 0 0 0 rgba(76,124,255,.55); }
+    70%  { box-shadow: 0 0 0 6px rgba(76,124,255,0); }
+    100% { box-shadow: 0 0 0 0 rgba(76,124,255,0); }
+  }
+
+  .callout {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 12px;
+    max-width: 860px;
+    color: var(--text-2);
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+  .callout b { color: var(--text-1); }
+  .callout code {
+    background: var(--card-2); padding: 1px 5px; border-radius: 4px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+  }
+</style>
+</head>
+<body>
+
+  <h1>隧道卡片 · 连接中边框流动效果 <small>4 种方案对比 + 首次连接 vs 重连 配色</small></h1>
+  <p class="lead">
+    针对"重连中"与"首次连接中"两种 pending 状态，给隧道卡片外框加一个流动动画，让用户
+    一眼看出这条隧道正在建立连接。下面四种从最克制到最显眼排列。
+  </p>
+
+  <!-- ===================== Variant A ===================== -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="num">A</span>
+      <h2>Marching ants</h2>
+      <span class="desc">虚线蚁行，最克制。适合"不想抢注意力"的持续状态。</span>
+    </div>
+    <div class="card-wrap v-ants">
+      <div class="card">
+        <div class="drag">⋮⋮</div>
+        <div class="avatar">L</div>
+        <div class="meta">
+          <div class="title">Test-PG</div>
+          <div class="row">0.0.0.0:15432 · <span class="via">via <span class="link">测试环境转发</span></span> · acucloud-test-db.chu0q20em0u2.rds.cn-northwest-1.amazonaws.com.cn:5432</div>
+          <div class="note">第 #0 次失败, 下次在 1s</div>
+        </div>
+        <div class="badge warn"><span class="dot"></span>重连中…</div>
+        <div class="actions">
+          <button title="停止">■</button>
+          <button title="复制">⧉</button>
+          <button title="删除">🗑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== Variant B ===================== -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="num">B</span>
+      <h2>Sweep glow (推荐)</h2>
+      <span class="desc">一段亮色沿边框顺时针巡游，其余部分保留浅色边。方向感强，语义 = "正在连接中"。</span>
+    </div>
+    <div class="card-wrap v-sweep">
+      <div class="card">
+        <div class="drag">⋮⋮</div>
+        <div class="avatar">L</div>
+        <div class="meta">
+          <div class="title">Test-PG</div>
+          <div class="row">0.0.0.0:15432 · <span class="via">via <span class="link">测试环境转发</span></span> · acucloud-test-db.chu0q20em0u2.rds.cn-northwest-1.amazonaws.com.cn:5432</div>
+          <div class="note">第 #0 次失败, 下次在 1s</div>
+        </div>
+        <div class="badge warn"><span class="dot"></span>重连中…</div>
+        <div class="actions">
+          <button title="停止">■</button>
+          <button title="复制">⧉</button>
+          <button title="删除">🗑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== Variant C ===================== -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="num">C</span>
+      <h2>Conic rainbow-warn</h2>
+      <span class="desc">整圈渐变旋转，最抢眼。适合 "只出现几秒" 的短暂状态；长时间用会晃眼。</span>
+    </div>
+    <div class="card-wrap v-conic">
+      <div class="card">
+        <div class="drag">⋮⋮</div>
+        <div class="avatar">L</div>
+        <div class="meta">
+          <div class="title">Test-PG</div>
+          <div class="row">0.0.0.0:15432 · <span class="via">via <span class="link">测试环境转发</span></span> · acucloud-test-db.chu0q20em0u2.rds.cn-northwest-1.amazonaws.com.cn:5432</div>
+          <div class="note">第 #0 次失败, 下次在 1s</div>
+        </div>
+        <div class="badge warn"><span class="dot"></span>重连中…</div>
+        <div class="actions">
+          <button title="停止">■</button>
+          <button title="复制">⧉</button>
+          <button title="删除">🗑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== Variant D ===================== -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="num">D</span>
+      <h2>Breathing glow</h2>
+      <span class="desc">整框呼吸，没有方向，节奏感明显。视觉噪音介于 A 和 B 之间。</span>
+    </div>
+    <div class="card-wrap v-breath">
+      <div class="card">
+        <div class="drag">⋮⋮</div>
+        <div class="avatar">L</div>
+        <div class="meta">
+          <div class="title">Test-PG</div>
+          <div class="row">0.0.0.0:15432 · <span class="via">via <span class="link">测试环境转发</span></span> · acucloud-test-db.chu0q20em0u2.rds.cn-northwest-1.amazonaws.com.cn:5432</div>
+          <div class="note">第 #0 次失败, 下次在 1s</div>
+        </div>
+        <div class="badge warn"><span class="dot"></span>重连中…</div>
+        <div class="actions">
+          <button title="停止">■</button>
+          <button title="复制">⧉</button>
+          <button title="删除">🗑</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== Variant E — first connect ===================== -->
+  <div class="first-block">
+    <div class="variant">
+      <div class="variant-head">
+        <span class="num">E</span>
+        <h2>首次连接：sweep 蓝色版</h2>
+        <span class="desc">
+          第一次连（还没连成过）用<b>蓝色</b>方向 sweep；重连（连过又断了）用<b>橙色</b>方向 sweep。
+          颜色语义 = 蓝 "正在进行" · 橙 "有异常/需要注意"。
+        </span>
+      </div>
+      <div class="card-wrap v-first-sweep">
+        <div class="card">
+          <div class="drag">⋮⋮</div>
+          <div class="avatar" style="background: linear-gradient(135deg, #60A5FA, #3B82F6);">L</div>
+          <div class="meta">
+            <div class="title">Prod-Pg</div>
+            <div class="row">0.0.0.0:25432 · <span class="via">via <span class="link">生产环境转发</span></span> · acucloud-prod-db.chcum1ufvdc2.us-east-1.rds.amazonaws.com:5432</div>
+            <div class="note" style="color: var(--accent);">正在建立连接…</div>
+          </div>
+          <div class="badge warn"><span class="dot"></span>连接中…</div>
+          <div class="actions">
+            <button title="停止">■</button>
+            <button title="复制">⧉</button>
+            <button title="删除">🗑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>推荐组合：B（重连中 · 橙 sweep）+ E（首次连接 · 蓝 sweep）</b>。<br>
+      理由：<br>
+      &nbsp;· <b>方向 sweep</b> = "正在推进"，比呼吸/蚁行更贴 "connecting" 的语义；<br>
+      &nbsp;· <b>颜色区分</b>两种 pending：蓝 = 从零开始（正常），橙 = 有过失败正在恢复（需要用户注意）；<br>
+      &nbsp;· 一旦转为 <code>connected</code> 立刻收边框；一旦转为 <code>failed</code> 边框变红色 + 停止流动。
+    </div>
+  </div>
+
+</body>
+</html>
