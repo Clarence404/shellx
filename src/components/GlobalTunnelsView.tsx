@@ -90,15 +90,27 @@ export function GlobalTunnelsView(_props: Props = {} as Props) {
   // rule_id -> true means the last close was user-initiated (Stop / Delete),
   // suppressing auto-reconnect. Cleared once the retry decision is made.
   const stopIntents = useRef<Record<string, boolean>>({});
+  // rule_id -> true once we've observed the tunnel in the active state at
+  // least once this app session. Distinguishes "first-connect in progress"
+  // (never active + retry armed) from "reconnecting" (was active, now
+  // recovering). Cleared when the session is forgotten so the next open
+  // reads as first-connect again.
+  const [hasBeenActive, setHasBeenActive] = useState<Record<string, true>>({});
 
   const registerRuleSession = (ruleId: string, sid: string) =>
     setRuleSessions((s) => (s[ruleId] === sid ? s : { ...s, [ruleId]: sid }));
-  const forgetRuleSession = (ruleId: string) =>
+  const forgetRuleSession = (ruleId: string) => {
     setRuleSessions((s) => {
       if (!(ruleId in s)) return s;
       const { [ruleId]: _drop, ...rest } = s;
       return rest;
     });
+    setHasBeenActive((s) => {
+      if (!(ruleId in s)) return s;
+      const { [ruleId]: _drop, ...rest } = s;
+      return rest;
+    });
+  };
   const markStopIntent = (ruleId: string) => {
     stopIntents.current[ruleId] = true;
   };
@@ -190,10 +202,22 @@ export function GlobalTunnelsView(_props: Props = {} as Props) {
   const prevStatusRef = useRef<Record<string, string>>({});
   useEffect(() => {
     const nextStatus: Record<string, string> = {};
+    const activated: string[] = [];
     for (const [sid, list] of Object.entries(tunnelStatusesAll)) {
       for (const st of list) {
         nextStatus[`${sid}::${st.rule_id}`] = st.status;
+        if (st.status === "active") activated.push(st.rule_id);
       }
+    }
+    if (activated.length > 0) {
+      setHasBeenActive((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const id of activated) {
+          if (!next[id]) { next[id] = true; changed = true; }
+        }
+        return changed ? next : prev;
+      });
     }
     // Flag rules whose known session just transitioned to closed/error.
     for (const [ruleId, sid] of Object.entries(ruleSessions)) {
@@ -437,6 +461,7 @@ export function GlobalTunnelsView(_props: Props = {} as Props) {
             statusesBySession={tunnelStatusesAll}
             ruleSessions={ruleSessions}
             retries={retries}
+            hasBeenActive={hasBeenActive}
             onEditRule={(rule) => setEditing({ mode: "edit", rule })}
             onRegisterRuleSession={registerRuleSession}
             onForgetRuleSession={forgetRuleSession}
@@ -619,7 +644,7 @@ function ImportBar({
 
 // ─── Host group with drag reorder ───────────────────────────────────────
 function HostGroup({
-  host, rules, sessionId, statusesBySession, ruleSessions, retries,
+  host, rules, sessionId, statusesBySession, ruleSessions, retries, hasBeenActive,
   onEditRule, onRegisterRuleSession, onForgetRuleSession,
   onMarkStopIntent, onCancelRetry, onManualRetry,
   onDeletedRule, onLocalReorder,
@@ -630,6 +655,7 @@ function HostGroup({
   statusesBySession: Record<string, TunnelStatus[]>;
   ruleSessions: Record<string, string>;
   retries: Record<string, RetryState>;
+  hasBeenActive: Record<string, true>;
   onEditRule: (rule: TunnelRule) => void;
   onRegisterRuleSession: (ruleId: string, sessionId: string) => void;
   onForgetRuleSession: (ruleId: string) => void;
@@ -754,6 +780,7 @@ function HostGroup({
               sessionId={attachedSid}
               status={status}
               retry={retries[rule.id]}
+              wasEverActive={!!hasBeenActive[rule.id]}
               isDragging={draggingId === rule.id}
               isDragOver={dragOverId === rule.id && draggingId !== rule.id}
               onGripPointerDown={(e) => onGripPointerDown(e, rule.id)}
@@ -788,7 +815,8 @@ function badgeColorFor(id: string): string {
 }
 
 function TunnelCard({
-  rule, host, sessionId, status, retry, isDragging, isDragOver,
+  rule, host, sessionId, status, retry, wasEverActive,
+  isDragging, isDragOver,
   onGripPointerDown, rowRef,
   onEdit, onRegisterRuleSession, onForgetRuleSession,
   onMarkStopIntent, onCancelRetry, onManualRetry, onDeleted,
@@ -798,6 +826,7 @@ function TunnelCard({
   sessionId: string | null;
   status: TunnelStatus | undefined;
   retry: RetryState | undefined;
+  wasEverActive: boolean;
   isDragging: boolean;
   isDragOver: boolean;
   onGripPointerDown: (e: React.PointerEvent) => void;
@@ -909,11 +938,30 @@ function TunnelCard({
     } finally { setBusy(false); }
   }
 
-  const isReconnecting = !!retry && !retry.authFailed;
   const isAuthFailed = !!retry?.authFailed;
-  const borderColor = isRunning ? "var(--success)"
+  // "Reconnecting" only makes sense once the tunnel has actually been
+  // active at least once — otherwise a retry armed by an initial-connect
+  // failure (autostart on a not-yet-reachable host, for example) would
+  // read as "reconnect" even though nothing has ever connected.
+  const isReconnecting = !!retry && !isAuthFailed && wasEverActive;
+  // First-time-connecting covers two overlapping cases:
+  //  · the openTunnelViaHost await (`busy`) right after the user hits Play
+  //  · a retry loop for a rule that has never reached active state yet
+  //    (i.e. the initial connect keeps failing but auto-reconnect keeps
+  //    retrying — the user hasn't "lost" a connection, they never had one)
+  const isFirstConnecting =
+    (busy && !isRunning && !isReconnecting) ||
+    (!!retry && !isAuthFailed && !wasEverActive);
+  const connectingClass = isReconnecting
+    ? "shx-connecting-border shx-connecting-border--reconnect"
+    : isFirstConnecting
+    ? "shx-connecting-border shx-connecting-border--first"
+    : "";
+  // When the sweep is on, the ::before ring is the border, so we keep the
+  // 1px static border but make it transparent to avoid layout shift.
+  const borderColor = connectingClass ? "transparent"
+    : isRunning ? "var(--success)"
     : isAuthFailed ? "var(--error)"
-    : isReconnecting ? "var(--warn, #F59E0B)"
     : isError ? "var(--error)"
     : isDragOver ? "var(--accent)"
     : "var(--border)";
@@ -922,6 +970,7 @@ function TunnelCard({
       ref={rowRef}
       data-rule-id={rule.id}
       onClick={onEdit}
+      className={connectingClass || undefined}
       style={{
         display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12,
         padding: "12px 14px", margin: "4px 0",
@@ -969,7 +1018,11 @@ function TunnelCard({
             flex: 1, minWidth: 0,
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>{rule.label || `${rule.remote_host}:${rule.remote_port}`}</span>
-          <StatusPill status={status} retry={retry} />
+          <StatusPill
+            status={status}
+            retry={retry}
+            firstConnecting={isFirstConnecting}
+          />
         </div>
         <div style={{
           fontSize: 11, color: "var(--text-3)",
@@ -982,7 +1035,7 @@ function TunnelCard({
           <span style={{ color: "var(--text-4)" }}> → </span>
           <span style={{ color: "var(--text-2)" }}>{rule.remote_host}:{rule.remote_port}</span>
         </div>
-        {retry && <RetryHint retry={retry} />}
+        {retry && <RetryHint retry={retry} wasEverActive={wasEverActive} />}
       </div>
       <div
         onClick={(e) => e.stopPropagation()}
@@ -1062,7 +1115,11 @@ function TunnelCard({
   );
 }
 
-function StatusPill({ status, retry }: { status: TunnelStatus | undefined; retry?: RetryState }) {
+function StatusPill({ status, retry, firstConnecting }: {
+  status: TunnelStatus | undefined;
+  retry?: RetryState;
+  firstConnecting?: boolean;
+}) {
   const t = useT();
   const base = {
     padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 500,
@@ -1077,6 +1134,21 @@ function StatusPill({ status, retry }: { status: TunnelStatus | undefined; retry
       <span style={{ ...base, background: "color-mix(in srgb, var(--error) 15%, transparent)", color: "var(--error)" }}>
         <Dot color="var(--error)" />
         {t("Credentials revoked")}
+      </span>
+    );
+  }
+  // First-connect (never active yet) takes precedence over the retry
+  // pill: even if a retry is armed, from the user's perspective the
+  // tunnel is still "connecting for the first time", not "reconnecting".
+  if (firstConnecting) {
+    return (
+      <span style={{ ...base, background: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>
+        <span style={{
+          width: 6, height: 6, borderRadius: "50%",
+          background: "currentColor",
+          animation: "shx-pulse 1.4s ease-in-out infinite",
+        }} />
+        {t("Connecting…")}
       </span>
     );
   }
@@ -1128,7 +1200,7 @@ function Dot({ color }: { color: string }) {
   return <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />;
 }
 
-function RetryHint({ retry }: { retry: RetryState }) {
+function RetryHint({ retry, wasEverActive }: { retry: RetryState; wasEverActive: boolean }) {
   const t = useT();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -1143,17 +1215,31 @@ function RetryHint({ retry }: { retry: RetryState }) {
       </div>
     );
   }
+  // The hint's colour follows the pill: warn for reconnect (was active),
+  // accent for first-connect (never active). Attempt-count text is
+  // suppressed at attempt=0 because nothing has actually been tried yet
+  // at that point — the state machine just armed a scheduled attempt.
+  const color = wasEverActive ? "var(--warn, #F59E0B)" : "var(--accent)";
   if (retry.nextRetryAt === 0) {
     return (
-      <div style={{ fontSize: 11, color: "var(--warn, #F59E0B)", marginTop: 4 }}>
-        {t("Attempt")} #{retry.attempt} · {t("dialing…")}
+      <div style={{ fontSize: 11, color, marginTop: 4 }}>
+        {retry.attempt <= 1
+          ? t("dialing…")
+          : `${t("Attempt")} #${retry.attempt} · ${t("dialing…")}`}
       </div>
     );
   }
   const remainingMs = Math.max(0, retry.nextRetryAt - now);
   const remainingS = Math.ceil(remainingMs / 1000);
+  if (retry.attempt === 0) {
+    return (
+      <div style={{ fontSize: 11, color, marginTop: 4 }}>
+        {t("next in")} {remainingS}s
+      </div>
+    );
+  }
   return (
-    <div style={{ fontSize: 11, color: "var(--warn, #F59E0B)", marginTop: 4 }}>
+    <div style={{ fontSize: 11, color, marginTop: 4 }}>
       {t("Attempt")} #{retry.attempt} {t("failed")} · {t("next in")} {remainingS}s
     </div>
   );

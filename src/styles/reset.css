@@ -50,6 +50,51 @@ input { font: inherit; color: inherit; }
   100% { left: 110%; }
 }
 
+/* Rotating gradient border for tunnel cards mid-connect. A conic-gradient
+   sweeps clockwise so users see a single bright segment orbiting the card,
+   which reads as "in progress" more clearly than a static warn border.
+   Requires @property so the angle interpolates smoothly. */
+@property --shx-sweep-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes shx-sweep-rotate {
+  to { --shx-sweep-angle: 360deg; }
+}
+.shx-connecting-border {
+  position: relative;
+}
+.shx-connecting-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--shx-sweep-angle),
+    var(--shx-sweep-hi) 0deg,
+    var(--shx-sweep-hi) 30deg,
+    var(--shx-sweep-lo) 90deg,
+    var(--shx-sweep-lo) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: shx-sweep-rotate 2.4s linear infinite;
+  pointer-events: none;
+}
+.shx-connecting-border--reconnect {
+  --shx-sweep-hi: #F59E0B;
+  --shx-sweep-lo: rgba(245, 158, 11, 0.18);
+}
+.shx-connecting-border--first {
+  --shx-sweep-hi: var(--accent, #4C7CFF);
+  --shx-sweep-lo: rgba(76, 124, 255, 0.18);
+}
+
 /* Warm-Minimal scrollbar — the WebView2 default is nearly invisible on dark. */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
