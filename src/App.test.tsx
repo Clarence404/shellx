@@ -107,6 +107,15 @@ vi.mock("./ipc/hostkeys", () => ({
 
 vi.mock("./ipc/tunnels", () => ({
   onTunnelStatus: vi.fn().mockResolvedValue(() => {}),
+  // GlobalTunnelsView is mounted for the whole app session now, so its
+  // IPC surface has to exist even in tests that never open the view.
+  listTunnelsForHost: vi.fn().mockResolvedValue([]),
+  openTunnelViaHost: vi.fn().mockResolvedValue({ session_id: "s1", reused_session: false }),
+  closeTunnel: vi.fn().mockResolvedValue(undefined),
+  addTunnel: vi.fn().mockResolvedValue(undefined),
+  updateTunnel: vi.fn().mockResolvedValue(undefined),
+  deleteTunnel: vi.fn().mockResolvedValue(undefined),
+  reorderTunnels: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe("App shell", () => {
@@ -291,5 +300,23 @@ describe("App shell", () => {
     });
     expect(document.documentElement.dataset.theme).toBeUndefined();
     expect(document.documentElement.dataset.density).toBeUndefined();
+  });
+
+  it("keeps the Tunnels view mounted when the rail moves off it", async () => {
+    render(<App />);
+    // Hidden but present from the start — autostart rules open at launch.
+    expect(screen.getByTestId("global-tunnels-view").style.display).toBe("none");
+
+    await act(async () => {
+      useSessions.setState({ railView: "tunnels" });
+    });
+    expect(screen.getByTestId("global-tunnels-view").style.display).toBe("grid");
+
+    // Navigating away only hides it. Unmounting would drop the rule →
+    // session map and every running tunnel would read as stopped.
+    await act(async () => {
+      useSessions.setState({ railView: "hosts" });
+    });
+    expect(screen.getByTestId("global-tunnels-view").style.display).toBe("none");
   });
 });

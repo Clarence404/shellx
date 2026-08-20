@@ -579,7 +579,11 @@ export function App() {
         {railView === "files" && (
           <RailFilesView onConnectSavedHost={(host) => void handleConnectSavedHost(host)} />
         )}
-        {railView === "tunnels" && <GlobalTunnelsView />}
+        {/* Always mounted, hidden on other views: the tunnel runtime
+            state (rule → session map, retry timers, autostart-once
+            guard) lives inside it, and unmounting dropped every running
+            tunnel out of the UI while the forwarder stayed up. */}
+        <GlobalTunnelsView hidden={railView !== "tunnels"} />
         {railView === "settings" && <SettingsView />}
         {railView === "serial" && (
           <div style={{
