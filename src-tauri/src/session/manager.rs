@@ -291,6 +291,15 @@ impl SessionManager {
         let mut lc = lc_arc.lock().await;
         let ssh = lc.ssh_handle.clone()
             .ok_or_else(|| crate::error::Error::Protocol("no SSH handle for this session".into()))?;
+        // A re-open of a rule that is already running (double-clicked Play,
+        // autostart racing a manual start, auto-reconnect racing either)
+        // must retire the old task *before* the new one binds the port:
+        // silently, so the frontend doesn't read it as an unexpected close
+        // and arm a reconnect, and synchronously, so the local port is
+        // actually free when we rebind it.
+        if let Some(old) = lc.tunnels.remove(&rule_id) {
+            old.supersede().await;
+        }
         let handle = crate::session::tunnel::spawn_tunnel(
             ssh, session_id, rule_id.clone(), local_port, remote_host, remote_port, bind_all, app,
         ).await.map_err(|e| crate::error::Error::Protocol(e))?;

@@ -23,14 +23,41 @@ pub struct TunnelStatusEvent {
     pub error: Option<String>,
 }
 
-/// Owns a running tunnel task. Dropping or calling `abort()` tears it down.
+/// Why a tunnel task is being torn down.
+///
+/// The distinction matters for the `tunnel:status` event: a real close
+/// (user pressed Stop, transport died) must be reported so the UI — and
+/// the auto-reconnect state machine — can react, while a supersede
+/// (the same rule is being re-opened over the top of this task) must
+/// stay silent. Emitting "closed" for a superseded task made the
+/// frontend arm a reconnect, which re-opened the rule, which superseded
+/// the task again — an endless reconnect flap.
+enum Stop {
+    Close,
+    Supersede,
+}
+
+/// Owns a running tunnel task. `abort()` tears it down and reports the
+/// close; `supersede()` tears it down silently and waits for the socket
+/// to be released. Dropping the handle without either is treated as a
+/// supersede (silent) — the safe default.
 pub struct TunnelHandle {
-    abort_tx: oneshot::Sender<()>,
+    abort_tx: oneshot::Sender<Stop>,
+    task: tokio::task::JoinHandle<()>,
 }
 
 impl TunnelHandle {
+    /// Tear down and emit a `closed` status event.
     pub fn abort(self) {
-        let _ = self.abort_tx.send(());
+        let _ = self.abort_tx.send(Stop::Close);
+    }
+
+    /// Tear down silently and wait for the task to drop its listener, so
+    /// the caller can rebind the same local port without racing a
+    /// still-open socket. Bounded so a wedged task can't block the caller.
+    pub async fn supersede(self) {
+        let _ = self.abort_tx.send(Stop::Supersede);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(3), self.task).await;
     }
 }
 
@@ -56,6 +83,14 @@ pub async fn spawn_tunnel(
         let sock = TcpSocket::new_v4()?;
         // SO_REUSEADDR lets us rebind immediately after the previous session
         // closes (avoids TIME_WAIT "address already in use" on reconnect).
+        //
+        // Unix only: on Windows SO_REUSEADDR does not mean "reuse a
+        // TIME_WAIT port", it means "let anyone bind this port too". Two
+        // listeners then share the port and inbound connections land on
+        // whichever the OS picks — including a stale one whose SSH
+        // channel is dead. Without it, a duplicate bind fails loudly
+        // instead of silently producing a half-broken tunnel.
+        #[cfg(unix)]
         sock.set_reuseaddr(true)?;
         sock.bind(addr)?;
         sock.listen(128)
@@ -76,7 +111,7 @@ pub async fn spawn_tunnel(
         }
     };
 
-    let (abort_tx, mut abort_rx) = oneshot::channel::<()>();
+    let (abort_tx, mut abort_rx) = oneshot::channel::<Stop>();
 
     let app2 = app.clone();
     let rule_id2 = rule_id.clone();
@@ -92,19 +127,24 @@ pub async fn spawn_tunnel(
         },
     );
 
-    tokio::spawn(async move {
+    let task = tokio::spawn(async move {
         loop {
             tokio::select! {
-                _ = &mut abort_rx => {
-                    let _ = app2.emit(
-                        EV_TUNNEL_STATUS,
-                        TunnelStatusEvent {
-                            session_id,
-                            rule_id: rule_id2,
-                            status: "closed".into(),
-                            error: None,
-                        },
-                    );
+                stop = &mut abort_rx => {
+                    // Silent on supersede (and on a dropped sender, which
+                    // means the handle was replaced in the map): only a
+                    // genuine close reaches the UI.
+                    if matches!(stop, Ok(Stop::Close)) {
+                        let _ = app2.emit(
+                            EV_TUNNEL_STATUS,
+                            TunnelStatusEvent {
+                                session_id,
+                                rule_id: rule_id2,
+                                status: "closed".into(),
+                                error: None,
+                            },
+                        );
+                    }
                     break;
                 }
                 accepted = listener.accept() => {
@@ -150,7 +190,7 @@ pub async fn spawn_tunnel(
         }
     });
 
-    Ok(TunnelHandle { abort_tx })
+    Ok(TunnelHandle { abort_tx, task })
 }
 
 async fn splice(tcp: tokio::net::TcpStream, mut channel: russh::Channel<russh::client::Msg>) {

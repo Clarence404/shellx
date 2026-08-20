@@ -142,6 +142,23 @@ pub async fn tunnel_open_via_host(
 
     // Path 1: piggy-back on an already-open SSH session for the host.
     if let Some(session_id) = mgr.find_ssh_by_host(args.host_id).await {
+        // A session can stay in the map marked Active long after its
+        // transport is gone (laptop slept, idle NAT/firewall dropped the
+        // flow). Reusing it binds the local port happily and then fails
+        // every forwarded connection, which reads to the user as "the
+        // tunnel is up but nothing connects". Probe first; on a dead
+        // transport, retire the session and dial a fresh one below.
+        if !transport_alive(&mgr, session_id).await {
+            crate::log_warn!(
+                crate::logs::categories::TUNNEL,
+                "reusable ssh session failed liveness probe, dialing a fresh transport",
+                "rule_id": args.rule_id,
+                "host_id": args.host_id.to_string(),
+                "session": session_id.to_string(),
+            );
+            let _ = mgr.close(session_id).await;
+            return open_via_fresh_transport(args, mgr, host_store, keychain, app, &local, &remote).await;
+        }
         mgr.open_tunnel(
             session_id,
             args.rule_id.clone(),
@@ -166,6 +183,41 @@ pub async fn tunnel_open_via_host(
     }
 
     // Path 2: no live session — open a fresh tunnel-only SSH transport.
+    open_via_fresh_transport(args, mgr, host_store, keychain, app, &local, &remote).await
+}
+
+/// Is this session's SSH transport still usable? Opens and immediately
+/// closes a throwaway channel — the same probe the tunnel keepalive
+/// monitor uses, with a short timeout so a black-holed connection fails
+/// fast instead of hanging the caller.
+async fn transport_alive(mgr: &SessionManager, session_id: Uuid) -> bool {
+    let Some(ssh) = mgr.get_ssh_handle(session_id).await else { return false };
+    match tokio::time::timeout(
+        tokio::time::Duration::from_secs(5),
+        ssh.channel_open_session(),
+    )
+    .await
+    {
+        Ok(Ok(ch)) => {
+            let _ = ch.close().await;
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Dial a fresh tunnel-only SSH transport for `host_id` and open the
+/// tunnel on it. Used when no session exists for the host, or when the
+/// existing one turned out to be dead.
+async fn open_via_fresh_transport(
+    args: TunnelOpenViaHostArgs,
+    mgr: State<'_, SessionManager>,
+    host_store: State<'_, HostStore>,
+    keychain: State<'_, KeychainStore>,
+    app: AppHandle,
+    local: &str,
+    remote: &str,
+) -> Result<TunnelOpenViaHostResult> {
     let host = host_store
         .get(args.host_id)
         .await
