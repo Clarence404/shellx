@@ -14,9 +14,12 @@ describe("AppearancePanel", () => {
     useSettingsStore.setState({ ...DEFAULT_SETTINGS } as any);
   });
 
-  it("clicking Warm Light theme card calls setTheme('warm-light')", () => {
+  it("theme cards switch themeId in both directions", () => {
     render(<AppearancePanel />);
-    fireEvent.click(screen.getByText("Warm Light"));
+    // Light is the default, so Dark is the card that proves the click works.
+    fireEvent.click(screen.getByText("Dark"));
+    expect(useSettingsStore.getState().themeId).toBe("warm-minimal");
+    fireEvent.click(screen.getByText("Light"));
     expect(useSettingsStore.getState().themeId).toBe("warm-light");
   });
 

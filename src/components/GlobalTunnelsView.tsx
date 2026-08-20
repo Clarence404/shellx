@@ -49,7 +49,11 @@ type ImportParsed = {
   bind_all: boolean;
 };
 
-type Props = Record<string, never>;
+type Props = {
+  /** Rendered but not shown. The view stays mounted across rail
+      navigation — see the note on the component below. */
+  hidden?: boolean;
+};
 
 const EMPTY_STATUSES: TunnelStatus[] = [];
 
@@ -69,8 +73,15 @@ function parseSSHImport(cmd: string): ImportParsed[] {
   return results;
 }
 
-export function GlobalTunnelsView(_props: Props = {} as Props) {
-  void _props;
+/// Stays mounted for the whole app session and hides itself via
+/// `display: none` when the rail is on another view. The rule → session
+/// map, the retry timers and the once-per-launch autostart guard all
+/// live in this component: unmounting it dropped the mapping, so every
+/// running tunnel read as stopped on the way back and its Stop button
+/// did nothing while the forwarder kept running in the backend. Staying
+/// mounted also means autostart rules open at launch rather than on the
+/// first visit to this view.
+export function GlobalTunnelsView({ hidden = false }: Props = {}) {
   const t = useT();
   const hosts = useHostsStore((s) => s.hosts);
   const sessions = useSessions((s) => s.sessions);
@@ -341,9 +352,9 @@ export function GlobalTunnelsView(_props: Props = {} as Props) {
 
   const drawerOpen = editing !== null;
   return (
-    <div style={{
+    <div data-testid="global-tunnels-view" style={{
       height: "100%",
-      display: "grid",
+      display: hidden ? "none" : "grid",
       gridTemplateColumns: drawerOpen ? "1fr 420px" : "1fr",
       transition: "grid-template-columns 180ms ease",
       background: "var(--bg)", overflow: "hidden",

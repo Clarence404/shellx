@@ -107,6 +107,15 @@ vi.mock("./ipc/hostkeys", () => ({
 
 vi.mock("./ipc/tunnels", () => ({
   onTunnelStatus: vi.fn().mockResolvedValue(() => {}),
+  // GlobalTunnelsView is mounted for the whole app session now, so its
+  // IPC surface has to exist even in tests that never open the view.
+  listTunnelsForHost: vi.fn().mockResolvedValue([]),
+  openTunnelViaHost: vi.fn().mockResolvedValue({ session_id: "s1", reused_session: false }),
+  closeTunnel: vi.fn().mockResolvedValue(undefined),
+  addTunnel: vi.fn().mockResolvedValue(undefined),
+  updateTunnel: vi.fn().mockResolvedValue(undefined),
+  deleteTunnel: vi.fn().mockResolvedValue(undefined),
+  reorderTunnels: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe("App shell", () => {
@@ -272,24 +281,42 @@ describe("App shell", () => {
 
   it("applies themeId / density to <html data-*> attributes", async () => {
     render(<App />);
-    // Default theme (warm-minimal) and density (comfortable) → attributes ABSENT
+    // Default theme (warm-light) and density (comfortable) → attributes ABSENT
     expect(document.documentElement.dataset.theme).toBeUndefined();
     expect(document.documentElement.dataset.density).toBeUndefined();
 
-    // Switch to Warm Light + Compact
+    // Switch to Dark + Compact
     await act(async () => {
       const { useSettingsStore } = await import("./state/settings");
-      useSettingsStore.setState({ themeId: "warm-light", density: "compact" } as any);
+      useSettingsStore.setState({ themeId: "warm-minimal", density: "compact" } as any);
     });
-    expect(document.documentElement.dataset.theme).toBe("warm-light");
+    expect(document.documentElement.dataset.theme).toBe("warm-minimal");
     expect(document.documentElement.dataset.density).toBe("compact");
 
     // Switch back to defaults — attributes should be removed again
     await act(async () => {
       const { useSettingsStore } = await import("./state/settings");
-      useSettingsStore.setState({ themeId: "warm-minimal", density: "comfortable" } as any);
+      useSettingsStore.setState({ themeId: "warm-light", density: "comfortable" } as any);
     });
     expect(document.documentElement.dataset.theme).toBeUndefined();
     expect(document.documentElement.dataset.density).toBeUndefined();
+  });
+
+  it("keeps the Tunnels view mounted when the rail moves off it", async () => {
+    render(<App />);
+    // Hidden but present from the start — autostart rules open at launch.
+    expect(screen.getByTestId("global-tunnels-view").style.display).toBe("none");
+
+    await act(async () => {
+      useSessions.setState({ railView: "tunnels" });
+    });
+    expect(screen.getByTestId("global-tunnels-view").style.display).toBe("grid");
+
+    // Navigating away only hides it. Unmounting would drop the rule →
+    // session map and every running tunnel would read as stopped.
+    await act(async () => {
+      useSessions.setState({ railView: "hosts" });
+    });
+    expect(screen.getByTestId("global-tunnels-view").style.display).toBe("none");
   });
 });
