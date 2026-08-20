@@ -272,22 +272,22 @@ describe("App shell", () => {
 
   it("applies themeId / density to <html data-*> attributes", async () => {
     render(<App />);
-    // Default theme (warm-minimal) and density (comfortable) → attributes ABSENT
+    // Default theme (warm-light) and density (comfortable) → attributes ABSENT
     expect(document.documentElement.dataset.theme).toBeUndefined();
     expect(document.documentElement.dataset.density).toBeUndefined();
 
-    // Switch to Warm Light + Compact
+    // Switch to Dark + Compact
     await act(async () => {
       const { useSettingsStore } = await import("./state/settings");
-      useSettingsStore.setState({ themeId: "warm-light", density: "compact" } as any);
+      useSettingsStore.setState({ themeId: "warm-minimal", density: "compact" } as any);
     });
-    expect(document.documentElement.dataset.theme).toBe("warm-light");
+    expect(document.documentElement.dataset.theme).toBe("warm-minimal");
     expect(document.documentElement.dataset.density).toBe("compact");
 
     // Switch back to defaults — attributes should be removed again
     await act(async () => {
       const { useSettingsStore } = await import("./state/settings");
-      useSettingsStore.setState({ themeId: "warm-minimal", density: "comfortable" } as any);
+      useSettingsStore.setState({ themeId: "warm-light", density: "comfortable" } as any);
     });
     expect(document.documentElement.dataset.theme).toBeUndefined();
     expect(document.documentElement.dataset.density).toBeUndefined();
