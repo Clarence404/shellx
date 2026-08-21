@@ -15,6 +15,28 @@ describe("useSettingsStore", () => {
     } as any);
   });
 
+  it("setAdvanced clamps a value into its declared range", () => {
+    const set = useSettingsStore.getState().setAdvanced;
+    set("sftpConcurrency", 99);
+    expect(useSettingsStore.getState().advanced.sftpConcurrency).toBe(16);
+    set("sftpConcurrency", 0);
+    expect(useSettingsStore.getState().advanced.sftpConcurrency).toBe(1);
+    set("terminalScrollback", 12);
+    expect(useSettingsStore.getState().advanced.terminalScrollback).toBe(500);
+  });
+
+  it("setAdvanced leaves the whole advanced block otherwise intact", () => {
+    useSettingsStore.getState().setAdvanced("logLevel", "debug");
+    const a = useSettingsStore.getState().advanced;
+    expect(a.logLevel).toBe("debug");
+    expect(a.connectTimeoutSecs).toBe(DEFAULT_SETTINGS.advanced.connectTimeoutSecs);
+  });
+
+  it("keeps a keepalive interval of 0 as 0 (the disabled setting)", () => {
+    useSettingsStore.getState().setAdvanced("keepaliveIntervalSecs", 0);
+    expect(useSettingsStore.getState().advanced.keepaliveIntervalSecs).toBe(0);
+  });
+
   it("initialises with DEFAULT_SETTINGS values", () => {
     const s = useSettingsStore.getState();
     expect(s.themeId).toBe(DEFAULT_SETTINGS.themeId);

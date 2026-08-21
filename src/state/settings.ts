@@ -1,6 +1,8 @@
 import { create } from "zustand";
-import type { Settings } from "../types/settings";
+import type { AdvancedSettings, Settings } from "../types/settings";
 import {
+  ADVANCED_RANGES,
+  DEFAULT_ADVANCED,
   DEFAULT_SETTINGS,
   SYSTEM_FONT_SIZE_MIN, SYSTEM_FONT_SIZE_MAX,
   FILES_FONT_SIZE_MIN, FILES_FONT_SIZE_MAX,
@@ -22,7 +24,22 @@ interface State extends Settings {
   setLocalShell(v: string): void;
   setLanguage(v: Settings["language"]): void;
   setAutoUpdateCheck(v: boolean): void;
+  /** One setter for the whole Advanced block: every control passes the
+   *  field it owns, values are clamped to ADVANCED_RANGES on the way in.
+   *  A single setter keeps eight near-identical ones out of the store. */
+  setAdvanced<K extends keyof AdvancedSettings>(key: K, value: AdvancedSettings[K]): void;
   reset(): void;
+}
+
+/** Clamp a numeric advanced field to its declared range; non-numeric
+ *  fields (logLevel) pass through. */
+function clampAdvanced<K extends keyof AdvancedSettings>(
+  key: K, value: AdvancedSettings[K],
+): AdvancedSettings[K] {
+  const range = (ADVANCED_RANGES as Record<string, readonly [number, number]>)[key as string];
+  if (!range || typeof value !== "number") return value;
+  const [min, max] = range;
+  return Math.max(min, Math.min(max, Math.round(value))) as AdvancedSettings[K];
 }
 
 const SAVE_DEBOUNCE_MS = 300;
@@ -39,6 +56,7 @@ function snapshotForSave(s: State): Settings {
     localShell: s.localShell || undefined,
     language: s.language,
     autoUpdateCheck: s.autoUpdateCheck,
+    advanced: s.advanced,
     schemaVersion: s.schemaVersion,
   };
 }
@@ -74,7 +92,14 @@ export const useSettingsStore = create<State>((set, get) => ({
       if (!(VALID_THEMES as ReadonlyArray<string>).includes(loaded.themeId)) {
         loaded.themeId = DEFAULT_SETTINGS.themeId;
       }
-      set({ ...loaded, localShell: loaded.localShell ?? "" });
+      // `advanced` is absent from any settings.json written before v0.20;
+      // merge over the defaults so a partial block can't leave a field
+      // undefined and feed NaN into a slider.
+      set({
+        ...loaded,
+        localShell: loaded.localShell ?? "",
+        advanced: { ...DEFAULT_ADVANCED, ...(loaded.advanced ?? {}) },
+      });
     }
     // If null (missing / malformed), keep DEFAULT_SETTINGS as-is.
   },
@@ -130,6 +155,10 @@ export const useSettingsStore = create<State>((set, get) => ({
     immediateSave(get);
   },
 
+  setAdvanced(key, value) {
+    set((st) => ({ advanced: { ...st.advanced, [key]: clampAdvanced(key, value) } }));
+    scheduleSave(get);
+  },
   reset() {
     set({ ...DEFAULT_SETTINGS });
     immediateSave(get);

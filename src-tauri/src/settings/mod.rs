@@ -31,6 +31,10 @@ pub struct Settings {
     /// Check GitHub Releases for updates on startup. serde default: true.
     #[serde(default = "default_auto_update_check")]
     pub auto_update_check: bool,
+    /// Power-user tuning. Missing on settings.json files written before
+    /// v0.20 — serde default resolves to `AdvancedSettings::default()`.
+    #[serde(default)]
+    pub advanced: AdvancedSettings,
     pub schema_version: u32,
 }
 
@@ -40,12 +44,107 @@ fn default_files_font_size() -> u32 { 13 }
 fn default_language() -> String { "en".into() }
 fn default_auto_update_check() -> bool { true }
 
+/// Global power-user knobs, surfaced in Settings → Advanced. Every field
+/// has a serde default so a settings.json written by any earlier version
+/// still loads, and every field is range-checked by `sanitized()` before
+/// it reaches a consumer — a hand-edited file must not be able to wedge
+/// the app (a zero SFTP concurrency would stall every transfer).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvancedSettings {
+    /// TCP+handshake budget before a connect attempt gives up, 5..=60.
+    #[serde(default = "default_connect_timeout")]
+    pub connect_timeout_secs: u32,
+    /// SSH keepalive probe interval, 0..=300. 0 disables keepalives.
+    #[serde(default = "default_keepalive_interval")]
+    pub keepalive_interval_secs: u32,
+    /// Unanswered keepalives before russh drops the transport, 1..=10.
+    #[serde(default = "default_keepalive_max")]
+    pub keepalive_max: u32,
+    /// Concurrent SFTP transfers, 1..=16. Extra transfers queue.
+    #[serde(default = "default_sftp_concurrency")]
+    pub sftp_concurrency: u32,
+    /// Minimum level recorded by the logs subsystem, applied at startup.
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+    /// xterm scrollback lines for new terminals, 500..=50000.
+    #[serde(default = "default_terminal_scrollback")]
+    pub terminal_scrollback: u32,
+    /// First tunnel auto-reconnect delay in seconds, 1..=60. Later
+    /// attempts back off from here.
+    #[serde(default = "default_reconnect_interval")]
+    pub reconnect_interval_secs: u32,
+    /// Tunnel auto-reconnect attempts before giving up, 0..=20.
+    /// 0 means keep trying.
+    #[serde(default = "default_reconnect_max_attempts")]
+    pub reconnect_max_attempts: u32,
+}
+
+fn default_connect_timeout() -> u32 { 10 }
+fn default_keepalive_interval() -> u32 { 60 }
+fn default_keepalive_max() -> u32 { 3 }
+fn default_sftp_concurrency() -> u32 { 4 }
+fn default_log_level() -> String { "info".into() }
+fn default_terminal_scrollback() -> u32 { 5000 }
+fn default_reconnect_interval() -> u32 { 5 }
+fn default_reconnect_max_attempts() -> u32 { 10 }
+
+impl Default for AdvancedSettings {
+    fn default() -> Self {
+        Self {
+            connect_timeout_secs: default_connect_timeout(),
+            keepalive_interval_secs: default_keepalive_interval(),
+            keepalive_max: default_keepalive_max(),
+            sftp_concurrency: default_sftp_concurrency(),
+            log_level: default_log_level(),
+            terminal_scrollback: default_terminal_scrollback(),
+            reconnect_interval_secs: default_reconnect_interval(),
+            reconnect_max_attempts: default_reconnect_max_attempts(),
+        }
+    }
+}
+
+impl AdvancedSettings {
+    /// Clamp every field into the range its UI control offers, falling
+    /// back to the default for an unrecognised log level. Consumers use
+    /// this rather than the raw struct.
+    pub fn sanitized(&self) -> Self {
+        let log_level = match self.log_level.as_str() {
+            "debug" | "info" | "warn" | "error" => self.log_level.clone(),
+            _ => default_log_level(),
+        };
+        Self {
+            connect_timeout_secs: self.connect_timeout_secs.clamp(5, 60),
+            keepalive_interval_secs: self.keepalive_interval_secs.min(300),
+            keepalive_max: self.keepalive_max.clamp(1, 10),
+            sftp_concurrency: self.sftp_concurrency.clamp(1, 16),
+            log_level,
+            terminal_scrollback: self.terminal_scrollback.clamp(500, 50_000),
+            reconnect_interval_secs: self.reconnect_interval_secs.clamp(1, 60),
+            reconnect_max_attempts: self.reconnect_max_attempts.min(20),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalSettings {
     pub font_family: String,
     pub font_size: u32,
     pub cursor_style: String,
+}
+
+/// Read the sanitized `advanced` block, falling back to defaults when
+/// settings.json is missing or unreadable. Every consumer goes through
+/// here so nobody sees an unclamped value.
+pub fn advanced_or_default(store: &SettingsStore) -> AdvancedSettings {
+    store
+        .load()
+        .ok()
+        .flatten()
+        .map(|s| s.advanced)
+        .unwrap_or_default()
+        .sanitized()
 }
 
 pub struct SettingsStore {
@@ -111,6 +210,7 @@ mod tests {
             local_shell: None,
             language: "en".into(),
             auto_update_check: true,
+            advanced: AdvancedSettings::default(),
             schema_version: 1,
         }
     }
@@ -127,6 +227,50 @@ mod tests {
         assert_eq!(got.system_font, "system-default");
         assert_eq!(got.system_font_size, 13);
         assert_eq!(got.files_font_size, 13);
+    }
+
+    #[test]
+    fn legacy_settings_json_without_advanced_gets_defaults() {
+        // Anything written before v0.20 has no `advanced` key at all.
+        let td = TempDir::new().unwrap();
+        let store = SettingsStore::open(td.path());
+        let legacy = r#"{"themeId":"warm-light","density":"comfortable","terminal":{"fontFamily":"fira-code","fontSize":14,"cursorStyle":"block"},"schemaVersion":1}"#;
+        std::fs::write(td.path().join("settings.json"), legacy).unwrap();
+        let got = store.load().unwrap().unwrap();
+        assert_eq!(got.advanced, AdvancedSettings::default());
+        assert_eq!(got.advanced.sftp_concurrency, 4);
+        assert_eq!(got.advanced.log_level, "info");
+    }
+
+    #[test]
+    fn sanitized_clamps_out_of_range_values() {
+        let wild = AdvancedSettings {
+            connect_timeout_secs: 0,
+            keepalive_interval_secs: 9_999,
+            keepalive_max: 0,
+            // A hand-edited 0 here would otherwise hand out no transfer
+            // permits at all and stall the queue forever.
+            sftp_concurrency: 0,
+            log_level: "verbose".into(),
+            terminal_scrollback: 1,
+            reconnect_interval_secs: 0,
+            reconnect_max_attempts: 999,
+        };
+        let s = wild.sanitized();
+        assert_eq!(s.connect_timeout_secs, 5);
+        assert_eq!(s.keepalive_interval_secs, 300);
+        assert_eq!(s.keepalive_max, 1);
+        assert_eq!(s.sftp_concurrency, 1);
+        assert_eq!(s.log_level, "info");
+        assert_eq!(s.terminal_scrollback, 500);
+        assert_eq!(s.reconnect_interval_secs, 1);
+        assert_eq!(s.reconnect_max_attempts, 20);
+    }
+
+    #[test]
+    fn sanitized_keeps_a_disabled_keepalive_disabled() {
+        let off = AdvancedSettings { keepalive_interval_secs: 0, ..Default::default() };
+        assert_eq!(off.sanitized().keepalive_interval_secs, 0);
     }
 
     #[test]

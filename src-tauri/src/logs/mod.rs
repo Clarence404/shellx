@@ -137,6 +137,11 @@ pub struct LogsStore {
     tx_broadcast: broadcast::Sender<LogEntry>,
     tx_file: Option<mpsc::Sender<LogEntry>>,
     disk_enabled: std::sync::atomic::AtomicBool,
+    /// Severity floor applied at push time, from
+    /// `settings.advanced.logLevel`. Entries below it are dropped before
+    /// they reach the ring, the subscribers or the file — the panel's own
+    /// level selector only filters what was already recorded.
+    min_severity: std::sync::atomic::AtomicU8,
 }
 
 impl LogsStore {
@@ -148,7 +153,16 @@ impl LogsStore {
             tx_broadcast,
             tx_file,
             disk_enabled: std::sync::atomic::AtomicBool::new(true),
+            min_severity: std::sync::atomic::AtomicU8::new(Level::Debug.as_severity()),
         }
+    }
+
+    /// Raise (or lower) the severity floor. Called once at startup from
+    /// `settings.advanced.logLevel`; the Advanced panel says a restart is
+    /// needed rather than pretending a mid-run change re-records history.
+    pub fn set_min_level(&self, level: Level) {
+        self.min_severity
+            .store(level.as_severity(), Ordering::Relaxed);
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<LogEntry> {
@@ -166,6 +180,9 @@ impl LogsStore {
     /// Push a new entry into the ring, drop the oldest if full, then
     /// broadcast to live subscribers and enqueue for disk write.
     pub fn push(&self, level: Level, category: &str, message: impl Into<String>, fields: serde_json::Value) {
+        if level.as_severity() < self.min_severity.load(Ordering::Relaxed) {
+            return;
+        }
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let fields = match fields {
             serde_json::Value::Object(m) => m.into_iter().collect(),

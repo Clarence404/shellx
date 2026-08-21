@@ -107,13 +107,54 @@ pub struct TransferManager {
     /// cleaned up (a few bytes per group), which is fine for the size
     /// of state a user could plausibly accumulate.
     cancelled_groups: Arc<Mutex<HashSet<TransferId>>>,
+    /// How many byte-pumps may run at once (Settings → Advanced → SFTP
+    /// concurrency). Each task holds one permit for its whole life;
+    /// everything past the cap sits in Queued until a slot frees.
+    ///
+    /// Swapped wholesale when the setting changes: in-flight transfers
+    /// keep the permit they took from the old semaphore and finish
+    /// against it, newly queued ones queue on the new one. A std Mutex
+    /// (not tokio's) because the critical section is a clone of an Arc.
+    gate: std::sync::Mutex<Arc<tokio::sync::Semaphore>>,
+    gate_cap: std::sync::atomic::AtomicU32,
 }
 
 impl TransferManager {
     pub fn new() -> Self {
+        let cap = crate::settings::AdvancedSettings::default().sftp_concurrency;
         Self {
             tasks: Arc::new(Mutex::new(HashMap::new())),
             cancelled_groups: Arc::new(Mutex::new(HashSet::new())),
+            gate: std::sync::Mutex::new(Arc::new(tokio::sync::Semaphore::new(cap as usize))),
+            gate_cap: std::sync::atomic::AtomicU32::new(cap),
+        }
+    }
+
+    /// Point the gate at a new cap. Called before each queueing command
+    /// with the current setting, so a change applies to the next
+    /// transfer without an app restart. A no-op when the cap is
+    /// unchanged, which is the common case.
+    pub fn set_concurrency(&self, cap: u32) {
+        let cap = cap.clamp(1, 16);
+        if self.gate_cap.swap(cap, std::sync::atomic::Ordering::Relaxed) == cap {
+            return;
+        }
+        let fresh = Arc::new(tokio::sync::Semaphore::new(cap as usize));
+        match self.gate.lock() {
+            Ok(mut g) => *g = fresh,
+            Err(p) => *p.into_inner() = fresh,
+        }
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "concurrency limit changed",
+            "limit": cap,
+        );
+    }
+
+    /// The semaphore new tasks should queue on.
+    fn gate_handle(&self) -> Arc<tokio::sync::Semaphore> {
+        match self.gate.lock() {
+            Ok(g) => g.clone(),
+            Err(p) => p.into_inner().clone(),
         }
     }
 
@@ -327,6 +368,7 @@ impl TransferManager {
             pause_flag,
             session_mgr,
             conn_id,
+            self.gate_handle(),
         ));
         id
     }
@@ -384,6 +426,7 @@ impl TransferManager {
             pause_flag,
             session_mgr,
             conn_id,
+            self.gate_handle(),
         ));
         id
     }

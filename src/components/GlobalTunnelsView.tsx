@@ -7,9 +7,10 @@ import { useT } from "../i18n";
 import { useHostsStore } from "../state/hosts";
 import { useSessions } from "../state/sessions";
 import {
-  listTunnelsForHost, openTunnelViaHost, closeTunnel,
+  listTunnelsForHost, openTunnelViaHost, closeTunnel, listActiveTunnels,
   addTunnel, updateTunnel, deleteTunnel, reorderTunnels,
 } from "../ipc/tunnels";
+import { useSettingsStore } from "../state/settings";
 import { logPush } from "../ipc/logs";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
 import type { HostInfo } from "../types/host";
@@ -24,12 +25,13 @@ type RetryState = {
   timer: number | null;
 };
 
-/** Exponential-ish backoff: 2s → 5s → 15s → 60s (then 60s forever). */
-function backoffMs(attempt: number): number {
-  if (attempt <= 1) return 2000;
-  if (attempt === 2) return 5000;
-  if (attempt === 3) return 15000;
-  return 60000;
+/** Backoff from the configured first delay (Settings → Advanced → tunnel
+ *  reconnect): base → 2.5× → 7.5× → 30×, capped at a minute. With the
+ *  default 5s base that is 5s → 12s → 37s → 60s. */
+function backoffMs(attempt: number, baseSecs: number): number {
+  const base = Math.max(1, baseSecs) * 1000;
+  const factor = attempt <= 1 ? 1 : attempt === 2 ? 2.5 : attempt === 3 ? 7.5 : 30;
+  return Math.min(Math.round(base * factor), 60_000);
 }
 
 function isAuthError(msg: string): boolean {
@@ -92,8 +94,11 @@ export function GlobalTunnelsView({ hidden = false }: Props = {}) {
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<EditingState>(null);
   const [importOpen, setImportOpen] = useState(false);
-  // rule_id → session_id returned by tunnel_open_via_host.
-  const [ruleSessions, setRuleSessions] = useState<Record<string, string>>({});
+  // rule_id → session_id, held in the sessions store and reconciled
+  // against the backend on mount (see the effect below) so this view
+  // never becomes the sole owner of that knowledge again.
+  const ruleSessions = useSessions((s) => s.tunnelRuleSessions);
+  const advanced = useSettingsStore((s) => s.advanced);
   // Per-rule retry state — separate state so the pill can render "第 N 次
   // 重试, Xs 后" without needing to re-render on every unrelated status
   // event. Timers are tracked so we can cancel on unmount / stop.
@@ -106,22 +111,12 @@ export function GlobalTunnelsView({ hidden = false }: Props = {}) {
   // (never active + retry armed) from "reconnecting" (was active, now
   // recovering). Cleared when the session is forgotten so the next open
   // reads as first-connect again.
-  const [hasBeenActive, setHasBeenActive] = useState<Record<string, true>>({});
+  const hasBeenActive = useSessions((s) => s.tunnelEverActive);
 
-  const registerRuleSession = (ruleId: string, sid: string) =>
-    setRuleSessions((s) => (s[ruleId] === sid ? s : { ...s, [ruleId]: sid }));
-  const forgetRuleSession = (ruleId: string) => {
-    setRuleSessions((s) => {
-      if (!(ruleId in s)) return s;
-      const { [ruleId]: _drop, ...rest } = s;
-      return rest;
-    });
-    setHasBeenActive((s) => {
-      if (!(ruleId in s)) return s;
-      const { [ruleId]: _drop, ...rest } = s;
-      return rest;
-    });
-  };
+  const registerRuleSession = useSessions((s) => s.registerTunnelRuleSession);
+  const forgetRuleSession = useSessions((s) => s.forgetTunnelRuleSession);
+  const markEverActive = useSessions((s) => s.markTunnelEverActive);
+  const reconcileRuleSessions = useSessions((s) => s.reconcileTunnelRuleSessions);
   const markStopIntent = (ruleId: string) => {
     stopIntents.current[ruleId] = true;
   };
@@ -192,7 +187,20 @@ export function GlobalTunnelsView({ hidden = false }: Props = {}) {
         });
         return;
       }
-      const delay = backoffMs(currentAttempt);
+      // Retry limit of 0 means keep going; anything else stops the loop
+      // and leaves the rule stopped so the row shows the normal error.
+      const limit = advancedRef.current.reconnectMaxAttempts;
+      if (limit > 0 && currentAttempt >= limit) {
+        cancelRetry(ruleId);
+        forgetRuleSession(ruleId);
+        void logPush({
+          level: "error", category: "tunnel",
+          message: `reconnect gave up after ${currentAttempt} attempt(s): ${msg}`,
+          fields: { rule_id: ruleId, rule_label: rule.label, attempts: currentAttempt },
+        });
+        return;
+      }
+      const delay = backoffMs(currentAttempt, advancedRef.current.reconnectIntervalSecs);
       const nextRetryAt = Date.now() + delay;
       const timer = window.setTimeout(() => attemptReconnect(ruleId), delay);
       setRetries((prev) => ({
@@ -220,16 +228,7 @@ export function GlobalTunnelsView({ hidden = false }: Props = {}) {
         if (st.status === "active") activated.push(st.rule_id);
       }
     }
-    if (activated.length > 0) {
-      setHasBeenActive((prev) => {
-        let changed = false;
-        const next = { ...prev };
-        for (const id of activated) {
-          if (!next[id]) { next[id] = true; changed = true; }
-        }
-        return changed ? next : prev;
-      });
-    }
+    if (activated.length > 0) markEverActive(activated);
     // Flag rules whose known session just transitioned to closed/error.
     for (const [ruleId, sid] of Object.entries(ruleSessions)) {
       const key = `${sid}::${ruleId}`;
@@ -250,7 +249,7 @@ export function GlobalTunnelsView({ hidden = false }: Props = {}) {
         // Arm a retry only if we don't already have one going.
         setRetries((prev) => {
           if (prev[ruleId]) return prev;
-          const delay = backoffMs(1);
+          const delay = backoffMs(1, advancedRef.current.reconnectIntervalSecs);
           const nextRetryAt = Date.now() + delay;
           const timer = window.setTimeout(() => attemptReconnect(ruleId), delay);
           void logPush({
@@ -264,6 +263,42 @@ export function GlobalTunnelsView({ hidden = false }: Props = {}) {
     }
     prevStatusRef.current = nextStatus;
   }, [tunnelStatusesAll, ruleSessions, findRule, attemptReconnect]);
+
+  // Read inside callbacks that were created before the latest settings
+  // change; a ref keeps `attemptReconnect` out of the dependency churn.
+  const advancedRef = useRef(advanced);
+  advancedRef.current = advanced;
+
+  // Reconcile with the backend once per app run. Whatever it reports as
+  // forwarding IS running, whatever it omits is not — so a window reload
+  // (or an HMR remount in dev) re-attaches to live tunnels instead of
+  // showing them stopped with an inert Stop button.
+  const reconciledRef = useRef(false);
+  useEffect(() => {
+    if (reconciledRef.current) return;
+    reconciledRef.current = true;
+    void (async () => {
+      try {
+        const active = await listActiveTunnels();
+        reconcileRuleSessions(
+          active.map((a) => ({ ruleId: a.rule_id, sessionId: a.session_id })),
+        );
+        if (active.length > 0) {
+          void logPush({
+            level: "info", category: "tunnel",
+            message: `reattached to ${active.length} running tunnel(s)`,
+            fields: { count: active.length },
+          });
+        }
+      } catch (e) {
+        void logPush({
+          level: "warn", category: "tunnel",
+          message: "could not read running tunnels from the backend",
+          fields: { error: String(e) },
+        });
+      }
+    })();
+  }, [reconcileRuleSessions]);
 
   // Autostart-on-app-launch: once, after hosts + tunnels are loaded, kick
   // off openTunnelViaHost for every rule marked autostart=1.

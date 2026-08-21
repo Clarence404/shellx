@@ -103,8 +103,9 @@ impl SessionManager {
         label: String,
         host_id: Option<Uuid>,
         policy: Arc<dyn HostKeyPolicy>,
+        advanced: &crate::settings::AdvancedSettings,
     ) -> Result<ConnectionInfo> {
-        let ssh_conn = SshProtocol::connect(host, port, auth, policy).await?;
+        let ssh_conn = SshProtocol::connect(host, port, auth, policy, advanced).await?;
         let ssh_handle = Some(ssh_conn.handle_clone());
         let id = Uuid::new_v4();
         let info = ConnectionInfo {
@@ -325,6 +326,23 @@ impl SessionManager {
         let lc_arc = self.inner.lock().await.get(&id).cloned()?;
         let lc = lc_arc.lock().await;
         lc.ssh_handle.clone()
+    }
+
+    /// Every tunnel the backend is actually running, as
+    /// `(session_id, host_id, rule_id)`. This is the authoritative answer
+    /// to "which rules are up" — the frontend reconciles against it on
+    /// mount instead of trusting its own memory of what it started, so a
+    /// window reload can't leave a live forwarder with no UI attached.
+    pub async fn list_active_tunnels(&self) -> Vec<(Uuid, Option<Uuid>, String)> {
+        let arcs: Vec<_> = self.inner.lock().await.values().cloned().collect();
+        let mut out = Vec::new();
+        for a in arcs {
+            let live = a.lock().await;
+            for rule_id in live.tunnels.keys() {
+                out.push((live.info.id, live.info.host_id, rule_id.clone()));
+            }
+        }
+        out
     }
 
     pub async fn close_all_tunnels(&self, session_id: Uuid) {
@@ -619,6 +637,7 @@ mod tests {
                 label.into(),
                 None,
                 Arc::new(AcceptAllPolicy),
+                &crate::settings::AdvancedSettings::default(),
             )
             .await
             .unwrap();

@@ -96,6 +96,28 @@ pub struct ReorderArgs {
     pub rule_ids: Vec<Uuid>,
 }
 
+/// One running forwarder, as the backend sees it.
+#[derive(Serialize)]
+pub struct ActiveTunnel {
+    pub session_id: Uuid,
+    pub host_id: Option<Uuid>,
+    pub rule_id: String,
+}
+
+/// Everything the backend is currently forwarding. The frontend calls
+/// this on mount and reconciles its own view against the answer, so a
+/// window reload (or any remount) re-attaches to live tunnels instead of
+/// showing them as stopped and orphaning the forwarder.
+#[tauri::command]
+pub async fn tunnel_list_active(mgr: State<'_, SessionManager>) -> Result<Vec<ActiveTunnel>> {
+    Ok(mgr
+        .list_active_tunnels()
+        .await
+        .into_iter()
+        .map(|(session_id, host_id, rule_id)| ActiveTunnel { session_id, host_id, rule_id })
+        .collect())
+}
+
 #[tauri::command]
 pub async fn tunnel_reorder(
     args: ReorderArgs,
@@ -134,6 +156,7 @@ pub async fn tunnel_open_via_host(
     mgr: State<'_, SessionManager>,
     host_store: State<'_, HostStore>,
     keychain: State<'_, KeychainStore>,
+    settings: State<'_, crate::settings::SettingsStore>,
     app: AppHandle,
 ) -> Result<TunnelOpenViaHostResult> {
     let bind_addr = if args.bind_all.unwrap_or(false) { "0.0.0.0" } else { "127.0.0.1" };
@@ -157,7 +180,7 @@ pub async fn tunnel_open_via_host(
                 "session": session_id.to_string(),
             );
             let _ = mgr.close(session_id).await;
-            return open_via_fresh_transport(args, mgr, host_store, keychain, app, &local, &remote).await;
+            return open_via_fresh_transport(args, mgr, host_store, keychain, settings, app, &local, &remote).await;
         }
         mgr.open_tunnel(
             session_id,
@@ -183,7 +206,7 @@ pub async fn tunnel_open_via_host(
     }
 
     // Path 2: no live session — open a fresh tunnel-only SSH transport.
-    open_via_fresh_transport(args, mgr, host_store, keychain, app, &local, &remote).await
+    open_via_fresh_transport(args, mgr, host_store, keychain, settings, app, &local, &remote).await
 }
 
 /// Is this session's SSH transport still usable? Opens and immediately
@@ -214,6 +237,7 @@ async fn open_via_fresh_transport(
     mgr: State<'_, SessionManager>,
     host_store: State<'_, HostStore>,
     keychain: State<'_, KeychainStore>,
+    settings: State<'_, crate::settings::SettingsStore>,
     app: AppHandle,
     local: &str,
     remote: &str,
@@ -254,7 +278,15 @@ async fn open_via_fresh_transport(
     let policy: Arc<dyn crate::protocol::HostKeyPolicy> =
         Arc::new(crate::ipc::hostkeys::TofuPolicy { app: app.clone() });
     let info = mgr
-        .open_connection(&host.host, host.port, auth, host.label.clone(), Some(args.host_id), policy)
+        .open_connection(
+            &host.host,
+            host.port,
+            auth,
+            host.label.clone(),
+            Some(args.host_id),
+            policy,
+            &crate::settings::advanced_or_default(&settings),
+        )
         .await?;
 
     // Subscribe so a transport-side close reaches App.tsx as an EV_CLOSED
