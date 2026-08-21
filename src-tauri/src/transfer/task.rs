@@ -183,6 +183,20 @@ async fn wait_while_paused(
     Ok(())
 }
 
+/// Wait for a transfer slot, honouring a cancel that arrives while
+/// queued. Returns the permit, which the caller holds for the rest of the
+/// transfer — dropping it hands the slot to the next queued transfer.
+async fn acquire_slot(
+    gate: Arc<tokio::sync::Semaphore>,
+    cancel_rx: &mut oneshot::Receiver<()>,
+) -> Result<tokio::sync::OwnedSemaphorePermit> {
+    tokio::select! {
+        _ = &mut *cancel_rx => Err(Error::Protocol(CANCELLED_MARKER.into())),
+        permit = gate.acquire_owned() => permit
+            .map_err(|e| Error::Protocol(format!("transfer gate closed: {e}"))),
+    }
+}
+
 /// Pumps `local` -> `remote` over the connection's SFTP subsystem (opened
 /// lazily by `SessionManager::sftp_open_write` on first use).
 pub(crate) async fn run_upload(
@@ -195,8 +209,10 @@ pub(crate) async fn run_upload(
     pause_flag: Arc<AtomicBool>,
     session_mgr: SessionManager,
     conn_id: ConnectionId,
+    gate: Arc<tokio::sync::Semaphore>,
 ) {
     let result: Result<()> = async {
+        let _permit = acquire_slot(gate, &mut cancel_rx).await?;
         let meta = tokio::fs::metadata(&local).await.map_err(Error::Io)?;
         let total_bytes = meta.len();
         mark_active(&tasks, transfer_id, total_bytes).await;
@@ -259,8 +275,10 @@ pub(crate) async fn run_download(
     pause_flag: Arc<AtomicBool>,
     session_mgr: SessionManager,
     conn_id: ConnectionId,
+    gate: Arc<tokio::sync::Semaphore>,
 ) {
     let result: Result<()> = async {
+        let _permit = acquire_slot(gate, &mut cancel_rx).await?;
         let total_bytes = session_mgr
             .sftp_stat(conn_id, &remote)
             .await

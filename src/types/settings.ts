@@ -12,8 +12,53 @@ export interface Settings {
   localShell?: string;
   language: "en" | "zh";
   autoUpdateCheck: boolean;
+  advanced: AdvancedSettings;
   schemaVersion: 1;
 }
+
+/** Power-user knobs (Settings → Advanced). Ranges here must match the
+ *  clamps in `AdvancedSettings::sanitized()` on the Rust side — the
+ *  backend re-clamps whatever it is handed. */
+export interface AdvancedSettings {
+  connectTimeoutSecs: number;
+  keepaliveIntervalSecs: number;
+  keepaliveMax: number;
+  sftpConcurrency: number;
+  logLevel: "error" | "warn" | "info" | "debug";
+  terminalScrollback: number;
+  reconnectIntervalSecs: number;
+  reconnectMaxAttempts: number;
+}
+
+export const DEFAULT_ADVANCED: AdvancedSettings = {
+  connectTimeoutSecs: 10,
+  keepaliveIntervalSecs: 60,
+  keepaliveMax: 3,
+  sftpConcurrency: 4,
+  logLevel: "info",
+  terminalScrollback: 5000,
+  reconnectIntervalSecs: 5,
+  reconnectMaxAttempts: 10,
+};
+
+/** [min, max] per numeric advanced field, shared by the panel's controls
+ *  and the store's clamping so the two can't drift. */
+export const ADVANCED_RANGES = {
+  connectTimeoutSecs: [5, 60],
+  keepaliveIntervalSecs: [0, 300],
+  keepaliveMax: [1, 10],
+  sftpConcurrency: [1, 16],
+  terminalScrollback: [500, 50000],
+  reconnectIntervalSecs: [1, 60],
+  reconnectMaxAttempts: [0, 20],
+} as const;
+
+export const LOG_LEVEL_META: Array<{ id: AdvancedSettings["logLevel"]; label: string }> = [
+  { id: "error", label: "Error" },
+  { id: "warn", label: "Warn" },
+  { id: "info", label: "Info" },
+  { id: "debug", label: "Debug" },
+];
 
 export const DEFAULT_SETTINGS: Settings = {
   themeId: "warm-light",
@@ -28,6 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   language: "en",
   autoUpdateCheck: true,
+  advanced: DEFAULT_ADVANCED,
   schemaVersion: 1,
 };
 

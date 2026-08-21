@@ -19,6 +19,21 @@ fn main() {
     let tunnel_store = TunnelStore::new(host_store.conn_arc());
     let keychain = KeychainStore::open();
     let settings_store = SettingsStore::open(&config_dir);
+    // Advanced knobs are read once here: the log floor and the transfer
+    // concurrency both have to be in place before anything can emit or
+    // queue. Per-connection values (timeout, keepalive) are re-read at
+    // each connect instead, so changing them doesn't need a restart.
+    let advanced = shellx::settings::advanced_or_default(&settings_store);
+    let log_floor = shellx::logs::Level::from_str(&advanced.log_level)
+        .unwrap_or(shellx::logs::Level::Info);
+    let plugin_log_level = match log_floor {
+        shellx::logs::Level::Debug => log::LevelFilter::Debug,
+        shellx::logs::Level::Info => log::LevelFilter::Info,
+        shellx::logs::Level::Warn => log::LevelFilter::Warn,
+        shellx::logs::Level::Error => log::LevelFilter::Error,
+    };
+    let transfer_mgr = TransferManager::new();
+    transfer_mgr.set_concurrency(advanced.sftp_concurrency);
     // Logs subsystem lives here (ring buffer + file writer). Requires a
     // Tokio runtime for the file-writer background task, so we defer
     // actual init to the tauri setup hook below.
@@ -31,7 +46,7 @@ fn main() {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
+                        .level(plugin_log_level)
                         .build(),
                 )?;
             }
@@ -39,6 +54,10 @@ fn main() {
             // Managed here (not up in the pre-Builder block) because the
             // background writer task needs the Tauri Tokio runtime.
             let logs_store = shellx::logs::init(logs_config_dir.clone());
+            // Entries below the configured level are dropped at push time,
+            // so the floor governs the ring, the live stream and the jsonl
+            // file alike — not just what the panel chooses to display.
+            logs_store.set_min_level(log_floor);
             use tauri::Manager;
             app.handle().manage(logs_store);
             // First app-category line of every run: what started, where its
@@ -50,12 +69,13 @@ fn main() {
                 "arch": std::env::consts::ARCH,
                 "config_dir": logs_config_dir.display().to_string(),
                 "debug_build": cfg!(debug_assertions),
+                "log_level": advanced.log_level,
             );
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
         .manage(SessionManager::new())
-        .manage(TransferManager::new())
+        .manage(transfer_mgr)
         .manage(host_store)
         .manage(tunnel_store)
         .manage(keychain)
@@ -121,6 +141,7 @@ fn main() {
             ipc::tunnels::tunnel_delete,
             ipc::tunnels::tunnel_open,
             ipc::tunnels::tunnel_open_via_host,
+            ipc::tunnels::tunnel_list_active,
             ipc::tunnels::tunnel_close,
             ipc::tunnels::tunnel_add_session,
             ipc::tunnels::tunnel_reorder,

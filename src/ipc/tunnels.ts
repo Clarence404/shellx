@@ -71,6 +71,21 @@ export async function openTunnelViaHost(args: {
   return raw;
 }
 
+/** One forwarder the backend is actually running. */
+export interface ActiveTunnel {
+  session_id: Uuid;
+  host_id: Uuid | null;
+  rule_id: string;
+}
+
+/** Ask the backend which rules it is currently forwarding. The backend —
+ *  not this process's memory — is the authority; the Tunnels view
+ *  reconciles against this on mount so a reload re-attaches to live
+ *  tunnels instead of orphaning them. */
+export async function listActiveTunnels(): Promise<ActiveTunnel[]> {
+  return invoke("tunnel_list_active");
+}
+
 export async function closeTunnel(session_id: Uuid, rule_id: string): Promise<void> {
   return invoke("tunnel_close", { args: { session_id, rule_id } });
 }

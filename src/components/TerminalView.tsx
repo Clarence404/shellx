@@ -70,7 +70,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       cursorStyle: initialTerminal.cursorStyle,
       cursorInactiveStyle: "outline",
       convertEol: false,
-      scrollback: 5000,
+      scrollback: useSettingsStore.getState().advanced.terminalScrollback,
       theme: TERMINAL_PALETTES[initialTheme],
     });
     const fit = new FitAddon();

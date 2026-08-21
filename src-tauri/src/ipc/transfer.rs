@@ -31,8 +31,14 @@ pub async fn sftp_upload(
     app: AppHandle,
     session_mgr: State<'_, SessionManager>,
     transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, crate::settings::SettingsStore>,
 ) -> Result<TransferId> {
     let session_mgr = (*session_mgr).clone();
+    // Pick up the current SFTP concurrency before queueing, so a
+    // change in Settings → Advanced applies to the next transfer.
+    transfer_mgr.set_concurrency(
+        crate::settings::advanced_or_default(&settings).sftp_concurrency,
+    );
     Ok(transfer_mgr
         .start_upload(
             app,
@@ -58,8 +64,14 @@ pub async fn sftp_download(
     app: AppHandle,
     session_mgr: State<'_, SessionManager>,
     transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, crate::settings::SettingsStore>,
 ) -> Result<TransferId> {
     let session_mgr = (*session_mgr).clone();
+    // Pick up the current SFTP concurrency before queueing, so a
+    // change in Settings → Advanced applies to the next transfer.
+    transfer_mgr.set_concurrency(
+        crate::settings::advanced_or_default(&settings).sftp_concurrency,
+    );
     Ok(transfer_mgr
         .start_download(
             app,
@@ -145,8 +157,14 @@ pub async fn sftp_upload_dir(
     app: AppHandle,
     session_mgr: State<'_, SessionManager>,
     transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, crate::settings::SettingsStore>,
 ) -> Result<DirTransferInit> {
     let session_mgr = (*session_mgr).clone();
+    // Pick up the current SFTP concurrency before queueing, so a
+    // change in Settings → Advanced applies to the next transfer.
+    transfer_mgr.set_concurrency(
+        crate::settings::advanced_or_default(&settings).sftp_concurrency,
+    );
     let local_root = PathBuf::from(&args.local_dir);
     let group_id = Uuid::new_v4();
 
@@ -221,8 +239,14 @@ pub async fn sftp_download_dir(
     app: AppHandle,
     session_mgr: State<'_, SessionManager>,
     transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, crate::settings::SettingsStore>,
 ) -> Result<DirTransferInit> {
     let session_mgr = (*session_mgr).clone();
+    // Pick up the current SFTP concurrency before queueing, so a
+    // change in Settings → Advanced applies to the next transfer.
+    transfer_mgr.set_concurrency(
+        crate::settings::advanced_or_default(&settings).sftp_concurrency,
+    );
     let group_id = Uuid::new_v4();
     let local_root = PathBuf::from(&args.local_dir);
 

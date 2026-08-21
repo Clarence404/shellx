@@ -54,7 +54,9 @@ pub async fn open_connection(
     mgr: State<'_, SessionManager>,
     host_store: State<'_, crate::store::HostStore>,
     tunnel_store: State<'_, TunnelStore>,
+    settings: State<'_, crate::settings::SettingsStore>,
 ) -> Result<ConnectionInfo> {
+    let advanced = crate::settings::advanced_or_default(&settings);
     let auth = match args.auth_method.as_deref() {
         Some("publickey") => {
             let path = args.key_path.clone()
@@ -80,7 +82,7 @@ pub async fn open_connection(
         "auth": auth_kind,
     );
     let info = match mgr
-        .open_connection(&args.host, args.port, auth, args.label, args.host_id, policy)
+        .open_connection(&args.host, args.port, auth, args.label, args.host_id, policy, &advanced)
         .await
     {
         Ok(info) => info,

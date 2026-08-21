@@ -38,6 +38,22 @@ interface SessionsState {
   removeTunnelStatus: (sessionId: string, ruleId: string) => void;
   clearTunnelStatuses: (sessionId: string) => void;
 
+  /** rule_id → session_id for every rule believed to be running.
+   *  Lives here rather than in the Tunnels view so it survives a remount,
+   *  and is re-derived from `tunnel_list_active` on startup — the backend
+   *  is the authority on what is actually forwarding. */
+  tunnelRuleSessions: Record<string, string>;
+  /** rule_id → true once the rule has been seen active this run. Tells
+   *  "first connect in progress" apart from "reconnecting". */
+  tunnelEverActive: Record<string, true>;
+  registerTunnelRuleSession: (ruleId: string, sessionId: string) => void;
+  forgetTunnelRuleSession: (ruleId: string) => void;
+  markTunnelEverActive: (ruleIds: string[]) => void;
+  /** Replace the whole map with what the backend reports. Rules the
+   *  backend does not list are dropped, so a stale entry can't keep
+   *  showing a stopped tunnel as running. */
+  reconcileTunnelRuleSessions: (pairs: Array<{ ruleId: string; sessionId: string }>) => void;
+
   /** Incremented whenever tunnel rules for a host change (add/delete).
    *  TunnelsPanel subscribes to this to know when to re-fetch. */
   rulesVersion: Record<string, number>;
@@ -50,6 +66,8 @@ export const useSessions = create<SessionsState>((set, get) => ({
   activeActivity: {},
   connecting: {},
   tunnelStatuses: {},
+  tunnelRuleSessions: {},
+  tunnelEverActive: {},
   rulesVersion: {},
 
   railView: "hosts",
@@ -130,6 +148,43 @@ export const useSessions = create<SessionsState>((set, get) => ({
     set((s) => {
       const { [sessionId]: _, ...rest } = s.tunnelStatuses;
       return { tunnelStatuses: rest };
+    }),
+
+  registerTunnelRuleSession: (ruleId, sessionId) =>
+    set((s) => (
+      s.tunnelRuleSessions[ruleId] === sessionId
+        ? {}
+        : { tunnelRuleSessions: { ...s.tunnelRuleSessions, [ruleId]: sessionId } }
+    )),
+
+  forgetTunnelRuleSession: (ruleId) =>
+    set((s) => {
+      if (!(ruleId in s.tunnelRuleSessions) && !(ruleId in s.tunnelEverActive)) return {};
+      const { [ruleId]: _drop, ...restSessions } = s.tunnelRuleSessions;
+      const { [ruleId]: _drop2, ...restActive } = s.tunnelEverActive;
+      return { tunnelRuleSessions: restSessions, tunnelEverActive: restActive };
+    }),
+
+  markTunnelEverActive: (ruleIds) =>
+    set((s) => {
+      let changed = false;
+      const next = { ...s.tunnelEverActive };
+      for (const id of ruleIds) {
+        if (!next[id]) { next[id] = true; changed = true; }
+      }
+      return changed ? { tunnelEverActive: next } : {};
+    }),
+
+  reconcileTunnelRuleSessions: (pairs) =>
+    set(() => {
+      const next: Record<string, string> = {};
+      for (const p of pairs) next[p.ruleId] = p.sessionId;
+      // Anything the backend reports as running has demonstrably been
+      // active, so the pills read "reconnecting" rather than "connecting"
+      // if one of them drops later in this run.
+      const active: Record<string, true> = {};
+      for (const p of pairs) active[p.ruleId] = true;
+      return { tunnelRuleSessions: next, tunnelEverActive: active };
     }),
 
   bumpRulesVersion: (hostId) =>

@@ -4,7 +4,40 @@ import type { TunnelStatus } from "../types/tunnel";
 
 describe("sessions store", () => {
   beforeEach(() => {
-    useSessions.setState({ sessions: [], activeId: null });
+    useSessions.setState({
+      sessions: [], activeId: null,
+      tunnelRuleSessions: {}, tunnelEverActive: {},
+    });
+  });
+
+  it("reconcile replaces the rule→session map with what the backend reports", () => {
+    const st = useSessions.getState();
+    st.registerTunnelRuleSession("rule-a", "sess-1");
+    st.registerTunnelRuleSession("rule-stale", "sess-gone");
+    // The backend is the authority: rule-stale is not forwarding, so it
+    // must not survive reconciliation and keep reading as running.
+    st.reconcileTunnelRuleSessions([
+      { ruleId: "rule-a", sessionId: "sess-1" },
+      { ruleId: "rule-b", sessionId: "sess-2" },
+    ]);
+    expect(useSessions.getState().tunnelRuleSessions).toEqual({
+      "rule-a": "sess-1",
+      "rule-b": "sess-2",
+    });
+    // Anything reported running counts as having been active.
+    expect(useSessions.getState().tunnelEverActive).toEqual({
+      "rule-a": true,
+      "rule-b": true,
+    });
+  });
+
+  it("forgetting a rule drops both its session and its ever-active flag", () => {
+    const st = useSessions.getState();
+    st.registerTunnelRuleSession("rule-a", "sess-1");
+    st.markTunnelEverActive(["rule-a"]);
+    st.forgetTunnelRuleSession("rule-a");
+    expect(useSessions.getState().tunnelRuleSessions["rule-a"]).toBeUndefined();
+    expect(useSessions.getState().tunnelEverActive["rule-a"]).toBeUndefined();
   });
 
   it("adds a session and sets it active", () => {

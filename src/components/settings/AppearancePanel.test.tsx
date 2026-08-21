@@ -4,6 +4,13 @@ import { AppearancePanel } from "./AppearancePanel";
 import { useSettingsStore } from "../../state/settings";
 import { DEFAULT_SETTINGS } from "../../types/settings";
 
+vi.mock("../../ipc/local_pty", () => ({
+  // AppearancePanel enumerates shells on mount; jsdom has no Tauri bridge,
+  // and the unhandled rejection otherwise turns the whole run's exit code
+  // non-zero even when every test passes.
+  listAvailableShells: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("../../ipc/settings", () => ({
   loadSettings: vi.fn().mockResolvedValue(null),
   saveSettings: vi.fn().mockResolvedValue(undefined),

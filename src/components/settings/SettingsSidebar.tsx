@@ -3,7 +3,7 @@ import { useSettingsStore, useIconSizes } from "../../state/settings";
 import { SectionHeader } from "../SectionHeader";
 import { useT } from "../../i18n";
 
-type Section = "appearance" | "shortcuts" | "about" | "trusted-servers" | "logs";
+type Section = "appearance" | "shortcuts" | "about" | "trusted-servers" | "logs" | "advanced";
 
 interface Props {
   active: Section;
@@ -15,22 +15,20 @@ export function SettingsSidebar({ active, onSelect }: Props) {
   const iconSizes = useIconSizes();
   const reset = () => useSettingsStore.getState().reset();
 
-  function Row({ id, label, Icon, dim, onClick }: {
-    id: string; label: string; Icon: LucideIcon; dim?: boolean; onClick?: () => void;
+  function Row({ id, label, Icon, onClick }: {
+    id: string; label: string; Icon: LucideIcon; onClick?: () => void;
   }) {
     return (
       <div
         role="option"
         aria-selected={active === id}
-        onClick={dim ? undefined : onClick}
-        title={dim ? "Coming in v0.6" : undefined}
+        onClick={onClick}
         style={{
           display: "flex", alignItems: "center", gap: 8,
           padding: "7px 10px", margin: "0 4px", borderRadius: 4,
-          fontSize: "var(--font-ui-size)", color: dim ? "var(--text-3)" : "var(--text-1)",
+          fontSize: "var(--font-ui-size)", color: "var(--text-1)",
           background: active === id ? "var(--border)" : "transparent",
-          cursor: dim ? "not-allowed" : "pointer",
-          opacity: dim ? 0.4 : 1,
+          cursor: "pointer",
         }}
       >
         <Icon size={iconSizes.md} strokeWidth={1.8} style={{ flexShrink: 0 }} />
@@ -54,7 +52,8 @@ export function SettingsSidebar({ active, onSelect }: Props) {
         onClick={() => onSelect("trusted-servers")} />
       <Row id="logs" label={t("Logs")} Icon={FileText}
         onClick={() => onSelect("logs")} />
-      <Row id="advanced" label={t("Advanced")} Icon={Wrench} dim />
+      <Row id="advanced" label={t("Advanced")} Icon={Wrench}
+        onClick={() => onSelect("advanced")} />
       <Row id="about" label={t("About")} Icon={Info}
         onClick={() => onSelect("about")} />
       <div style={{ flex: 1 }} />

@@ -55,6 +55,8 @@ impl SshConnection {
 /// giving up. Windows' OS-level TCP timeout is 21–30s on an unresponsive host; we bound
 /// it here so the user sees "Connecting failed" quickly on a typo'd address instead of
 /// staring at a spinner for half a minute.
+/// Fallback budget for callers with no settings at hand (tests). The real
+/// value comes from `settings.advanced.connectTimeoutSecs`.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 enum AuthKind {
@@ -68,8 +70,26 @@ impl SshProtocol {
         port: u16,
         auth: AuthConfig,
         policy: Arc<dyn HostKeyPolicy>,
+        advanced: &crate::settings::AdvancedSettings,
     ) -> Result<SshConnection> {
-        let config = Arc::new(client::Config::default());
+        // keepalive_interval = None means "send no keepalives", which is
+        // what a 0 in the Advanced panel asks for. keepalive_max is the
+        // number of unanswered probes russh tolerates before it drops the
+        // transport, so a dead link surfaces in interval × max seconds.
+        let keepalive_interval = match advanced.keepalive_interval_secs {
+            0 => None,
+            secs => Some(Duration::from_secs(secs as u64)),
+        };
+        let config = Arc::new(client::Config {
+            keepalive_interval,
+            keepalive_max: advanced.keepalive_max as usize,
+            ..client::Config::default()
+        });
+        let connect_timeout = if advanced.connect_timeout_secs == 0 {
+            CONNECT_TIMEOUT
+        } else {
+            Duration::from_secs(advanced.connect_timeout_secs as u64)
+        };
         let rejected = Arc::new(AtomicBool::new(false));
         let handler = ClientHandler {
             host: host.to_string(),
@@ -78,7 +98,7 @@ impl SshProtocol {
             rejected: rejected.clone(),
         };
         let mut handle = tokio::time::timeout(
-            CONNECT_TIMEOUT,
+            connect_timeout,
             client::connect(config, (host, port), handler),
         )
         .await
@@ -865,7 +885,7 @@ kMIxPpuMqIv1f/8VHhjzAAAACXBsYW4tdGVzdAECAwQ=\n\
             username: "chen".into(),
             method: AuthMethod::Password("pw".into()),
         };
-        let mut conn = SshProtocol::connect("127.0.0.1", port, auth, Arc::new(AcceptAllPolicy))
+        let mut conn = SshProtocol::connect("127.0.0.1", port, auth, Arc::new(AcceptAllPolicy), &crate::settings::AdvancedSettings::default())
             .await
             .unwrap();
         let mut shell = conn.open_shell().await.unwrap();
@@ -891,7 +911,7 @@ kMIxPpuMqIv1f/8VHhjzAAAACXBsYW4tdGVzdAECAwQ=\n\
             },
         };
         let conn =
-            SshProtocol::connect("127.0.0.1", port, auth, Arc::new(AcceptAllPolicy)).await;
+            SshProtocol::connect("127.0.0.1", port, auth, Arc::new(AcceptAllPolicy), &crate::settings::AdvancedSettings::default()).await;
         assert!(conn.is_ok(), "key auth should succeed: {:?}", conn.err());
     }
 
@@ -915,7 +935,7 @@ kMIxPpuMqIv1f/8VHhjzAAAACXBsYW4tdGVzdAECAwQ=\n\
             method: AuthMethod::Password("pw".into()),
         };
         let res =
-            SshProtocol::connect("127.0.0.1", port, auth, Arc::new(RejectAll)).await;
+            SshProtocol::connect("127.0.0.1", port, auth, Arc::new(RejectAll), &crate::settings::AdvancedSettings::default()).await;
         assert!(
             res.is_err(),
             "connect must fail when policy rejects the host key"
