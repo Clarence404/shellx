@@ -8,7 +8,13 @@ use tauri::State;
 
 #[tauri::command]
 pub async fn load_settings(store: State<'_, SettingsStore>) -> Result<Option<Settings>> {
-    store.load()
+    store.load().map_err(|e| {
+        crate::log_error!(
+            crate::logs::categories::APP, "settings could not be read",
+            "error": e.to_string(),
+        );
+        e
+    })
 }
 
 #[derive(Deserialize)]
@@ -21,5 +27,14 @@ pub async fn save_settings(
     args: SaveSettingsArgs,
     store: State<'_, SettingsStore>,
 ) -> Result<()> {
-    store.save(&args.settings)
+    // A settings write that fails leaves the UI showing the new value and
+    // the disk holding the old one — worth a line even though the command
+    // does surface the error to the caller.
+    store.save(&args.settings).map_err(|e| {
+        crate::log_error!(
+            crate::logs::categories::APP, "settings could not be saved",
+            "error": e.to_string(),
+        );
+        e
+    })
 }

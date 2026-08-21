@@ -70,9 +70,33 @@ pub async fn open_connection(
         },
     };
     let policy = Arc::new(hostkeys::TofuPolicy { app: app.clone() });
-    let info = mgr
+    let auth_kind = if matches!(auth.method, AuthMethod::Key { .. }) { "publickey" } else { "password" };
+    crate::log_info!(
+        crate::logs::categories::SESSION,
+        "opening ssh connection",
+        "host": args.host,
+        "port": args.port,
+        "user": args.username,
+        "auth": auth_kind,
+    );
+    let info = match mgr
         .open_connection(&args.host, args.port, auth, args.label, args.host_id, policy)
-        .await?;
+        .await
+    {
+        Ok(info) => info,
+        Err(e) => {
+            crate::log_error!(
+                crate::logs::categories::SESSION,
+                "ssh connection failed",
+                "host": args.host,
+                "port": args.port,
+                "user": args.username,
+                "auth": auth_kind,
+                "error": e.to_string(),
+            );
+            return Err(e);
+        }
+    };
 
     // Determine effective connection_mode: prefer the stored host's mode when
     // host_id is set; otherwise fall back to args.connection_mode or the
@@ -85,13 +109,37 @@ pub async fn open_connection(
         args.connection_mode.clone().unwrap_or_else(|| "terminal_only".into())
     };
 
+    crate::log_info!(
+        crate::logs::categories::SESSION,
+        "ssh connection established",
+        "session": info.id.to_string(),
+        "host": args.host,
+        "mode": mode,
+    );
+
     match mode.as_str() {
         "tunnels_only" => {
             // No shell. Start all enabled tunnels.
             if let Some(hid) = args.host_id {
                 let rules = tunnel_store.list_for_host(hid).await.unwrap_or_default();
-                for rule in rules.into_iter().filter(|r| r.enabled) {
-                    let _ = mgr.open_tunnel(info.id, rule.id.to_string(), rule.local_port, rule.remote_host, rule.remote_port, rule.bind_all, app.clone()).await;
+                let enabled: Vec<_> = rules.into_iter().filter(|r| r.enabled).collect();
+                crate::log_info!(
+                    crate::logs::categories::SESSION,
+                    "tunnels-only session: opening stored rules",
+                    "session": info.id.to_string(),
+                    "count": enabled.len(),
+                );
+                for rule in enabled {
+                    let rule_id = rule.id.to_string();
+                    if let Err(e) = mgr.open_tunnel(info.id, rule_id.clone(), rule.local_port, rule.remote_host, rule.remote_port, rule.bind_all, app.clone()).await {
+                        crate::log_error!(
+                            crate::logs::categories::TUNNEL,
+                            "stored rule failed to open on connect",
+                            "session": info.id.to_string(),
+                            "rule_id": rule_id,
+                            "error": e.to_string(),
+                        );
+                    }
                 }
             }
             // There is no ShellDriver for tunnels_only, so nothing would
@@ -125,6 +173,11 @@ pub async fn open_connection(
                             }
                             _ => {
                                 // Transport dead or timed out; trigger EV_CLOSED.
+                                crate::log_warn!(
+                                    crate::logs::categories::SESSION,
+                                    "tunnels-only transport failed keepalive probe, closing session",
+                                    "session": monitor_id.to_string(),
+                                );
                                 let _ = mgr_monitor.close(monitor_id).await;
                                 break;
                             }
@@ -136,19 +189,47 @@ pub async fn open_connection(
         "term_tunnels" => {
             // Shell + tunnels.
             if let Err(e) = mgr.open_shell(info.id).await {
+                crate::log_error!(
+                    crate::logs::categories::SESSION,
+                    "shell channel failed to open, closing session",
+                    "session": info.id.to_string(),
+                    "error": e.to_string(),
+                );
                 let _ = mgr.close(info.id).await;
                 return Err(e);
             }
             if let Some(hid) = args.host_id {
                 let rules = tunnel_store.list_for_host(hid).await.unwrap_or_default();
-                for rule in rules.into_iter().filter(|r| r.enabled) {
-                    let _ = mgr.open_tunnel(info.id, rule.id.to_string(), rule.local_port, rule.remote_host, rule.remote_port, rule.bind_all, app.clone()).await;
+                let enabled: Vec<_> = rules.into_iter().filter(|r| r.enabled).collect();
+                crate::log_info!(
+                    crate::logs::categories::SESSION,
+                    "opening stored tunnel rules alongside shell",
+                    "session": info.id.to_string(),
+                    "count": enabled.len(),
+                );
+                for rule in enabled {
+                    let rule_id = rule.id.to_string();
+                    if let Err(e) = mgr.open_tunnel(info.id, rule_id.clone(), rule.local_port, rule.remote_host, rule.remote_port, rule.bind_all, app.clone()).await {
+                        crate::log_error!(
+                            crate::logs::categories::TUNNEL,
+                            "stored rule failed to open on connect",
+                            "session": info.id.to_string(),
+                            "rule_id": rule_id,
+                            "error": e.to_string(),
+                        );
+                    }
                 }
             }
         }
         _ => {
             // terminal_only (default): open shell only, no tunnels.
             if let Err(e) = mgr.open_shell(info.id).await {
+                crate::log_error!(
+                    crate::logs::categories::SESSION,
+                    "shell channel failed to open, closing session",
+                    "session": info.id.to_string(),
+                    "error": e.to_string(),
+                );
                 // open_connection already parked a LiveConnection (with its
                 // authenticated transport + keepalive) in the map; without this,
                 // a shell-open failure (e.g. sshd rejecting the shell subsystem)
@@ -172,6 +253,12 @@ pub async fn open_connection(
         while let Some(chunk) = rx.recv().await {
             let _ = app_clone.emit(EV_DATA, DataEvent { id, data: chunk });
         }
+        crate::log_info!(
+            crate::logs::categories::SESSION,
+            "session stream ended",
+            "session": id.to_string(),
+            "reason": "eof",
+        );
         let _ = app_clone.emit(
             EV_CLOSED,
             ClosedEvent {
@@ -228,6 +315,11 @@ pub struct CloseArgs {
 
 #[tauri::command]
 pub async fn close_connection(args: CloseArgs, mgr: State<'_, SessionManager>) -> Result<()> {
+    crate::log_info!(
+        crate::logs::categories::SESSION,
+        "closing session on request",
+        "session": args.id.to_string(),
+    );
     mgr.close(args.id).await
 }
 

@@ -55,14 +55,23 @@ export async function logsDiskEnabled(): Promise<boolean> {
   return invoke("logs_disk_enabled");
 }
 
-/** Push a frontend-side event into the shared log stream. */
+/** Push a frontend-side event into the shared log stream.
+ *
+ *  Never rejects: callers fire these off with `void logPush(...)` from
+ *  inside unrelated flows, and a logging round-trip that failed (bridge
+ *  not up yet, backend gone) must not surface as an unhandled rejection
+ *  in the middle of a transfer or a reconnect. */
 export async function logPush(args: {
   level: LogLevel;
   category: string;
   message: string;
   fields?: Record<string, unknown>;
 }): Promise<void> {
-  return invoke("logs_push", { args: { ...args, fields: args.fields ?? {} } });
+  try {
+    await invoke("logs_push", { args: { ...args, fields: args.fields ?? {} } });
+  } catch {
+    /* logging must never break the caller */
+  }
 }
 
 export function onLogEntry(cb: (entry: LogEntry) => void): Promise<UnlistenFn> {

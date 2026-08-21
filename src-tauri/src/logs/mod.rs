@@ -71,6 +71,7 @@ pub mod categories {
     pub const TUNNEL: &str = "tunnel";
     pub const SESSION: &str = "session";
     pub const SFTP: &str = "sftp";
+    pub const TRANSFER: &str = "transfer";
     pub const MONITOR: &str = "monitor";
     pub const HOST: &str = "host";
     pub const UPDATER: &str = "updater";
@@ -386,6 +387,56 @@ fn prune_old_files(logs_dir: &PathBuf) {
         // Simple lexical compare works because all names are YYYY-MM-DD.
         if stem < cutoff_key.as_str() {
             let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every category the app emits under. The Logs panel renders one
+    /// filter chip per entry (`CATEGORIES` in
+    /// `src/components/settings/LogsPanel.tsx`), so a category added here
+    /// needs a chip added there — this list is the checkable half.
+    const ALL: [&str; 9] = [
+        categories::TUNNEL,
+        categories::SESSION,
+        categories::SFTP,
+        categories::TRANSFER,
+        categories::MONITOR,
+        categories::HOST,
+        categories::UPDATER,
+        categories::KEYCHAIN,
+        categories::APP,
+    ];
+
+    #[test]
+    fn every_category_is_a_distinct_lowercase_slug() {
+        for c in ALL {
+            assert!(!c.is_empty(), "category must not be empty");
+            assert_eq!(c, c.to_ascii_lowercase(), "category must be lowercase: {c}");
+        }
+        let mut sorted = ALL.to_vec();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(sorted.len(), ALL.len(), "category slugs must be unique");
+    }
+
+    #[test]
+    fn category_filter_isolates_each_subsystem() {
+        let store = LogsStore::new(None);
+        for (i, cat) in ALL.iter().enumerate() {
+            store.push(Level::Info, cat, format!("event {i}"), serde_json::json!({}));
+        }
+        for cat in ALL {
+            let filter = LogFilter {
+                categories: vec![cat.to_string()],
+                ..Default::default()
+            };
+            let got = store.snapshot(&filter, 100, None);
+            assert_eq!(got.len(), 1, "filtering on {cat} must return only its own entry");
+            assert_eq!(got[0].category, cat);
         }
     }
 }

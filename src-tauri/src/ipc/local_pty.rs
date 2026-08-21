@@ -138,9 +138,25 @@ pub async fn open_local_terminal(
             .unwrap_or_else(default_shell),
     );
 
-    let info = mgr
+    let info = match mgr
         .open_local_session(&shell, "Local Terminal".into(), app.clone())
-        .await?;
+        .await
+    {
+        Ok(info) => {
+            crate::log_info!(
+                crate::logs::categories::SESSION, "local terminal opened",
+                "session": info.id.to_string(), "shell": shell,
+            );
+            info
+        }
+        Err(e) => {
+            crate::log_error!(
+                crate::logs::categories::SESSION, "local terminal failed to open",
+                "shell": shell, "error": e.to_string(),
+            );
+            return Err(e);
+        }
+    };
 
     let id = info.id;
     let mut rx = mgr.subscribe(id).await?;
@@ -149,6 +165,10 @@ pub async fn open_local_terminal(
         while let Some(chunk) = rx.recv().await {
             let _ = app_clone.emit(EV_DATA, DataEvent { id, data: chunk });
         }
+        crate::log_info!(
+            crate::logs::categories::SESSION, "local terminal exited",
+            "session": id.to_string(),
+        );
         let _ = app_clone.emit(EV_CLOSED, ClosedEvent { id, reason: "eof".into() });
     });
 
@@ -165,5 +185,9 @@ pub async fn close_local_terminal(
     args: CloseLocalArgs,
     mgr: State<'_, SessionManager>,
 ) -> Result<()> {
+    crate::log_info!(
+        crate::logs::categories::SESSION, "closing local terminal on request",
+        "session": args.id.to_string(),
+    );
     mgr.close(args.id).await
 }

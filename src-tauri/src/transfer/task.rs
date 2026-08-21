@@ -118,9 +118,42 @@ async fn finish(app: &AppHandle, tasks: &TaskMap, id: TransferId, result: Result
             error: e.to_string(),
         },
     };
-    if let Some(t) = tasks.lock().await.get_mut(&id) {
-        t.info.state = final_state.clone();
-        t.cancel = None;
+    let summary = {
+        let mut guard = tasks.lock().await;
+        guard.get_mut(&id).map(|t| {
+            t.info.state = final_state.clone();
+            t.cancel = None;
+            (
+                format!("{:?}", t.info.direction).to_lowercase(),
+                t.info.local_path.clone(),
+                t.info.remote_path.clone(),
+                t.info.bytes_done,
+                t.info.total_bytes,
+            )
+        })
+    };
+    // One line per transfer, at the level its outcome deserves — this is
+    // what the Logs panel shows when a queue entry ends up red.
+    if let Some((direction, local, remote, done, total)) = summary {
+        match &final_state {
+            TransferState::Done => crate::log_info!(
+                crate::logs::categories::TRANSFER, "transfer finished",
+                "transfer": id.to_string(), "direction": direction,
+                "local": local, "remote": remote, "bytes": done,
+            ),
+            TransferState::Cancelled => crate::log_warn!(
+                crate::logs::categories::TRANSFER, "transfer cancelled",
+                "transfer": id.to_string(), "direction": direction,
+                "local": local, "remote": remote, "bytes": done, "total_bytes": total,
+            ),
+            TransferState::Failed { error } => crate::log_error!(
+                crate::logs::categories::TRANSFER, "transfer failed",
+                "transfer": id.to_string(), "direction": direction,
+                "local": local, "remote": remote, "bytes": done, "total_bytes": total,
+                "error": error,
+            ),
+            _ => {}
+        }
     }
     let _ = app.emit(
         EV_DONE,

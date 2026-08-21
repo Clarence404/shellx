@@ -392,12 +392,20 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
     // One-time init: static system info + Linux platform check in one round trip.
     let init = match exec_cmd(&handle, INIT_CMD).await {
         Ok(o) => o,
-        Err(_) => {
+        Err(e) => {
+            crate::log_warn!(
+                crate::logs::categories::MONITOR, "init probe failed, host reported unsupported",
+                "session": conn_id, "error": e.to_string(),
+            );
             let _ = app.emit(EV_UNSUPPORTED, &conn_id);
             return;
         }
     };
     if extract_section(&init, "STAT").trim().is_empty() {
+        crate::log_warn!(
+            crate::logs::categories::MONITOR, "host has no /proc/stat, monitoring unsupported",
+            "session": conn_id,
+        );
         let _ = app.emit(EV_UNSUPPORTED, &conn_id);
         return;
     }
@@ -413,8 +421,15 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
     loop {
         let output = match exec_cmd(&handle, POLL_CMD).await {
             Ok(o) => { err_count = 0; o }
-            Err(_) => {
+            Err(e) => {
                 err_count += 1;
+                // Three consecutive failures ends the loop — log each one so
+                // the Logs panel shows why the Monitor tab went quiet.
+                crate::log_warn!(
+                    crate::logs::categories::MONITOR, "poll failed",
+                    "session": conn_id, "consecutive_failures": err_count,
+                    "giving_up": err_count >= 3, "error": e.to_string(),
+                );
                 if err_count >= 3 { break; }
                 sleep(interval).await;
                 continue;

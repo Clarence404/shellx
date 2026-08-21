@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { check as updaterCheck, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { logPush } from "../ipc/logs";
 
 export type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "upToDate" | "error";
 
@@ -34,18 +35,39 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
       if (upd) {
         pending = upd;
         set({ status: "available", version: upd.version, notes: upd.body ?? null });
+        void logPush({
+          level: "info", category: "updater",
+          message: `update available: ${upd.version}`,
+          fields: { version: upd.version, silent },
+        });
       } else {
         pending = null;
         set({ status: "upToDate" });
+        void logPush({
+          level: "info", category: "updater",
+          message: "no update available, already current",
+          fields: { silent },
+        });
       }
     } catch (e) {
       pending = null;
       if (silent) {
-        // Dev builds and offline starts land here — stay quiet.
+        // Dev builds and offline starts land here — stay quiet in the UI,
+        // but still leave a debug trace in the log stream.
         console.warn("shellx: update check failed:", e);
         set({ status: "idle" });
+        void logPush({
+          level: "debug", category: "updater",
+          message: "silent update check failed",
+          fields: { error: String(e) },
+        });
       } else {
         set({ status: "error", error: String(e) });
+        void logPush({
+          level: "error", category: "updater",
+          message: "update check failed",
+          fields: { error: String(e) },
+        });
       }
     }
   },
@@ -53,6 +75,12 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
   async downloadAndInstall() {
     if (!pending) return;
     set({ status: "downloading", progress: 0, received: 0, total: 0, error: null });
+    const target = pending.version;
+    void logPush({
+      level: "info", category: "updater",
+      message: `downloading update ${target}`,
+      fields: { version: target },
+    });
     try {
       let bytesTotal = 0;
       let bytesReceived = 0;
@@ -68,9 +96,19 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
           });
         }
       });
+      void logPush({
+        level: "info", category: "updater",
+        message: `update ${target} installed, relaunching`,
+        fields: { version: target, bytes: bytesReceived },
+      });
       await relaunch();
     } catch (e) {
       set({ status: "error", error: String(e) });
+      void logPush({
+        level: "error", category: "updater",
+        message: `update ${target} failed to install`,
+        fields: { version: target, error: String(e) },
+      });
     }
   },
 }));

@@ -44,6 +44,11 @@ const CHALLENGE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(12
 impl HostKeyPolicy for TofuPolicy {
     async fn verify(&self, host: &str, port: u16, key: &PublicKey) -> bool {
         let Some(path) = hostkeys::default_path() else {
+            crate::log_error!(
+                crate::logs::categories::SESSION,
+                "no known_hosts path available, refusing the host key",
+                "host": host, "port": port,
+            );
             return false;
         };
         let verdict = hostkeys::check(host, port, key, &path);
@@ -73,6 +78,15 @@ impl HostKeyPolicy for TofuPolicy {
         let accepted = matches!(
             tokio::time::timeout(CHALLENGE_TIMEOUT, rx).await,
             Ok(Ok(true))
+        );
+        crate::log_warn!(
+            crate::logs::categories::SESSION,
+            if accepted { "host key accepted by the user" } else { "host key rejected or the prompt timed out" },
+            "host": host, "port": port,
+            "verdict": verdict_str,
+            "key_type": key.algorithm().to_string(),
+            "fingerprint": format!("{}", key.fingerprint(russh::keys::HashAlg::Sha256)),
+            "accepted": accepted,
         );
         if accepted {
             let _ = hostkeys::learn(host, port, key, &path);

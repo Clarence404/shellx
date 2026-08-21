@@ -41,6 +41,16 @@ fn main() {
             let logs_store = shellx::logs::init(logs_config_dir.clone());
             use tauri::Manager;
             app.handle().manage(logs_store);
+            // First app-category line of every run: what started, where its
+            // config lives, and on what. Makes a jsonl file self-describing.
+            shellx::log_info!(
+                shellx::logs::categories::APP, "shellx started",
+                "version": env!("CARGO_PKG_VERSION"),
+                "os": std::env::consts::OS,
+                "arch": std::env::consts::ARCH,
+                "config_dir": logs_config_dir.display().to_string(),
+                "debug_build": cfg!(debug_assertions),
+            );
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())

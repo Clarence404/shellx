@@ -10,7 +10,9 @@ import {
 } from "../../ipc/logs";
 
 const LEVELS: LogLevel[] = ["debug", "info", "warn", "error"];
-const CATEGORIES = ["tunnel", "session", "sftp", "monitor", "host", "updater", "keychain", "app"];
+const CATEGORIES = [
+  "tunnel", "session", "sftp", "transfer", "monitor", "host", "updater", "keychain", "app",
+];
 
 export function LogsPanel() {
   const t = useT();

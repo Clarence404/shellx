@@ -94,6 +94,20 @@ pub async fn save_host(
     if let Some(pp) = args.passphrase.filter(|p| !p.is_empty()) {
         let _ = keychain.set_passphrase(record.id, &pp);
     }
+    crate::log_info!(
+        crate::logs::categories::HOST, "host saved",
+        "host_id": record.id.to_string(),
+        "label": record.label,
+        "target": format!("{}:{}", record.host, record.port),
+        "auth": record.auth_method,
+        "mode": record.connection_mode,
+    );
+    if !password_stored {
+        crate::log_warn!(
+            crate::logs::categories::KEYCHAIN, "password could not be stored in the OS keychain",
+            "host_id": record.id.to_string(),
+        );
+    }
     Ok(HostSaveResult { host: record, password_stored })
 }
 
@@ -137,6 +151,20 @@ pub async fn update_host(
         Some(Some(pp)) if !pp.is_empty() => { let _ = keychain.set_passphrase(args.id, &pp).is_ok(); }
         Some(Some(_)) => {}  // empty string — no-op
     }
+    crate::log_info!(
+        crate::logs::categories::HOST, "host updated",
+        "host_id": updated.id.to_string(),
+        "label": updated.label,
+        "target": format!("{}:{}", updated.host, updated.port),
+        "auth": updated.auth_method,
+        "mode": updated.connection_mode,
+    );
+    if !password_stored {
+        crate::log_warn!(
+            crate::logs::categories::KEYCHAIN, "keychain password update did not land",
+            "host_id": updated.id.to_string(),
+        );
+    }
     Ok(HostSaveResult { host: updated, password_stored })
 }
 
@@ -149,6 +177,10 @@ pub async fn delete_host(
     store.delete(args.id).await?;
     let _ = keychain.delete_password(args.id);
     let _ = keychain.delete_passphrase(args.id);
+    crate::log_info!(
+        crate::logs::categories::HOST, "host deleted, keychain entries removed",
+        "host_id": args.id.to_string(),
+    );
     Ok(())
 }
 
@@ -184,7 +216,20 @@ pub async fn set_host_passphrase(
     args: SetHostPassphraseArgs,
     keychain: State<'_, KeychainStore>,
 ) -> crate::error::Result<()> {
-    keychain.set_passphrase(args.id, &args.passphrase)
+    // The passphrase value itself never reaches the log — only the host it
+    // belongs to and whether the keychain accepted it.
+    let outcome = keychain.set_passphrase(args.id, &args.passphrase);
+    match &outcome {
+        Ok(()) => crate::log_info!(
+            crate::logs::categories::KEYCHAIN, "key passphrase stored",
+            "host_id": args.id.to_string(),
+        ),
+        Err(e) => crate::log_error!(
+            crate::logs::categories::KEYCHAIN, "key passphrase could not be stored",
+            "host_id": args.id.to_string(), "error": e.to_string(),
+        ),
+    }
+    outcome
 }
 
 #[tauri::command]

@@ -22,6 +22,11 @@ pub async fn monitor_start(
     let interval = interval_secs
         .map(|s| Duration::from_secs(s.max(1)))
         .unwrap_or(DEFAULT_POLL_INTERVAL);
+    crate::log_info!(
+        crate::logs::categories::MONITOR, "monitor poll loop started",
+        "session": id.to_string(),
+        "interval_secs": interval.as_secs(),
+    );
     mgr_state.start(id, ssh_handle, app, interval).await;
     Ok(())
 }
@@ -33,6 +38,10 @@ pub async fn monitor_stop(
 ) -> Result<()> {
     let id = uuid::Uuid::parse_str(&conn_id)
         .map_err(|e| Error::Protocol(format!("invalid conn_id: {e}")))?;
+    crate::log_info!(
+        crate::logs::categories::MONITOR, "monitor poll loop stopped",
+        "session": id.to_string(),
+    );
     mgr_state.stop(id).await;
     Ok(())
 }

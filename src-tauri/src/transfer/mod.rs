@@ -143,6 +143,11 @@ impl TransferManager {
                 .map(|(id, _)| *id)
                 .collect()
         };
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "cancelling transfer group",
+            "group": group_id.to_string(),
+            "children": ids.len(),
+        );
         for id in ids {
             let _ = self.cancel(id).await;
         }
@@ -212,6 +217,10 @@ impl TransferManager {
         if let Some(t) = self.tasks.lock().await.get_mut(&id) {
             t.info.state = TransferState::Paused;
         }
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "transfer paused",
+            "transfer": id.to_string(),
+        );
         let _ = app.emit(
             crate::transfer::task::EV_STATE,
             crate::transfer::task::StateEvent {
@@ -240,6 +249,10 @@ impl TransferManager {
         if let Some(t) = self.tasks.lock().await.get_mut(&id) {
             t.info.state = TransferState::Active;
         }
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "transfer resumed",
+            "transfer": id.to_string(),
+        );
         let _ = app.emit(
             crate::transfer::task::EV_STATE,
             crate::transfer::task::StateEvent {
@@ -295,6 +308,13 @@ impl TransferManager {
                 pause_flag: pause_flag.clone(),
             },
         );
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "upload queued",
+            "transfer": id.to_string(),
+            "session": conn_id.to_string(),
+            "local": info.local_path,
+            "remote": info.remote_path,
+        );
         let _ = app.emit(EV_STARTED, &info);
         let tasks_clone = self.tasks.clone();
         tokio::spawn(task::run_upload(
@@ -344,6 +364,13 @@ impl TransferManager {
                 cancel: Some(tx),
                 pause_flag: pause_flag.clone(),
             },
+        );
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "download queued",
+            "transfer": id.to_string(),
+            "session": conn_id.to_string(),
+            "remote": info.remote_path,
+            "local": info.local_path,
         );
         let _ = app.emit(EV_STARTED, &info);
         let tasks_clone = self.tasks.clone();
