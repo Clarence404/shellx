@@ -1,9 +1,11 @@
 import { Plus, ChevronLeft, ChevronRight, List, TerminalSquare, Plug } from "lucide-react";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { HostContextMenu, type MenuItem } from "./HostContextMenu";
 import { useHostsStore } from "../state/hosts";
 import { usePaneDrag } from "../state/paneDrag";
+import { useSessions } from "../state/sessions";
+import { paneIds } from "../state/paneTree";
 import type { HostInfo } from "../types/host";
 import { useT } from "../i18n";
 
@@ -42,6 +44,14 @@ export function TabBar({
 }: Props) {
   const t = useT();
   const savedHosts = useHostsStore((s) => s.hosts);
+  // Which sessions are on screen right now. With a split up, several tabs
+  // are visible at once and only one of them has the focus, so the strip
+  // has three states to tell apart rather than two.
+  const layout = useSessions((s) => s.layout);
+  const shownIds = useMemo(
+    () => new Set(layout ? paneIds(layout) : activeTabId ? [activeTabId] : []),
+    [layout, activeTabId],
+  );
   const stripRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef<HTMLDivElement | null>(null);
   const listBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -258,8 +268,12 @@ export function TabBar({
           scrollbarWidth: "none",
         }}
       >
-        {tabs.map((t) => (
-          <div key={t.id} role="tab" aria-selected={t.id === activeTabId}
+        {tabs.map((t) => {
+          const focused = t.id === activeTabId;
+          const onScreen = shownIds.has(t.id);
+          return (
+          <div key={t.id} role="tab" aria-selected={focused}
+            data-shown={onScreen ? "true" : undefined}
             ref={t.id === activeTabId ? activeRef : undefined}
             title={t.title}
             onClick={() => onSelect(t.id)}
@@ -277,8 +291,16 @@ export function TabBar({
             }}
             style={{
               padding: "6px 12px", borderRadius: "5px 5px 0 0", fontSize: "var(--font-ui-size)",
-              background: t.id === activeTabId ? "var(--panel-2)" : "transparent",
-              color: t.id === activeTabId ? "var(--text-1)" : "var(--text-3)",
+              // Three states, and the focused one has to win at a glance:
+              // a filled ground plus a 2px accent bar under it. In light
+              // themes panel-2 alone is within a hair of the titlebar's
+              // panel-1, which is why this used to read as "no state at all".
+              background: focused ? "var(--border)" : onScreen ? "var(--panel-2)" : "transparent",
+              boxShadow: focused
+                ? "inset 0 -2px 0 var(--accent)"
+                : onScreen ? "inset 0 -2px 0 var(--border-hi)" : "none",
+              color: focused ? "var(--text-1)" : onScreen ? "var(--text-2)" : "var(--text-3)",
+              fontWeight: focused ? 500 : 400,
               display: "flex", alignItems: "center", gap: 8,
               cursor: "pointer", flexShrink: 0,
               whiteSpace: "nowrap", userSelect: "none",
@@ -327,9 +349,10 @@ export function TabBar({
               data-tab-close
               onClick={(e) => { e.stopPropagation(); onClose(t.id); }}
               aria-label={`close ${t.title}`}
-              style={{ opacity: 0.6, fontSize: 12, flexShrink: 0 }}>×</span>
+              style={{ opacity: focused ? 0.85 : 0.6, fontSize: 12, flexShrink: 0 }}>×</span>
           </div>
-        ))}
+          );
+        })}
         {onNewConnection && (
           <button
             ref={plusBtnRef}
