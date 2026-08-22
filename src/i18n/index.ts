@@ -34,6 +34,10 @@ const zh: Record<string, string> = {
   "Close tab": "关闭标签页",
   "Close others": "关闭其他",
   "Close all": "关闭全部",
+  "Duplicate host": "复制主机",
+  "Rename tab…": "重命名标签…",
+  "Copy address": "复制主机地址",
+  "Close other": "关闭其他",
   "to the left": "个左侧标签",
   "to the right": "个右侧标签",
 

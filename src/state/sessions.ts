@@ -31,6 +31,9 @@ interface SessionsState {
   endConnecting: (hostId: string) => void;
 
   setActivity: (id: ConnectionId, activity: ActivityKind) => void;
+  /** Rename a tab. Display only — the saved host keeps its own label, so
+   *  this dies with the session. */
+  renameSession: (id: ConnectionId, label: string) => void;
   markSessionClosed: (id: ConnectionId) => void;
 
   tunnelStatuses: Record<string, TunnelStatus[]>;
@@ -116,6 +119,11 @@ export const useSessions = create<SessionsState>((set, get) => ({
 
   setActivity: (id, activity) =>
     set((st) => ({ activeActivity: { ...st.activeActivity, [id]: activity } })),
+
+  renameSession: (id, label) =>
+    set((st) => ({
+      sessions: st.sessions.map((s) => (s.id === id ? { ...s, label: label } : s)),
+    })),
 
   markSessionClosed: (id) =>
     set((st) => {

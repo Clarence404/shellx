@@ -14,6 +14,7 @@ interface Props {
   onTabsClose?: (ids: string[]) => void;
   onNewConnection?: () => void;
   onNewLocalTerminal?: () => void;
+  onRename?: (id: string, title: string) => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
   onOpenPalette?: () => void;
 }
@@ -32,7 +33,7 @@ const MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
  * the window by any non-interactive area; TabBar / logo / controls are
  * interactive and NOT drag regions.
  */
-export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection, onNewLocalTerminal, onConnectHost, onOpenPalette }: Props) {
+export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection, onNewLocalTerminal, onRename, onConnectHost, onOpenPalette }: Props) {
   const [maximized, setMaximized] = useState(false);
   const t = useT();
   const themeId = useSettingsStore((s) => s.themeId);
@@ -94,6 +95,7 @@ export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClo
           onCloseTabs={onTabsClose}
           onNewConnection={onNewConnection}
           onNewLocalTerminal={onNewLocalTerminal}
+          onRename={onRename}
           onConnectHost={onConnectHost}
         />
       </div>

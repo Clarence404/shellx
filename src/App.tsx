@@ -455,7 +455,9 @@ export function App() {
     }
   }
 
-  const tabs = sessions.map((s) => ({ id: s.id, title: s.label, state: s.state, kind: s.kind }));
+  const tabs = sessions.map((s) => ({
+    id: s.id, title: s.label, state: s.state, kind: s.kind, hostId: s.host_id,
+  }));
 
   async function handleNewLocalTerminal() {
     try {
@@ -486,6 +488,7 @@ export function App() {
         onNewLocalTerminal={() => void handleNewLocalTerminal()}
         onEditHost={(host) => setDialog({ mode: "edit", initial: host })}
         onConnectHost={(host, forceNew) => void handleConnectSavedHost(host, forceNew)}
+        onRename={(id, title) => useSessions.getState().renameSession(id, title)}
       >
         {/* Tab body stays mounted whenever activeId exists — hide via
             display:none when the user is on a rail-level view (Files /

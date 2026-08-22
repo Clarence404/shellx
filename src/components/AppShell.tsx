@@ -14,6 +14,7 @@ interface Props {
   onTabsClose?: (ids: string[]) => void;
   onNewConnection?: () => void;
   onNewLocalTerminal?: () => void;
+  onRename?: (id: string, title: string) => void;
   onEditHost?: (host: HostInfo) => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
   onOpenPalette?: () => void;
@@ -33,6 +34,7 @@ export function AppShell({
   onTabsClose,
   onNewConnection,
   onNewLocalTerminal,
+  onRename,
   onEditHost,
   onConnectHost,
   onOpenPalette,
@@ -47,6 +49,7 @@ export function AppShell({
         onTabsClose={onTabsClose}
         onNewConnection={onNewConnection}
         onNewLocalTerminal={onNewLocalTerminal}
+        onRename={onRename}
         onConnectHost={onConnectHost}
         onOpenPalette={onOpenPalette}
       />
