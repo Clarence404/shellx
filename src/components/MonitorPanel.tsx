@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useMonitorStore } from "../state/monitor";
 import { startMonitor, stopMonitor, onMonitorSnapshot, onMonitorUnsupported } from "../ipc/monitor";
 import { HostInfoCard } from "./monitor/HostInfoCard";
-import { useTopRightGutter } from "./paneChrome";
+import { ActivitySwitcherSlot } from "./paneChrome";
 import { PerformanceTab } from "./monitor/PerformanceTab";
 import { ProcessTab } from "./monitor/ProcessTab";
 import { DiskTab } from "./monitor/DiskTab";
@@ -23,7 +23,6 @@ interface Props { connectionId: string }
 export function MonitorPanel({ connectionId }: Props) {
   const t = useT();
   const [subTab, setSubTab] = useState<SubTab>("performance");
-  const topRightGutter = useTopRightGutter();
   const [unsupported, setUnsupported] = useState(false);
   const [intervalSecs, setIntervalSecs] = useState<IntervalSecs>(2);
   const snapshots = useMonitorStore((s) => s.snapshots[connectionId]) ?? EMPTY_SNAPSHOTS;
@@ -89,15 +88,11 @@ export function MonitorPanel({ connectionId }: Props) {
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--panel-2)", overflow: "hidden" }}>
-      {/* The floating switcher hovers over this card's top-right corner
-          when the area isn't split — leave it room. */}
-      <div style={{ paddingRight: topRightGutter }}>
-        <HostInfoCard
-          system={latest?.system ?? EMPTY_SYSTEM}
-          memory={latest?.memory ?? EMPTY_MEMORY}
-          connectionId={connectionId}
-        />
-      </div>
+      <HostInfoCard
+        system={latest?.system ?? EMPTY_SYSTEM}
+        memory={latest?.memory ?? EMPTY_MEMORY}
+        connectionId={connectionId}
+      />
 
       {/* Sub-tab bar */}
       <div style={{
@@ -139,6 +134,7 @@ export function MonitorPanel({ connectionId }: Props) {
             <option key={s} value={s}>{s}s</option>
           ))}
         </select>
+              <ActivitySwitcherSlot sessionId={connectionId} />
       </div>
 
       {/* Sub-tab content */}

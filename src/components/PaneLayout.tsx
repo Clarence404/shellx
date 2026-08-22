@@ -6,6 +6,7 @@ import type { DragTarget } from "../state/paneDrag";
 import * as tree from "../state/paneTree";
 import type { DropZone, PaneNode } from "../state/paneTree";
 import { placeSurfaces, surfaceHost } from "./SessionSurfaces";
+import { ActivitySwitcher } from "./paneChrome";
 import { useHostsStore } from "../state/hosts";
 import { activitiesFor, clampActivity } from "../state/activities";
 import type { ActivityKind } from "../types/connection";
@@ -339,6 +340,11 @@ function Pane({
   registerSlot: (sessionId: string, el: HTMLElement | null) => void;
 }) {
   const session = useSessions((s) => s.sessions.find((x) => x.id === sessionId));
+  const wanted = useSessions((s) => s.activeActivity[sessionId]);
+  const hosts = useHostsStore((s) => s.hosts);
+  const mode = hosts.find((h) => h.id === (session?.host_id ?? ""))?.connection_mode
+    ?? "terminal_only";
+  const activity = clampActivity(wanted, activitiesFor(session, mode));
   const label = session?.label ?? sessionId;
   const closed = session?.state === "closed";
   const [hover, setHover] = useState(false);
@@ -370,18 +376,19 @@ function Pane({
         ref={(el) => registerSlot(sessionId, el)}
         style={{ flex: 1, minHeight: 0, position: "relative" }}
       />
-      {/* Unsplit there is no header to hold the switcher, so it floats over
-          the body's top-right corner: faint until the pointer is in the
-          area, solid once it is. Costs no vertical space at all. */}
-      {!split && (
+      {/* Files, tunnels and monitor dock the switcher in their own header
+          row (see ActivitySwitcherSlot). A terminal has no such row, so
+          here it floats over the top-right corner — same buttons, same
+          gaps, same corner, faint until the pointer is in the pane. */}
+      {activity === "terminal" && (
         <div
           style={{
-            position: "absolute", top: 5, right: 6, zIndex: 4,
+            position: "absolute", top: split ? 27 : 3, right: 4, zIndex: 4,
             opacity: hover ? 1 : 0.42,
             transition: "opacity 120ms ease",
           }}
         >
-          <ActivitySwitcher sessionId={sessionId} framed />
+          <ActivitySwitcher sessionId={sessionId} />
         </div>
       )}
     </div>
@@ -394,72 +401,6 @@ const ACTIVITY_ICON: Record<ActivityKind, React.ReactNode> = {
   tunnel: <Network size={11} />,
   monitor: <Activity size={11} />,
 };
-
-/**
- * Terminal / Files / Tunnels / Monitor for one session.
- *
- * Split, this sits in each pane's header. Unsplit, the same control floats
- * over the top-right of the area and fades up on hover — which is what
- * replaced the toolbar that used to own a whole 32px row for it.
- */
-function ActivitySwitcher({
-  sessionId, style, framed,
-}: {
-  sessionId: string;
-  style?: React.CSSProperties;
-  /** Floating placement: give it a surface so it reads over terminal output. */
-  framed?: boolean;
-}) {
-  const t = useT();
-  const session = useSessions((s) => s.sessions.find((x) => x.id === sessionId));
-  const wanted = useSessions((s) => s.activeActivity[sessionId]);
-  const hosts = useHostsStore((s) => s.hosts);
-  const mode = hosts.find((h) => h.id === (session?.host_id ?? ""))?.connection_mode ?? "terminal_only";
-  const options = activitiesFor(session, mode);
-  const current = clampActivity(wanted, options);
-
-  // One activity is no choice — a local shell gets no control at all.
-  if (options.length < 2) return null;
-
-  return (
-    <span
-      data-pane-activities
-      style={{
-        display: "inline-flex", gap: 1, flex: "none",
-        ...(framed ? {
-          background: "var(--panel-1)",
-          border: "1px solid var(--border)",
-          borderRadius: 6, padding: 2,
-        } : null),
-        ...style,
-      }}
-    >
-      {options.map((o) => {
-        const on = o.id === current;
-        return (
-          <span
-            key={o.id}
-            role="button"
-            aria-label={t(o.label)}
-            aria-pressed={on}
-            title={t(o.label)}
-            onClick={(e) => {
-              e.stopPropagation();
-              useSessions.getState().setActive(sessionId);
-              useSessions.getState().setActivity(sessionId, o.id);
-            }}
-            style={{
-              display: "grid", placeItems: "center",
-              width: 20, height: 17, borderRadius: 4, cursor: "pointer",
-              background: on ? "var(--wash, var(--panel-2))" : "transparent",
-              color: on ? "var(--accent)" : "var(--text-3)",
-            }}
-          >{ACTIVITY_ICON[o.id]}</span>
-        );
-      })}
-    </span>
-  );
-}
 
 function PaneHeader({
   sessionId, label, closed, focused,
@@ -492,9 +433,7 @@ function PaneHeader({
         opacity: closed ? 0.5 : 1,
       }} />
       <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
-      {/* This pane's own activity — the same control that floats over an
-          unsplit area, so the two states look like one idea. */}
-      <ActivitySwitcher sessionId={sessionId} style={{ marginLeft: "auto" }} />
+
       <span
         data-pane-pop
         role="button"
@@ -504,7 +443,7 @@ function PaneHeader({
           e.stopPropagation();
           useSessions.getState().popPane(sessionId);
         }}
-        style={{ marginLeft: 4, display: "flex", cursor: "pointer", opacity: 0.7 }}
+        style={{ marginLeft: "auto", display: "flex", cursor: "pointer", opacity: 0.7 }}
       >
         <X size={11} />
       </span>

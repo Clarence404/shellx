@@ -7,7 +7,7 @@ import {
   addTunnel, deleteTunnel, reorderTunnels,
 } from "../ipc/tunnels";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
-import { useTopRightGutter } from "./paneChrome";
+import { ActivitySwitcherSlot } from "./paneChrome";
 import { useT } from "../i18n";
 
 const EMPTY_STATUSES: TunnelStatus[] = [];
@@ -32,7 +32,6 @@ function parseSSHImport(cmd: string): Array<{ local_port: number; remote_host: s
 export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMode }: Props) {
   const t = useT();
   const tunnelStatuses = useSessions((s) => s.tunnelStatuses[sessionId] ?? EMPTY_STATUSES);
-  const topRightGutter = useTopRightGutter();
   const rulesVersion = useSessions((s) => hostId ? (s.rulesVersion[hostId] ?? 0) : 0);
   const hostInfo = useHostsStore((s) => hostId ? (s.hosts.find((h) => h.id === hostId) ?? null) : null);
   const [rules, setRules] = useState<TunnelRule[]>([]);
@@ -402,7 +401,7 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       {/* Header */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "7px 12px", paddingRight: 12 + topRightGutter,
+        padding: "7px 12px",
         borderBottom: "1px solid var(--border)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -417,9 +416,12 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
             </>
           )}
         </div>
-        {!addOpen && (
-          <button onClick={() => setAddOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>+ {t("Add")}</button>
-        )}
+        <span style={{ display: "flex", alignItems: "center", marginLeft: "auto" }}>
+          {!addOpen && (
+            <button onClick={() => setAddOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>+ {t("Add")}</button>
+          )}
+          <ActivitySwitcherSlot sessionId={sessionId} />
+        </span>
       </div>
 
       {/* Scrollable list */}

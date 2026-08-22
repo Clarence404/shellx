@@ -27,7 +27,7 @@ describe("PaneLayout", () => {
   });
   afterEach(cleanup);
 
-  it("floats the switcher over a lone pane instead of giving it a header", () => {
+  it("floats the switcher over a terminal pane instead of giving it a row", () => {
     render(<PaneLayout />);
     expect(document.querySelectorAll("[data-pane-id]")).toHaveLength(1);
     // No header and no toolbar row — the switcher hovers over the body,
@@ -38,11 +38,30 @@ describe("PaneLayout", () => {
     expect(useSessions.getState().activeActivity["a"]).toBe("files");
   });
 
+  it("hands the switcher over to the view once the pane leaves the terminal", () => {
+    useSessions.setState({ activeActivity: { a: "files" } });
+    render(<PaneLayout />);
+    // The file browser docks it in its own header row instead, so the pane
+    // must not draw a second one floating on top.
+    expect(screen.queryByLabelText("Files")).toBeNull();
+    expect(screen.queryByLabelText("Terminal")).toBeNull();
+  });
+
+  it("keeps the pane header free of the switcher, even split", () => {
+    useSessions.setState({ layout: tree.splitPane(tree.leaf("a"), "a", "right", "b") });
+    render(<PaneLayout />);
+    // Both panes show terminals, so both switchers float over their body —
+    // the header carries identity, drag and pop only.
+    const header = screen.getByText("db01").parentElement!;
+    expect(header.querySelectorAll('[aria-label="Files"]')).toHaveLength(0);
+    expect(header.querySelector("[data-pane-pop]")).not.toBeNull();
+  });
+
   it("switches one pane's activity without touching its neighbour", () => {
     useSessions.setState({ layout: tree.splitPane(tree.leaf("a"), "a", "right", "b") });
     render(<PaneLayout />);
     const paneA = document.querySelector('[data-pane-id="a"]')!;
-    fireEvent.click(paneA.querySelectorAll('[aria-label="Files"]')[0]);
+    fireEvent.click(paneA.querySelectorAll('[aria-label="Files"]')[0] as HTMLElement);
     expect(useSessions.getState().activeActivity["a"]).toBe("files");
     expect(useSessions.getState().activeActivity["b"]).toBeUndefined();
     // Clicking a pane's switcher also focuses it.

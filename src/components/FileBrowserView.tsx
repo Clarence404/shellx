@@ -6,7 +6,7 @@ import { buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useFilesStore } from "../state/files";
-import { useTopRightGutter } from "./paneChrome";
+import { ActivitySwitcherSlot } from "./paneChrome";
 import { sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir, sftpRealpath } from "../ipc/sftp";
 import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
 import { localIsDir } from "../ipc/local";
@@ -40,7 +40,6 @@ export function FileBrowserView({ connectionId }: Props) {
   // actually over the browser area.
   const paneRef = useRef<HTMLDivElement | null>(null);
   const [osDragOver, setOsDragOver] = useState(false);
-  const topRightGutter = useTopRightGutter();
 
   // v0.5.6: Same three folder-scope actions the toolbar exposes, packaged
   // for the file-row + empty-area context menus. Definition kept near the
@@ -209,8 +208,7 @@ export function FileBrowserView({ connectionId }: Props) {
       }}
     >
       <div style={{
-        height: 32, padding: "0 10px", paddingRight: 10 + topRightGutter,
-        background: "var(--panel-1)",
+        height: 32, padding: "0 10px", background: "var(--panel-1)",
         borderBottom: "1px solid var(--border)",
         display: "flex", alignItems: "center", gap: 8,
       }}>
@@ -229,6 +227,7 @@ export function FileBrowserView({ connectionId }: Props) {
           onClick={handleUploadClick}>
           {(size) => <Upload size={size} />}
         </PaneToolbarButton>
+        <ActivitySwitcherSlot sessionId={connectionId} />
       </div>
       <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}
         onContextMenu={(e) => {
