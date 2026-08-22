@@ -1,6 +1,7 @@
 import { Activity } from "lucide-react";
 import type { ProcessRow } from "../../types/monitor";
 import { useT } from "../../i18n";
+import { SUBTAB_HEIGHT } from "../MonitorPanel";
 
 interface Props {
   processes: ProcessRow[];
@@ -14,8 +15,6 @@ export function ProcessTab({ processes }: Props) {
   return (
     <div
       style={{
-        flex: 1,
-        minHeight: 0,
         padding: 12,
         display: "flex",
         flexDirection: "column",
@@ -23,12 +22,13 @@ export function ProcessTab({ processes }: Props) {
     >
       <div
         style={{
-          flex: 1,
-          minHeight: 0,
           background: "var(--panel-1)",
           border: "1px solid var(--border)",
           borderRadius: 10,
-          overflow: "hidden",
+          // `clip` rounds the corners like `hidden` did, without becoming a
+          // scroll container — which would trap the sticky table header in
+          // this card instead of parking it under the sub-tab bar.
+          overflow: "clip",
           display: "flex",
           flexDirection: "column",
         }}
@@ -54,8 +54,8 @@ export function ProcessTab({ processes }: Props) {
           </span>
         </div>
 
-        {/* Table */}
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        {/* Table — flows; the panel scrolls. */}
+        <div>
           {processes.length === 0 ? (
             <div style={{ padding: 24, color: "var(--text-3)", fontSize: 13 }}>
               {t("Collecting data…")}
@@ -80,8 +80,10 @@ export function ProcessTab({ processes }: Props) {
                   style={{
                     background: "var(--panel-1)",
                     position: "sticky",
-                    top: 0,
-                    zIndex: 1,
+                    // Parks just below the sub-tab bar rather than at the
+                    // very top, so the two don't overlap while scrolling.
+                    top: SUBTAB_HEIGHT,
+                    zIndex: 2,
                   }}
                 >
                   {["PID", "CPU %", "MEM %", t("Process")].map((h) => (

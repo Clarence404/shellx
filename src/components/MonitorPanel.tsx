@@ -10,6 +10,10 @@ import { useT } from "../i18n";
 
 type SubTab = "performance" | "process" | "disk";
 
+/** Height of the sticky sub-tab bar. The process table's own sticky
+ *  header parks directly under it. */
+export const SUBTAB_HEIGHT = 36;
+
 const INTERVALS = [1, 2, 5, 10, 30] as const;
 type IntervalSecs = typeof INTERVALS[number];
 
@@ -87,7 +91,14 @@ export function MonitorPanel({ connectionId }: Props) {
   }
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--panel-2)", overflow: "hidden" }}>
+    // One scroll container for the whole panel: the host card scrolls
+    // away with the content and only the sub-tab bar stays put. Each tab
+    // below flows at its natural height — none of them may scroll on their
+    // own, or this turns into a scrollbar inside a scrollbar.
+    <div style={{
+      height: "100%", display: "flex", flexDirection: "column",
+      background: "var(--panel-2)", overflowY: "auto",
+    }}>
       <HostInfoCard
         system={latest?.system ?? EMPTY_SYSTEM}
         memory={latest?.memory ?? EMPTY_MEMORY}
@@ -96,9 +107,13 @@ export function MonitorPanel({ connectionId }: Props) {
 
       {/* Sub-tab bar */}
       <div style={{
-        height: 36, padding: "0 12px", display: "flex", alignItems: "center",
+        height: SUBTAB_HEIGHT, padding: "0 12px", display: "flex", alignItems: "center",
         gap: 4, background: "var(--panel-1)", borderBottom: "1px solid var(--border)",
         flexShrink: 0,
+        // Sticks to the top of the panel's scroll: switching sub-tab or
+        // changing the interval must not require scrolling back up.
+        position: "sticky", top: 0, zIndex: 3,
+        boxShadow: "0 4px 10px rgba(16,20,28,0.05)",
       }}>
         {([
           ["performance", t("Performance")],
@@ -137,8 +152,8 @@ export function MonitorPanel({ connectionId }: Props) {
               <ActivitySwitcherSlot sessionId={connectionId} />
       </div>
 
-      {/* Sub-tab content */}
-      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Sub-tab content — flows; the panel above owns the scrolling. */}
+      <div style={{ display: "flex", flexDirection: "column" }}>
         {subTab === "performance" && (
           <PerformanceTab snapshots={snapshots} diskIo={latest?.diskIo ?? EMPTY_DISK_IO} />
         )}

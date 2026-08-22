@@ -246,9 +246,7 @@ export function PerformanceTab({ snapshots, diskIo }: Props) {
   return (
     <div
       style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
+        // No scrolling here — MonitorPanel is the one scroll container.
         padding: 12,
         display: "flex",
         flexDirection: "column",
