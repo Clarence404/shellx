@@ -159,6 +159,24 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     });
     ro.observe(hostRef.current);
 
+    // Web fonts land after the first fit. A changed cell height silently
+    // invalidates the row count xterm already committed to, so the last
+    // row paints past the bottom of the pane — and since overflowing
+    // resizes nothing, no ResizeObserver tick ever corrects it. Re-fit
+    // once the fonts have settled; if the view is hidden at that moment
+    // the observer's own fit covers it when it comes back.
+    let fontsHandled = false;
+    const refitForFonts = () => {
+      if (fontsHandled || !termRef.current || !fitRef.current) return;
+      if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
+      fontsHandled = true;
+      try { fitRef.current.fit(); } catch { /* renderer not ready */ }
+      const tm = termRef.current;
+      void resizeSession(sessionId, tm.cols, tm.rows);
+    };
+    void document.fonts?.ready.then(refitForFonts);
+    document.fonts?.addEventListener("loadingdone", refitForFonts);
+
     // Re-announce terminal dimensions on demand. When a shell is opened
     // late onto an existing session (host switched from tunnels-only to a
     // terminal mode), the PTY starts at the backend default 80x24; the
@@ -205,6 +223,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       cancelled = true;
       dataDisp.dispose();
       resizeDisp.dispose();
+      document.fonts?.removeEventListener("loadingdone", refitForFonts);
       ro.disconnect();
       window.removeEventListener("shellx:refit", onRefit);
       window.removeEventListener("keydown", onGlobalKey);

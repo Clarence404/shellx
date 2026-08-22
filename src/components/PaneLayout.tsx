@@ -374,7 +374,7 @@ function Pane({
           appends here — see SessionSurfaces. */}
       <div
         ref={(el) => registerSlot(sessionId, el)}
-        style={{ flex: 1, minHeight: 0, position: "relative" }}
+        style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden" }}
       />
       {/* Files, tunnels and monitor dock the switcher in their own header
           row (see ActivitySwitcherSlot). A terminal has no such row, so

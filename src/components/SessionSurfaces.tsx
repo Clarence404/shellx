@@ -27,6 +27,11 @@ export function surfaceHost(sessionId: string): HTMLDivElement {
     el.style.height = "100%";
     el.style.minHeight = "0";
     el.style.position = "relative";
+    // Clip, like the absolutely-positioned box this replaced. Without it a
+    // terminal whose fit briefly computed one row too many paints past the
+    // pane and gets cut by an ancestor instead — and since overflow doesn't
+    // resize anything, no ResizeObserver tick ever corrects it.
+    el.style.overflow = "hidden";
     hosts.set(sessionId, el);
   }
   return el;
@@ -45,10 +50,25 @@ export function placeSurfaces(
   sessionIds: string[],
   park: HTMLElement | null,
 ): void {
+  const moved: string[] = [];
   for (const id of sessionIds) {
     const host = surfaceHost(id);
     const slot = slots.get(id) ?? park;
-    if (slot && host.parentNode !== slot) slot.appendChild(host);
+    if (slot && host.parentNode !== slot) {
+      slot.appendChild(host);
+      moved.push(id);
+    }
+  }
+  // A move can change the box a terminal has to live in without changing
+  // its pixel size (parked → shown at the same dimensions, or shifted
+  // between equally sized panes), and then no ResizeObserver fires. Ask
+  // the view to re-fit once layout has settled.
+  if (moved.length > 0) {
+    requestAnimationFrame(() => {
+      for (const id of moved) {
+        window.dispatchEvent(new CustomEvent("shellx:refit", { detail: id }));
+      }
+    });
   }
 }
 
