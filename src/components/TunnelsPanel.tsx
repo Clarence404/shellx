@@ -7,6 +7,7 @@ import {
   addTunnel, deleteTunnel, reorderTunnels,
 } from "../ipc/tunnels";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
+import { useTopRightGutter } from "./paneChrome";
 import { useT } from "../i18n";
 
 const EMPTY_STATUSES: TunnelStatus[] = [];
@@ -31,6 +32,7 @@ function parseSSHImport(cmd: string): Array<{ local_port: number; remote_host: s
 export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMode }: Props) {
   const t = useT();
   const tunnelStatuses = useSessions((s) => s.tunnelStatuses[sessionId] ?? EMPTY_STATUSES);
+  const topRightGutter = useTopRightGutter();
   const rulesVersion = useSessions((s) => hostId ? (s.rulesVersion[hostId] ?? 0) : 0);
   const hostInfo = useHostsStore((s) => hostId ? (s.hosts.find((h) => h.id === hostId) ?? null) : null);
   const [rules, setRules] = useState<TunnelRule[]>([]);
@@ -398,7 +400,11 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       </div>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: "1px solid var(--border)" }}>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "7px 12px", paddingRight: 12 + topRightGutter,
+        borderBottom: "1px solid var(--border)",
+      }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 11, color: "var(--text-2)" }}>{rules.length} {t("rules")}</span>
           {activeCount > 0 && (
