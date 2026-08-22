@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { ActivityKind, ConnectionId, ConnectionInfo } from "../types/connection";
 import type { TunnelStatus } from "../types/tunnel";
+import * as tree from "./paneTree";
+import type { DropZone, PaneNode } from "./paneTree";
 
 export type RailView = "hosts" | "files" | "tunnels" | "serial" | "settings";
 
@@ -31,6 +33,26 @@ interface SessionsState {
   endConnecting: (hostId: string) => void;
 
   setActivity: (id: ConnectionId, activity: ActivityKind) => void;
+
+  /** Split layout over the session list. null = one pane showing
+   *  `activeId`, which is how the app runs until the user drags a tab
+   *  into the main area. `activeId` is always the focused pane. */
+  layout: PaneNode | null;
+  /** Put `sessionId` beside the pane showing `targetId`. */
+  splitPane: (targetId: ConnectionId, zone: Exclude<DropZone, "center">, sessionId: ConnectionId) => void;
+  /** Put `sessionId` outside everything — a full-width row or full-height column. */
+  splitRoot: (zone: Exclude<DropZone, "center">, sessionId: ConnectionId) => void;
+  /** Relocate a pane that is already on screen. */
+  movePane: (sessionId: ConnectionId, targetId: ConnectionId, zone: Exclude<DropZone, "center">) => void;
+  moveRoot: (sessionId: ConnectionId, zone: Exclude<DropZone, "center">) => void;
+  swapPanes: (a: ConnectionId, b: ConnectionId) => void;
+  /** Point a pane at another session; the displaced one stays a plain tab. */
+  replacePane: (targetId: ConnectionId, sessionId: ConnectionId) => void;
+  /** Take a pane out of the layout. The session stays open as a tab. */
+  popPane: (sessionId: ConnectionId) => void;
+  equalizeRow: (path: string) => void;
+  equalizeLayout: () => void;
+  setPaneBoundary: (path: string, index: number, fraction: number) => void;
   /** Rename a tab. Display only — the saved host keeps its own label, so
    *  this dies with the session. */
   renameSession: (id: ConnectionId, label: string) => void;
@@ -69,6 +91,7 @@ export const useSessions = create<SessionsState>((set, get) => ({
   activeActivity: {},
   connecting: {},
   tunnelStatuses: {},
+  layout: null,
   tunnelRuleSessions: {},
   tunnelEverActive: {},
   rulesVersion: {},
@@ -103,9 +126,27 @@ export const useSessions = create<SessionsState>((set, get) => ({
           ? remaining[remaining.length - 1]?.id ?? null
           : st.activeId;
       const { [id]: _removed, ...restActivity } = st.activeActivity;
-      return { sessions: remaining, activeId: nextActive, activeActivity: restActivity };
+      // A closed session must leave the layout with it, or its pane would
+      // point at a tab that no longer exists.
+      const layout = tree.normalize(tree.dropPane(st.layout, id));
+      const shown = tree.paneIds(layout);
+      const activeId = layout && (!nextActive || !shown.includes(nextActive))
+        ? shown[0] ?? null
+        : nextActive;
+      return { sessions: remaining, activeId, activeActivity: restActivity, layout };
     }),
-  setActive: (id) => set({ activeId: id }),
+  setActive: (id) =>
+    set((st) => {
+      // With a split up, focusing a session that isn't on screen puts it
+      // in the pane you were looking at rather than tearing the layout
+      // down. Focusing one that IS on screen just moves the focus.
+      if (!id || !st.layout || tree.hasPane(st.layout, id)) return { activeId: id };
+      const focused = st.activeId && tree.hasPane(st.layout, st.activeId)
+        ? st.activeId
+        : tree.paneIds(st.layout)[0];
+      if (!focused) return { activeId: id };
+      return { layout: tree.replacePane(st.layout, focused, id), activeId: id };
+    }),
   hostIsConnected: (hostId) =>
     get().sessions.some((s) => s.host_id === hostId),
   beginConnecting: (hostId) =>
@@ -157,6 +198,65 @@ export const useSessions = create<SessionsState>((set, get) => ({
       const { [sessionId]: _, ...rest } = s.tunnelStatuses;
       return { tunnelStatuses: rest };
     }),
+
+  splitPane: (targetId, zone, sessionId) =>
+    set((st) => {
+      const base = st.layout ?? tree.leaf(st.activeId ?? targetId);
+      if (!tree.hasPane(base, targetId)) return {};
+      return { layout: tree.splitPane(base, targetId, zone, sessionId), activeId: sessionId };
+    }),
+
+  splitRoot: (zone, sessionId) =>
+    set((st) => {
+      const base = st.layout ?? (st.activeId ? tree.leaf(st.activeId) : null);
+      return { layout: tree.wrapRoot(base, zone, sessionId), activeId: sessionId };
+    }),
+
+  movePane: (sessionId, targetId, zone) =>
+    set((st) => {
+      if (!st.layout || sessionId === targetId) return {};
+      const without = tree.dropPane(st.layout, sessionId);
+      if (!without || !tree.hasPane(without, targetId)) return {};
+      return { layout: tree.splitPane(without, targetId, zone, sessionId), activeId: sessionId };
+    }),
+
+  moveRoot: (sessionId, zone) =>
+    set((st) => {
+      if (!st.layout) return {};
+      const without = tree.dropPane(st.layout, sessionId);
+      if (!without) return {};
+      return { layout: tree.wrapRoot(without, zone, sessionId), activeId: sessionId };
+    }),
+
+  swapPanes: (a, b) =>
+    set((st) => (st.layout ? { layout: tree.swapPanes(st.layout, a, b), activeId: a } : {})),
+
+  replacePane: (targetId, sessionId) =>
+    set((st) => (st.layout
+      ? { layout: tree.replacePane(st.layout, targetId, sessionId), activeId: sessionId }
+      : { activeId: sessionId })),
+
+  popPane: (sessionId) =>
+    set((st) => {
+      if (!st.layout) return {};
+      const next = tree.normalize(tree.dropPane(st.layout, sessionId));
+      const stillShown = tree.paneIds(next);
+      return {
+        layout: next,
+        activeId: next === null
+          ? (stillShown[0] ?? st.activeId)
+          : (st.activeId && stillShown.includes(st.activeId) ? st.activeId : stillShown[0]),
+      };
+    }),
+
+  equalizeRow: (path) =>
+    set((st) => (st.layout ? { layout: tree.equalizePath(st.layout, path) } : {})),
+
+  equalizeLayout: () =>
+    set((st) => (st.layout ? { layout: tree.equalizeAll(st.layout) } : {})),
+
+  setPaneBoundary: (path, index, fraction) =>
+    set((st) => (st.layout ? { layout: tree.setBoundary(st.layout, path, index, fraction) } : {})),
 
   registerTunnelRuleSession: (ruleId, sessionId) =>
     set((s) => (

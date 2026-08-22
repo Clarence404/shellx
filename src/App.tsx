@@ -11,6 +11,8 @@ import { MonitorPanel } from "./components/MonitorPanel";
 import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
 import { GlobalTunnelsView } from "./components/GlobalTunnelsView";
+import { PaneLayout } from "./components/PaneLayout";
+import { SessionSurfaces } from "./components/SessionSurfaces";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsView } from "./components/settings/SettingsView";
@@ -47,6 +49,7 @@ export function App() {
   const addSession = useSessions((s) => s.addSession);
   const removeSession = useSessions((s) => s.removeSession);
   const markSessionClosed = useSessions((s) => s.markSessionClosed);
+  const activityBySession = useSessions((s) => s.activeActivity);
   const activeActivity = useSessions((s) =>
     s.activeId ? (s.activeActivity[s.activeId] ?? "terminal") : "terminal"
   );
@@ -78,23 +81,38 @@ export function App() {
 
   // Build the tab list based on connection_mode.
   // Local sessions only get a Terminal tab — no SSH Files or Tunnels available.
-  const availableTabs: { id: ActivityKind; label: string }[] =
-    activeSession?.kind === "local"
-      ? [{ id: "terminal", label: "Terminal" }]
-      : mode === "tunnels_only"
-      ? [{ id: "tunnel", label: "Tunnels" }]
-      : mode === "term_tunnels"
-      ? [
-          { id: "terminal", label: "Terminal" },
-          { id: "files", label: "Files" },
-          { id: "tunnel", label: "Tunnels" },
-          { id: "monitor", label: "Monitor" },
-        ]
-      : [
-          { id: "terminal", label: "Terminal" },
-          { id: "files", label: "Files" },
-          { id: "monitor", label: "Monitor" },
-        ];
+  function tabsFor(session: typeof activeSession, connMode: string): { id: ActivityKind; label: string }[] {
+    if (session?.kind === "local") return [{ id: "terminal", label: "Terminal" }];
+    if (connMode === "tunnels_only") return [{ id: "tunnel", label: "Tunnels" }];
+    if (connMode === "term_tunnels") {
+      return [
+        { id: "terminal", label: "Terminal" },
+        { id: "files", label: "Files" },
+        { id: "tunnel", label: "Tunnels" },
+        { id: "monitor", label: "Monitor" },
+      ];
+    }
+    return [
+      { id: "terminal", label: "Terminal" },
+      { id: "files", label: "Files" },
+      { id: "monitor", label: "Monitor" },
+    ];
+  }
+
+  function modeOf(session: typeof activeSession): string {
+    return hosts.find((h) => h.id === (session?.host_id ?? ""))?.connection_mode ?? "terminal_only";
+  }
+
+  /** Which activity a given session's pane should render. Every pane in a
+   *  split shows its own, so a terminal beside a file browser works. */
+  function activityFor(sessionId: string): ActivityKind {
+    const session = sessions.find((s) => s.id === sessionId) ?? null;
+    const allowed = tabsFor(session, modeOf(session));
+    const wanted = activityBySession[sessionId];
+    return allowed.some((tab) => tab.id === wanted) ? wanted : allowed[0].id;
+  }
+
+  const availableTabs = tabsFor(activeSession, mode);
 
   // Clamp activeActivity to a valid tab for the current session.
   const effectiveActivity: ActivityKind = availableTabs.some((t) => t.id === activeActivity)
@@ -509,53 +527,10 @@ export function App() {
               />
             )}
             <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-              {/* One TerminalView + FileBrowserView per session, always
-                  mounted, toggled via display. Rendering only the active
-                  session (previous shape) forced xterm.js to dispose and
-                  recreate on every tab switch — the shell process kept
-                  running on the backend but its accumulated output (welcome
-                  banner, PS1 prompt) was written to a Terminal that no
-                  longer existed. When the tab was re-visited, the new
-                  Terminal instance only received bytes from that point on,
-                  so the top rows read blank until the user hit Enter and
-                  the shell echoed a fresh prompt. Keeping every session's
-                  view mounted means each xterm keeps its own scrollback
-                  intact across tab switches. */}
-              {sessions.map((s) => {
-                const isActive = s.id === activeId;
-                return (
-                  <div key={s.id} style={{
-                    display: isActive ? "block" : "none",
-                    position: "absolute", inset: 0,
-                  }}>
-                    <div style={{ display: effectiveActivity === "terminal" ? "block" : "none", height: "100%" }}>
-                      <TerminalView sessionId={s.id} />
-                    </div>
-                    <div style={{ display: effectiveActivity === "files" ? "block" : "none", height: "100%" }}>
-                      <FileBrowserView connectionId={s.id} />
-                    </div>
-                  </div>
-                );
-              })}
-              {/* TunnelsPanel: rendered only when the tunnel tab is active.
-                  State survives tab switches via the Zustand tunnelStatuses store
-                  and the backend, so conditional mounting is safe here. */}
-              {effectiveActivity === "tunnel" && activeId && activeSession && (
-                <div style={{ position: "absolute", inset: 0 }}>
-                  <TunnelsPanel
-                    sessionId={activeId}
-                    hostId={activeSession.host_id ?? null}
-                    connectionMode={mode}
-                  />
-                </div>
-              )}
-              {effectiveActivity === "monitor" && activeId && activeSession?.kind === "ssh" && (
-                <div key={activeId} style={{ position: "absolute", inset: 0 }}>
-                  <MonitorBoundary>
-                    <MonitorPanel connectionId={activeId} />
-                  </MonitorBoundary>
-                </div>
-              )}
+              {/* Panes. Each one is a box; the session bodies themselves
+                  live in portalled surfaces below and get moved into the
+                  right box, so a layout change never remounts an xterm. */}
+              <PaneLayout />
             </div>
           </div>
         )}
@@ -597,6 +572,42 @@ export function App() {
           </div>
         )}
       </AppShell>
+      {/* One portal per session, rendered once and never relocated by
+          React — PaneLayout moves the host node instead. Lives outside
+          AppShell so switching rail views can't unmount a terminal. */}
+      <SessionSurfaces
+        sessionIds={sessions.map((s) => s.id)}
+        renderBody={(id) => {
+          const session = sessions.find((s) => s.id === id) ?? null;
+          const activity = activityFor(id);
+          return (
+            <>
+              <div style={{ display: activity === "terminal" ? "block" : "none", height: "100%" }}>
+                <TerminalView sessionId={id} />
+              </div>
+              <div style={{ display: activity === "files" ? "block" : "none", height: "100%" }}>
+                <FileBrowserView connectionId={id} />
+              </div>
+              {activity === "tunnel" && (
+                <div style={{ position: "absolute", inset: 0 }}>
+                  <TunnelsPanel
+                    sessionId={id}
+                    hostId={session?.host_id ?? null}
+                    connectionMode={modeOf(session)}
+                  />
+                </div>
+              )}
+              {activity === "monitor" && session?.kind === "ssh" && (
+                <div style={{ position: "absolute", inset: 0 }}>
+                  <MonitorBoundary>
+                    <MonitorPanel connectionId={id} />
+                  </MonitorBoundary>
+                </div>
+              )}
+            </>
+          );
+        }}
+      />
       <ConnectDialog
         open={dialog !== null}
         mode={dialog?.mode ?? "create"}

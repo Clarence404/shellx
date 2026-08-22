@@ -3,6 +3,7 @@ import { forwardRef, useEffect, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { HostContextMenu, type MenuItem } from "./HostContextMenu";
 import { useHostsStore } from "../state/hosts";
+import { usePaneDrag } from "../state/paneDrag";
 import type { HostInfo } from "../types/host";
 import { useT } from "../i18n";
 
@@ -262,6 +263,13 @@ export function TabBar({
             ref={t.id === activeTabId ? activeRef : undefined}
             title={t.title}
             onClick={() => onSelect(t.id)}
+            onPointerDown={(e) => {
+              // Arms a pane drag; a press that never travels 4px stays a
+              // plain click and onClick still selects the tab.
+              if ((e.target as HTMLElement).closest("[data-tab-close]")) return;
+              if (renaming) return;
+              usePaneDrag.getState().arm(t.id, e.clientX, e.clientY);
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -316,6 +324,7 @@ export function TabBar({
               </span>
             )}
             <span
+              data-tab-close
               onClick={(e) => { e.stopPropagation(); onClose(t.id); }}
               aria-label={`close ${t.title}`}
               style={{ opacity: 0.6, fontSize: 12, flexShrink: 0 }}>×</span>
