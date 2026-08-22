@@ -131,6 +131,11 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     // after fitting, measure what was actually rendered and give a row
     // back while it overflows.
     const OVERFLOW_GUARD = 3;
+    // Only a real overflow is worth a row. Rendered height is an integer
+    // while the box it sits in is fractional, so a sub-pixel excess is
+    // routine — spending a whole row (~17px) on it is what left too much
+    // dead space at the bottom.
+    const OVERFLOW_SLACK = 2;
     const doFit = () => {
       const host = hostRef.current;
       if (!host || host.offsetHeight <= 0) return;
@@ -141,7 +146,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       const available = host.clientHeight
         - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
       for (let i = 0; i < OVERFLOW_GUARD; i++) {
-        if (screen.offsetHeight <= available || term.rows <= 1) break;
+        if (screen.offsetHeight <= available + OVERFLOW_SLACK || term.rows <= 1) break;
         term.resize(term.cols, term.rows - 1);
       }
     };
@@ -298,7 +303,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
         // terminal background either way.
         style={{
           width: "100%", height: "100%",
-          padding: "8px 8px 14px", boxSizing: "border-box",
+          padding: 8, boxSizing: "border-box",
           background: TERMINAL_PALETTES[themeId].background,
         }}
       />
