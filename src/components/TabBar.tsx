@@ -281,7 +281,7 @@ export function TabBar({
               color: t.id === activeTabId ? "var(--text-1)" : "var(--text-3)",
               display: "flex", alignItems: "center", gap: 8,
               cursor: "pointer", flexShrink: 0,
-              whiteSpace: "nowrap",
+              whiteSpace: "nowrap", userSelect: "none",
               opacity: t.state === "closed" ? 0.4 : 1,
               filter: t.state === "closed" ? "grayscale(0.6)" : "none",
               transition: "opacity 300ms, filter 300ms",

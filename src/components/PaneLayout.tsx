@@ -98,6 +98,18 @@ export function PaneLayout() {
     if (!drag.sessionId) return;
     const store = usePaneDrag.getState();
 
+    // A pointer drag still extends the native text selection, which paints
+    // half the window blue on the way to the drop. Suppress selection for
+    // the length of the press — including the armed phase, so even a click
+    // that never becomes a drag can't leave a stray selection behind — and
+    // drop whatever was already selected when the press started.
+    const body = document.body;
+    const prevSelect = body.style.userSelect;
+    const prevCursor = body.style.cursor;
+    body.style.userSelect = "none";
+    body.style.cursor = "grabbing";
+    window.getSelection()?.removeAllRanges();
+
     function targetAt(x: number, y: number): DragTarget | null {
       const root = rootRef.current;
       if (!root) return null;
@@ -170,6 +182,8 @@ export function PaneLayout() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("keydown", onKey);
+      body.style.userSelect = prevSelect;
+      body.style.cursor = prevCursor;
     };
   }, [drag.sessionId, verdictFor]);
 
@@ -368,7 +382,7 @@ function PaneHeader({
         borderBottom: "1px solid var(--border)",
         fontSize: "calc(var(--font-ui-size) - 2px)",
         color: focused ? "var(--text-1)" : "var(--text-3)",
-        whiteSpace: "nowrap", overflow: "hidden",
+        whiteSpace: "nowrap", overflow: "hidden", userSelect: "none",
       }}
     >
       <span style={{
