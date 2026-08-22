@@ -291,14 +291,16 @@ export function TabBar({
             }}
             style={{
               padding: "6px 12px", borderRadius: "5px 5px 0 0", fontSize: "var(--font-ui-size)",
-              // Three states, and the focused one has to win at a glance:
-              // a filled ground plus a 2px accent bar under it. In light
+              // Three states, told apart by ground and edge rather than an
+              // accent bar: the focused tab is a filled card with a
+              // hairline lip, a tab that's on screen in another pane is
+              // filled but edgeless, and everything else is bare. In light
               // themes panel-2 alone is within a hair of the titlebar's
-              // panel-1, which is why this used to read as "no state at all".
+              // panel-1, which is why the fill has to come from --border.
               background: focused ? "var(--border)" : onScreen ? "var(--panel-2)" : "transparent",
               boxShadow: focused
-                ? "inset 0 -2px 0 var(--accent)"
-                : onScreen ? "inset 0 -2px 0 var(--border-hi)" : "none",
+                ? "inset 1px 1px 0 var(--border-hi), inset -1px 0 0 var(--border-hi)"
+                : "none",
               color: focused ? "var(--text-1)" : onScreen ? "var(--text-2)" : "var(--text-3)",
               fontWeight: focused ? 500 : 400,
               display: "flex", alignItems: "center", gap: 8,

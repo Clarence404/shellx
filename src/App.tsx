@@ -10,7 +10,6 @@ import { MonitorPanel } from "./components/MonitorPanel";
 import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
 import { GlobalTunnelsView } from "./components/GlobalTunnelsView";
-import { ActivityToolbar } from "./components/ActivityToolbar";
 import { PaneLayout } from "./components/PaneLayout";
 import { activitiesFor, clampActivity } from "./state/activities";
 import { SessionSurfaces } from "./components/SessionSurfaces";
@@ -486,16 +485,6 @@ export function App() {
             display: (railView === "hosts" && !pendingConnectHostId) ? "flex" : "none",
             flexDirection: "column", height: "100%", minHeight: 0,
           }}>
-            {/* Unsplit, the activity switcher stays where it always was.
-                Once the area is split each pane carries its own in its
-                header instead — one toolbar can't speak for four panes. */}
-            {layout === null && activeSession?.kind !== "local" && (
-              <ActivityToolbar
-                activity={activityFor(activeId)}
-                onChange={(a) => setActivity(activeId, a)}
-                tabs={activitiesFor(activeSession, modeOf(activeSession))}
-              />
-            )}
             <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
               {/* Panes. Each one is a box; the session bodies themselves
                   live in portalled surfaces below and get moved into the

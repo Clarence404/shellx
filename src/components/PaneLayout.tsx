@@ -341,11 +341,14 @@ function Pane({
   const session = useSessions((s) => s.sessions.find((x) => x.id === sessionId));
   const label = session?.label ?? sessionId;
   const closed = session?.state === "closed";
+  const [hover, setHover] = useState(false);
 
   return (
     <div
       data-pane-id={sessionId}
       onPointerDown={() => useSessions.getState().setActive(sessionId)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         flex: 1, display: "flex", flexDirection: "column",
         minWidth: 0, minHeight: 0, position: "relative",
@@ -367,6 +370,20 @@ function Pane({
         ref={(el) => registerSlot(sessionId, el)}
         style={{ flex: 1, minHeight: 0, position: "relative" }}
       />
+      {/* Unsplit there is no header to hold the switcher, so it floats over
+          the body's top-right corner: faint until the pointer is in the
+          area, solid once it is. Costs no vertical space at all. */}
+      {!split && (
+        <div
+          style={{
+            position: "absolute", top: 5, right: 6, zIndex: 4,
+            opacity: hover ? 1 : 0.42,
+            transition: "opacity 120ms ease",
+          }}
+        >
+          <ActivitySwitcher sessionId={sessionId} framed />
+        </div>
+      )}
     </div>
   );
 }
@@ -378,10 +395,20 @@ const ACTIVITY_ICON: Record<ActivityKind, React.ReactNode> = {
   monitor: <Activity size={11} />,
 };
 
-function PaneHeader({
-  sessionId, label, closed, focused,
+/**
+ * Terminal / Files / Tunnels / Monitor for one session.
+ *
+ * Split, this sits in each pane's header. Unsplit, the same control floats
+ * over the top-right of the area and fades up on hover — which is what
+ * replaced the toolbar that used to own a whole 32px row for it.
+ */
+function ActivitySwitcher({
+  sessionId, style, framed,
 }: {
-  sessionId: string; label: string; closed: boolean; focused: boolean;
+  sessionId: string;
+  style?: React.CSSProperties;
+  /** Floating placement: give it a surface so it reads over terminal output. */
+  framed?: boolean;
 }) {
   const t = useT();
   const session = useSessions((s) => s.sessions.find((x) => x.id === sessionId));
@@ -390,6 +417,56 @@ function PaneHeader({
   const mode = hosts.find((h) => h.id === (session?.host_id ?? ""))?.connection_mode ?? "terminal_only";
   const options = activitiesFor(session, mode);
   const current = clampActivity(wanted, options);
+
+  // One activity is no choice — a local shell gets no control at all.
+  if (options.length < 2) return null;
+
+  return (
+    <span
+      data-pane-activities
+      style={{
+        display: "inline-flex", gap: 1, flex: "none",
+        ...(framed ? {
+          background: "var(--panel-1)",
+          border: "1px solid var(--border)",
+          borderRadius: 6, padding: 2,
+        } : null),
+        ...style,
+      }}
+    >
+      {options.map((o) => {
+        const on = o.id === current;
+        return (
+          <span
+            key={o.id}
+            role="button"
+            aria-label={t(o.label)}
+            aria-pressed={on}
+            title={t(o.label)}
+            onClick={(e) => {
+              e.stopPropagation();
+              useSessions.getState().setActive(sessionId);
+              useSessions.getState().setActivity(sessionId, o.id);
+            }}
+            style={{
+              display: "grid", placeItems: "center",
+              width: 20, height: 17, borderRadius: 4, cursor: "pointer",
+              background: on ? "var(--wash, var(--panel-2))" : "transparent",
+              color: on ? "var(--accent)" : "var(--text-3)",
+            }}
+          >{ACTIVITY_ICON[o.id]}</span>
+        );
+      })}
+    </span>
+  );
+}
+
+function PaneHeader({
+  sessionId, label, closed, focused,
+}: {
+  sessionId: string; label: string; closed: boolean; focused: boolean;
+}) {
+  const t = useT();
   return (
     <div
       onPointerDown={(e) => {
@@ -415,39 +492,9 @@ function PaneHeader({
         opacity: closed ? 0.5 : 1,
       }} />
       <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
-      {/* This pane's own activity. Each pane switches independently, which
-          is what lets one show files while its neighbour runs a shell —
-          the old single toolbar above the whole area could not. */}
-      {options.length > 1 && (
-        <span
-          data-pane-activities
-          style={{ marginLeft: "auto", display: "inline-flex", gap: 1, flex: "none" }}
-        >
-          {options.map((o) => {
-            const on = o.id === current;
-            return (
-              <span
-                key={o.id}
-                role="button"
-                aria-label={t(o.label)}
-                aria-pressed={on}
-                title={t(o.label)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  useSessions.getState().setActive(sessionId);
-                  useSessions.getState().setActivity(sessionId, o.id);
-                }}
-                style={{
-                  display: "grid", placeItems: "center",
-                  width: 20, height: 17, borderRadius: 4, cursor: "pointer",
-                  background: on ? "var(--wash, var(--panel-2))" : "transparent",
-                  color: on ? "var(--accent)" : "var(--text-3)",
-                }}
-              >{ACTIVITY_ICON[o.id]}</span>
-            );
-          })}
-        </span>
-      )}
+      {/* This pane's own activity — the same control that floats over an
+          unsplit area, so the two states look like one idea. */}
+      <ActivitySwitcher sessionId={sessionId} style={{ marginLeft: "auto" }} />
       <span
         data-pane-pop
         role="button"
@@ -457,10 +504,7 @@ function PaneHeader({
           e.stopPropagation();
           useSessions.getState().popPane(sessionId);
         }}
-        style={{
-          marginLeft: options.length > 1 ? 4 : "auto",
-          display: "flex", cursor: "pointer", opacity: 0.7,
-        }}
+        style={{ marginLeft: 4, display: "flex", cursor: "pointer", opacity: 0.7 }}
       >
         <X size={11} />
       </span>

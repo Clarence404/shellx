@@ -27,13 +27,15 @@ describe("PaneLayout", () => {
   });
   afterEach(cleanup);
 
-  it("leaves a lone pane bare — the old toolbar above it still applies", () => {
+  it("floats the switcher over a lone pane instead of giving it a header", () => {
     render(<PaneLayout />);
     expect(document.querySelectorAll("[data-pane-id]")).toHaveLength(1);
-    // No header, no per-pane switcher: unsplit, the window-level toolbar
-    // is still the control, exactly as before panes existed.
+    // No header and no toolbar row — the switcher hovers over the body,
+    // costing no vertical space.
     expect(screen.queryByTitle("Remove from layout")).toBeNull();
-    expect(screen.queryByLabelText("Files")).toBeNull();
+    expect(screen.getByLabelText("Files")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Files"));
+    expect(useSessions.getState().activeActivity["a"]).toBe("files");
   });
 
   it("switches one pane's activity without touching its neighbour", () => {
