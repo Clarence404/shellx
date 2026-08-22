@@ -19,6 +19,9 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  // The overflow-guarded fit from the mount effect, so the live-settings
+  // effect below re-fits the same way rather than calling fit() raw.
+  const safeFitRef = useRef<(() => void) | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -118,9 +121,29 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     //   user switches to the Hosts view).
     let firstFitDone = false;
     const pendingBytes: Uint8Array[] = [];
+
+    // FitAddon picks rows as floor(available / cellHeight), but the height
+    // a row actually paints at can be a fraction taller than the value
+    // that division used (font metrics settling, device-pixel rounding).
+    // The error is per-row, so it scales with the row count: invisible at
+    // 40 rows, but past ~70 it exceeds the 14px bottom gutter and eats the
+    // last line — which is why this only ever showed up maximised. So
+    // after fitting, measure what was actually rendered and give a row
+    // back while it overflows.
+    const OVERFLOW_GUARD = 3;
     const doFit = () => {
-      if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
+      const host = hostRef.current;
+      if (!host || host.offsetHeight <= 0) return;
       fit.fit();
+      const screen = host.querySelector(".xterm-screen") as HTMLElement | null;
+      if (!screen) return;
+      const style = window.getComputedStyle(host);
+      const available = host.clientHeight
+        - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      for (let i = 0; i < OVERFLOW_GUARD; i++) {
+        if (screen.offsetHeight <= available || term.rows <= 1) break;
+        term.resize(term.cols, term.rows - 1);
+      }
     };
     const tryInitialFit = () => {
       if (firstFitDone) return;
@@ -158,6 +181,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       else doFit();
     });
     ro.observe(hostRef.current);
+    safeFitRef.current = doFit;
 
     // Web fonts land after the first fit. A changed cell height silently
     // invalidates the row count xterm already committed to, so the last
@@ -170,7 +194,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       if (fontsHandled || !termRef.current || !fitRef.current) return;
       if (!hostRef.current || hostRef.current.offsetHeight <= 0) return;
       fontsHandled = true;
-      try { fitRef.current.fit(); } catch { /* renderer not ready */ }
+      try { doFit(); } catch { /* renderer not ready */ }
       const tm = termRef.current;
       void resizeSession(sessionId, tm.cols, tm.rows);
     };
@@ -186,7 +210,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     const onRefit = (ev: Event) => {
       const id = (ev as CustomEvent<string>).detail;
       if (id !== sessionId || !termRef.current) return;
-      try { fitRef.current?.fit(); } catch { /* renderer not ready */ }
+      try { doFit(); } catch { /* renderer not ready */ }
       const tm = termRef.current;
       void resizeSession(sessionId, tm.cols, tm.rows);
     };
@@ -250,7 +274,8 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     termRef.current.options.fontSize = terminal.fontSize;
     termRef.current.options.cursorStyle = terminal.cursorStyle;
     if (hostRef.current && hostRef.current.offsetHeight > 0) {
-      try { fitRef.current.fit(); } catch { /* renderer not ready */ }
+      try { (safeFitRef.current ?? fitRef.current.fit.bind(fitRef.current))(); }
+      catch { /* renderer not ready */ }
     }
   }, [terminal.fontFamily, terminal.fontSize, terminal.cursorStyle]);
 
