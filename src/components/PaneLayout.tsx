@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { X, Monitor, Folder, Network, Activity } from "lucide-react";
 import { useSessions } from "../state/sessions";
 import { usePaneDrag, isDragging } from "../state/paneDrag";
 import type { DragTarget } from "../state/paneDrag";
 import * as tree from "../state/paneTree";
 import type { DropZone, PaneNode } from "../state/paneTree";
 import { placeSurfaces, surfaceHost } from "./SessionSurfaces";
+import { useHostsStore } from "../state/hosts";
+import { activitiesFor, clampActivity } from "../state/activities";
+import type { ActivityKind } from "../types/connection";
 import { useT } from "../i18n";
 
 /** Outer band of the whole area: a drop here spans everything. */
@@ -237,7 +240,7 @@ function PaneNodeView({
       <Pane
         sessionId={node.sessionId}
         focused={multi && node.sessionId === activeId}
-        showHeader={multi}
+        split={multi}
         registerSlot={registerSlot}
       />
     );
@@ -326,11 +329,13 @@ function Gutter({ path, index, row }: { path: string; index: number; row: boolea
 }
 
 function Pane({
-  sessionId, focused, showHeader, registerSlot,
+  sessionId, focused, split, registerSlot,
 }: {
   sessionId: string;
   focused: boolean;
-  showHeader: boolean;
+  /** True once there are several panes. A lone pane keeps the original
+   *  chrome — the toolbar above the area — and shows no header at all. */
+  split: boolean;
   registerSlot: (sessionId: string, el: HTMLElement | null) => void;
 }) {
   const session = useSessions((s) => s.sessions.find((x) => x.id === sessionId));
@@ -348,8 +353,13 @@ function Pane({
         outlineOffset: -1,
       }}
     >
-      {showHeader && (
-        <PaneHeader sessionId={sessionId} label={label} closed={!!closed} focused={focused} />
+      {split && (
+        <PaneHeader
+          sessionId={sessionId}
+          label={label}
+          closed={!!closed}
+          focused={focused}
+        />
       )}
       {/* The session's real body is a detached host div that PaneLayout
           appends here — see SessionSurfaces. */}
@@ -361,18 +371,32 @@ function Pane({
   );
 }
 
+const ACTIVITY_ICON: Record<ActivityKind, React.ReactNode> = {
+  terminal: <Monitor size={11} />,
+  files: <Folder size={11} />,
+  tunnel: <Network size={11} />,
+  monitor: <Activity size={11} />,
+};
+
 function PaneHeader({
   sessionId, label, closed, focused,
 }: {
   sessionId: string; label: string; closed: boolean; focused: boolean;
 }) {
   const t = useT();
+  const session = useSessions((s) => s.sessions.find((x) => x.id === sessionId));
+  const wanted = useSessions((s) => s.activeActivity[sessionId]);
+  const hosts = useHostsStore((s) => s.hosts);
+  const mode = hosts.find((h) => h.id === (session?.host_id ?? ""))?.connection_mode ?? "terminal_only";
+  const options = activitiesFor(session, mode);
+  const current = clampActivity(wanted, options);
   return (
     <div
       onPointerDown={(e) => {
         // The header is the pane's drag handle. A press that never travels
         // stays a plain focus click (see DRAG_THRESHOLD).
-        if ((e.target as HTMLElement).closest("[data-pane-pop]")) return;
+        const el = e.target as HTMLElement;
+        if (el.closest("[data-pane-pop]") || el.closest("[data-pane-activities]")) return;
         usePaneDrag.getState().arm(sessionId, e.clientX, e.clientY);
       }}
       style={{
@@ -391,6 +415,39 @@ function PaneHeader({
         opacity: closed ? 0.5 : 1,
       }} />
       <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+      {/* This pane's own activity. Each pane switches independently, which
+          is what lets one show files while its neighbour runs a shell —
+          the old single toolbar above the whole area could not. */}
+      {options.length > 1 && (
+        <span
+          data-pane-activities
+          style={{ marginLeft: "auto", display: "inline-flex", gap: 1, flex: "none" }}
+        >
+          {options.map((o) => {
+            const on = o.id === current;
+            return (
+              <span
+                key={o.id}
+                role="button"
+                aria-label={t(o.label)}
+                aria-pressed={on}
+                title={t(o.label)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  useSessions.getState().setActive(sessionId);
+                  useSessions.getState().setActivity(sessionId, o.id);
+                }}
+                style={{
+                  display: "grid", placeItems: "center",
+                  width: 20, height: 17, borderRadius: 4, cursor: "pointer",
+                  background: on ? "var(--wash, var(--panel-2))" : "transparent",
+                  color: on ? "var(--accent)" : "var(--text-3)",
+                }}
+              >{ACTIVITY_ICON[o.id]}</span>
+            );
+          })}
+        </span>
+      )}
       <span
         data-pane-pop
         role="button"
@@ -400,7 +457,10 @@ function PaneHeader({
           e.stopPropagation();
           useSessions.getState().popPane(sessionId);
         }}
-        style={{ marginLeft: "auto", display: "flex", cursor: "pointer", opacity: 0.7 }}
+        style={{
+          marginLeft: options.length > 1 ? 4 : "auto",
+          display: "flex", cursor: "pointer", opacity: 0.7,
+        }}
       >
         <X size={11} />
       </span>

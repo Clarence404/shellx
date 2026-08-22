@@ -27,11 +27,43 @@ describe("PaneLayout", () => {
   });
   afterEach(cleanup);
 
-  it("shows a single pane with no header until the area is split", () => {
+  it("leaves a lone pane bare — the old toolbar above it still applies", () => {
     render(<PaneLayout />);
-    // One pane, and no pane chrome to explain — there is nothing to tell apart.
     expect(document.querySelectorAll("[data-pane-id]")).toHaveLength(1);
+    // No header, no per-pane switcher: unsplit, the window-level toolbar
+    // is still the control, exactly as before panes existed.
     expect(screen.queryByTitle("Remove from layout")).toBeNull();
+    expect(screen.queryByLabelText("Files")).toBeNull();
+  });
+
+  it("switches one pane's activity without touching its neighbour", () => {
+    useSessions.setState({ layout: tree.splitPane(tree.leaf("a"), "a", "right", "b") });
+    render(<PaneLayout />);
+    const paneA = document.querySelector('[data-pane-id="a"]')!;
+    fireEvent.click(paneA.querySelectorAll('[aria-label="Files"]')[0]);
+    expect(useSessions.getState().activeActivity["a"]).toBe("files");
+    expect(useSessions.getState().activeActivity["b"]).toBeUndefined();
+    // Clicking a pane's switcher also focuses it.
+    expect(useSessions.getState().activeId).toBe("a");
+  });
+
+  it("offers only a terminal for a local session, even split", () => {
+    useSessions.setState({
+      sessions: [
+        { id: "L", label: "Local", kind: "local", host_id: null, state: "active" } as ConnectionInfo,
+        session("a", "ubuntu"),
+      ],
+      activeId: "L",
+      layout: tree.splitPane(tree.leaf("L"), "L", "right", "a"),
+    });
+    render(<PaneLayout />);
+    const paneL = document.querySelector('[data-pane-id="L"]')!;
+    // A local shell has no SSH subsystems, so its pane gets no switcher.
+    expect(paneL.querySelectorAll('[aria-label="Files"]')).toHaveLength(0);
+    expect(paneL.querySelectorAll('[aria-label="Monitor"]')).toHaveLength(0);
+    // Its SSH neighbour still has one.
+    expect(document.querySelector('[data-pane-id="a"]')!
+      .querySelectorAll('[aria-label="Files"]')).toHaveLength(1);
   });
 
   it("renders one box per pane, with headers, once split", () => {

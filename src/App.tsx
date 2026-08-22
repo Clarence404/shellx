@@ -4,14 +4,15 @@ import { EmptyState } from "./components/EmptyState";
 import { ConnectingPanel } from "./components/ConnectingPanel";
 import { ErrorDialog } from "./components/ErrorDialog";
 import { TerminalView } from "./components/TerminalView";
-import { ActivityToolbar } from "./components/ActivityToolbar";
 import { FileBrowserView } from "./components/FileBrowserView";
 import { TunnelsPanel } from "./components/TunnelsPanel";
 import { MonitorPanel } from "./components/MonitorPanel";
 import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
 import { GlobalTunnelsView } from "./components/GlobalTunnelsView";
+import { ActivityToolbar } from "./components/ActivityToolbar";
 import { PaneLayout } from "./components/PaneLayout";
+import { activitiesFor, clampActivity } from "./state/activities";
 import { SessionSurfaces } from "./components/SessionSurfaces";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
@@ -50,9 +51,7 @@ export function App() {
   const removeSession = useSessions((s) => s.removeSession);
   const markSessionClosed = useSessions((s) => s.markSessionClosed);
   const activityBySession = useSessions((s) => s.activeActivity);
-  const activeActivity = useSessions((s) =>
-    s.activeId ? (s.activeActivity[s.activeId] ?? "terminal") : "terminal"
-  );
+  const layout = useSessions((s) => s.layout);
   const setActivity = useSessions((s) => s.setActivity);
   const railView = useSessions((s) => s.railView);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
@@ -74,50 +73,18 @@ export function App() {
   const hosts = useHostsStore((s) => s.hosts);
   const loadHosts = useHostsStore((s) => s.load);
 
-  // Derive connection_mode for the currently active session.
   const activeSession = sessions.find((s) => s.id === activeId) ?? null;
-  const activeHost = hosts.find((h) => h.id === (activeSession?.host_id ?? ""));
-  const mode = activeHost?.connection_mode ?? "terminal_only";
-
-  // Build the tab list based on connection_mode.
-  // Local sessions only get a Terminal tab — no SSH Files or Tunnels available.
-  function tabsFor(session: typeof activeSession, connMode: string): { id: ActivityKind; label: string }[] {
-    if (session?.kind === "local") return [{ id: "terminal", label: "Terminal" }];
-    if (connMode === "tunnels_only") return [{ id: "tunnel", label: "Tunnels" }];
-    if (connMode === "term_tunnels") {
-      return [
-        { id: "terminal", label: "Terminal" },
-        { id: "files", label: "Files" },
-        { id: "tunnel", label: "Tunnels" },
-        { id: "monitor", label: "Monitor" },
-      ];
-    }
-    return [
-      { id: "terminal", label: "Terminal" },
-      { id: "files", label: "Files" },
-      { id: "monitor", label: "Monitor" },
-    ];
-  }
 
   function modeOf(session: typeof activeSession): string {
     return hosts.find((h) => h.id === (session?.host_id ?? ""))?.connection_mode ?? "terminal_only";
   }
 
-  /** Which activity a given session's pane should render. Every pane in a
-   *  split shows its own, so a terminal beside a file browser works. */
+  /** Which activity a session's surface renders. Each pane switches its
+   *  own now, so a terminal can sit beside a file browser. */
   function activityFor(sessionId: string): ActivityKind {
     const session = sessions.find((s) => s.id === sessionId) ?? null;
-    const allowed = tabsFor(session, modeOf(session));
-    const wanted = activityBySession[sessionId];
-    return allowed.some((tab) => tab.id === wanted) ? wanted : allowed[0].id;
+    return clampActivity(activityBySession[sessionId], activitiesFor(session, modeOf(session)));
   }
-
-  const availableTabs = tabsFor(activeSession, mode);
-
-  // Clamp activeActivity to a valid tab for the current session.
-  const effectiveActivity: ActivityKind = availableTabs.some((t) => t.id === activeActivity)
-    ? activeActivity
-    : (availableTabs[0]?.id ?? "terminal");
 
   const themeId = useSettingsStore((s) => s.themeId);
   const density = useSettingsStore((s) => s.density);
@@ -519,11 +486,14 @@ export function App() {
             display: (railView === "hosts" && !pendingConnectHostId) ? "flex" : "none",
             flexDirection: "column", height: "100%", minHeight: 0,
           }}>
-            {activeSession?.kind !== "local" && (
+            {/* Unsplit, the activity switcher stays where it always was.
+                Once the area is split each pane carries its own in its
+                header instead — one toolbar can't speak for four panes. */}
+            {layout === null && activeSession?.kind !== "local" && (
               <ActivityToolbar
-                activity={effectiveActivity}
+                activity={activityFor(activeId)}
                 onChange={(a) => setActivity(activeId, a)}
-                tabs={availableTabs}
+                tabs={activitiesFor(activeSession, modeOf(activeSession))}
               />
             )}
             <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
