@@ -6,6 +6,7 @@ import { buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useFilesStore } from "../state/files";
+import { ActivitySwitcherSlot } from "./paneChrome";
 import { sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir, sftpRealpath } from "../ipc/sftp";
 import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
 import { localIsDir } from "../ipc/local";
@@ -226,6 +227,7 @@ export function FileBrowserView({ connectionId }: Props) {
           onClick={handleUploadClick}>
           {(size) => <Upload size={size} />}
         </PaneToolbarButton>
+        <ActivitySwitcherSlot sessionId={connectionId} />
       </div>
       <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}
         onContextMenu={(e) => {

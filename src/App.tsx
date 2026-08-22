@@ -4,13 +4,15 @@ import { EmptyState } from "./components/EmptyState";
 import { ConnectingPanel } from "./components/ConnectingPanel";
 import { ErrorDialog } from "./components/ErrorDialog";
 import { TerminalView } from "./components/TerminalView";
-import { ActivityToolbar } from "./components/ActivityToolbar";
 import { FileBrowserView } from "./components/FileBrowserView";
 import { TunnelsPanel } from "./components/TunnelsPanel";
 import { MonitorPanel } from "./components/MonitorPanel";
 import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
 import { GlobalTunnelsView } from "./components/GlobalTunnelsView";
+import { PaneLayout } from "./components/PaneLayout";
+import { activitiesFor, clampActivity } from "./state/activities";
+import { SessionSurfaces } from "./components/SessionSurfaces";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsView } from "./components/settings/SettingsView";
@@ -47,9 +49,8 @@ export function App() {
   const addSession = useSessions((s) => s.addSession);
   const removeSession = useSessions((s) => s.removeSession);
   const markSessionClosed = useSessions((s) => s.markSessionClosed);
-  const activeActivity = useSessions((s) =>
-    s.activeId ? (s.activeActivity[s.activeId] ?? "terminal") : "terminal"
-  );
+  const activityBySession = useSessions((s) => s.activeActivity);
+  const layout = useSessions((s) => s.layout);
   const setActivity = useSessions((s) => s.setActivity);
   const railView = useSessions((s) => s.railView);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
@@ -71,35 +72,18 @@ export function App() {
   const hosts = useHostsStore((s) => s.hosts);
   const loadHosts = useHostsStore((s) => s.load);
 
-  // Derive connection_mode for the currently active session.
   const activeSession = sessions.find((s) => s.id === activeId) ?? null;
-  const activeHost = hosts.find((h) => h.id === (activeSession?.host_id ?? ""));
-  const mode = activeHost?.connection_mode ?? "terminal_only";
 
-  // Build the tab list based on connection_mode.
-  // Local sessions only get a Terminal tab — no SSH Files or Tunnels available.
-  const availableTabs: { id: ActivityKind; label: string }[] =
-    activeSession?.kind === "local"
-      ? [{ id: "terminal", label: "Terminal" }]
-      : mode === "tunnels_only"
-      ? [{ id: "tunnel", label: "Tunnels" }]
-      : mode === "term_tunnels"
-      ? [
-          { id: "terminal", label: "Terminal" },
-          { id: "files", label: "Files" },
-          { id: "tunnel", label: "Tunnels" },
-          { id: "monitor", label: "Monitor" },
-        ]
-      : [
-          { id: "terminal", label: "Terminal" },
-          { id: "files", label: "Files" },
-          { id: "monitor", label: "Monitor" },
-        ];
+  function modeOf(session: typeof activeSession): string {
+    return hosts.find((h) => h.id === (session?.host_id ?? ""))?.connection_mode ?? "terminal_only";
+  }
 
-  // Clamp activeActivity to a valid tab for the current session.
-  const effectiveActivity: ActivityKind = availableTabs.some((t) => t.id === activeActivity)
-    ? activeActivity
-    : (availableTabs[0]?.id ?? "terminal");
+  /** Which activity a session's surface renders. Each pane switches its
+   *  own now, so a terminal can sit beside a file browser. */
+  function activityFor(sessionId: string): ActivityKind {
+    const session = sessions.find((s) => s.id === sessionId) ?? null;
+    return clampActivity(activityBySession[sessionId], activitiesFor(session, modeOf(session)));
+  }
 
   const themeId = useSettingsStore((s) => s.themeId);
   const density = useSettingsStore((s) => s.density);
@@ -455,7 +439,9 @@ export function App() {
     }
   }
 
-  const tabs = sessions.map((s) => ({ id: s.id, title: s.label, state: s.state, kind: s.kind }));
+  const tabs = sessions.map((s) => ({
+    id: s.id, title: s.label, state: s.state, kind: s.kind, hostId: s.host_id,
+  }));
 
   async function handleNewLocalTerminal() {
     try {
@@ -486,6 +472,7 @@ export function App() {
         onNewLocalTerminal={() => void handleNewLocalTerminal()}
         onEditHost={(host) => setDialog({ mode: "edit", initial: host })}
         onConnectHost={(host, forceNew) => void handleConnectSavedHost(host, forceNew)}
+        onRename={(id, title) => useSessions.getState().renameSession(id, title)}
       >
         {/* Tab body stays mounted whenever activeId exists — hide via
             display:none when the user is on a rail-level view (Files /
@@ -498,61 +485,11 @@ export function App() {
             display: (railView === "hosts" && !pendingConnectHostId) ? "flex" : "none",
             flexDirection: "column", height: "100%", minHeight: 0,
           }}>
-            {activeSession?.kind !== "local" && (
-              <ActivityToolbar
-                activity={effectiveActivity}
-                onChange={(a) => setActivity(activeId, a)}
-                tabs={availableTabs}
-              />
-            )}
             <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-              {/* One TerminalView + FileBrowserView per session, always
-                  mounted, toggled via display. Rendering only the active
-                  session (previous shape) forced xterm.js to dispose and
-                  recreate on every tab switch — the shell process kept
-                  running on the backend but its accumulated output (welcome
-                  banner, PS1 prompt) was written to a Terminal that no
-                  longer existed. When the tab was re-visited, the new
-                  Terminal instance only received bytes from that point on,
-                  so the top rows read blank until the user hit Enter and
-                  the shell echoed a fresh prompt. Keeping every session's
-                  view mounted means each xterm keeps its own scrollback
-                  intact across tab switches. */}
-              {sessions.map((s) => {
-                const isActive = s.id === activeId;
-                return (
-                  <div key={s.id} style={{
-                    display: isActive ? "block" : "none",
-                    position: "absolute", inset: 0,
-                  }}>
-                    <div style={{ display: effectiveActivity === "terminal" ? "block" : "none", height: "100%" }}>
-                      <TerminalView sessionId={s.id} />
-                    </div>
-                    <div style={{ display: effectiveActivity === "files" ? "block" : "none", height: "100%" }}>
-                      <FileBrowserView connectionId={s.id} />
-                    </div>
-                  </div>
-                );
-              })}
-              {/* TunnelsPanel: rendered only when the tunnel tab is active.
-                  State survives tab switches via the Zustand tunnelStatuses store
-                  and the backend, so conditional mounting is safe here. */}
-              {effectiveActivity === "tunnel" && activeId && activeSession && (
-                <div style={{ position: "absolute", inset: 0 }}>
-                  <TunnelsPanel
-                    sessionId={activeId}
-                    hostId={activeSession.host_id ?? null}
-                    connectionMode={mode}
-                  />
-                </div>
-              )}
-              {effectiveActivity === "monitor" && activeId && activeSession?.kind === "ssh" && (
-                <div key={activeId} style={{ position: "absolute", inset: 0 }}>
-                  <MonitorBoundary>
-                    <MonitorPanel connectionId={activeId} />
-                  </MonitorBoundary>
-                </div>
-              )}
+              {/* Panes. Each one is a box; the session bodies themselves
+                  live in portalled surfaces below and get moved into the
+                  right box, so a layout change never remounts an xterm. */}
+              <PaneLayout />
             </div>
           </div>
         )}
@@ -594,6 +531,42 @@ export function App() {
           </div>
         )}
       </AppShell>
+      {/* One portal per session, rendered once and never relocated by
+          React — PaneLayout moves the host node instead. Lives outside
+          AppShell so switching rail views can't unmount a terminal. */}
+      <SessionSurfaces
+        sessionIds={sessions.map((s) => s.id)}
+        renderBody={(id) => {
+          const session = sessions.find((s) => s.id === id) ?? null;
+          const activity = activityFor(id);
+          return (
+            <>
+              <div style={{ display: activity === "terminal" ? "block" : "none", height: "100%" }}>
+                <TerminalView sessionId={id} />
+              </div>
+              <div style={{ display: activity === "files" ? "block" : "none", height: "100%" }}>
+                <FileBrowserView connectionId={id} />
+              </div>
+              {activity === "tunnel" && (
+                <div style={{ position: "absolute", inset: 0 }}>
+                  <TunnelsPanel
+                    sessionId={id}
+                    hostId={session?.host_id ?? null}
+                    connectionMode={modeOf(session)}
+                  />
+                </div>
+              )}
+              {activity === "monitor" && session?.kind === "ssh" && (
+                <div style={{ position: "absolute", inset: 0 }}>
+                  <MonitorBoundary>
+                    <MonitorPanel connectionId={id} />
+                  </MonitorBoundary>
+                </div>
+              )}
+            </>
+          );
+        }}
+      />
       <ConnectDialog
         open={dialog !== null}
         mode={dialog?.mode ?? "create"}

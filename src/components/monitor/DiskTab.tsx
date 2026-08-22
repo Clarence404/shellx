@@ -41,13 +41,11 @@ export function DiskTab({ disks, diskIo, snapshots }: Props) {
   return (
     <div
       style={{
-        flex: 1,
-        minHeight: 0,
+        // No scrolling here — MonitorPanel is the one scroll container.
         padding: 12,
         display: "flex",
         flexDirection: "column",
         gap: 10,
-        overflowY: "auto",
       }}
     >
       {/* Partitions — natural height; outer DiskTab scrolls when needed */}

@@ -7,6 +7,7 @@ import {
   addTunnel, deleteTunnel, reorderTunnels,
 } from "../ipc/tunnels";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
+import { ActivitySwitcherSlot } from "./paneChrome";
 import { useT } from "../i18n";
 
 const EMPTY_STATUSES: TunnelStatus[] = [];
@@ -398,7 +399,11 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
       </div>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 12px", borderBottom: "1px solid var(--border)" }}>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "7px 12px",
+        borderBottom: "1px solid var(--border)",
+      }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 11, color: "var(--text-2)" }}>{rules.length} {t("rules")}</span>
           {activeCount > 0 && (
@@ -411,9 +416,12 @@ export function TunnelsPanel({ sessionId, hostId, connectionMode: _connectionMod
             </>
           )}
         </div>
-        {!addOpen && (
-          <button onClick={() => setAddOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>+ {t("Add")}</button>
-        )}
+        <span style={{ display: "flex", alignItems: "center", marginLeft: "auto" }}>
+          {!addOpen && (
+            <button onClick={() => setAddOpen(true)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>+ {t("Add")}</button>
+          )}
+          <ActivitySwitcherSlot sessionId={sessionId} />
+        </span>
       </div>
 
       {/* Scrollable list */}

@@ -1,12 +1,23 @@
 import { Plus, ChevronLeft, ChevronRight, List, TerminalSquare, Plug } from "lucide-react";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { HostContextMenu } from "./HostContextMenu";
+import { HostContextMenu, type MenuItem } from "./HostContextMenu";
 import { useHostsStore } from "../state/hosts";
+import { usePaneDrag } from "../state/paneDrag";
+import { useSessions } from "../state/sessions";
+import { paneIds } from "../state/paneTree";
 import type { HostInfo } from "../types/host";
 import { useT } from "../i18n";
 
-export type Tab = { id: string; title: string; state?: "active" | "closed"; kind?: "ssh" | "local" };
+export type Tab = {
+  id: string;
+  title: string;
+  state?: "active" | "closed";
+  kind?: "ssh" | "local";
+  /** Saved-host id, when the session came from one. Lets the context menu
+   *  offer "duplicate" and "copy address" without asking the parent. */
+  hostId?: string | null;
+};
 
 interface Props {
   tabs: Tab[];
@@ -17,6 +28,8 @@ interface Props {
   onNewConnection?: () => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
   onNewLocalTerminal?: () => void;
+  /** Rename a tab in place. Absent → the menu item is not offered. */
+  onRename?: (id: string, title: string) => void;
 }
 
 // v0.16: no hard cap — the quick-connect list scrolls internally so a
@@ -27,9 +40,18 @@ const QUICK_CONNECT_MAX_HEIGHT = 320;
 
 export function TabBar({
   tabs, activeTabId, onSelect, onClose, onCloseTabs, onNewConnection, onConnectHost, onNewLocalTerminal,
+  onRename,
 }: Props) {
   const t = useT();
   const savedHosts = useHostsStore((s) => s.hosts);
+  // Which sessions are on screen right now. With a split up, several tabs
+  // are visible at once and only one of them has the focus, so the strip
+  // has three states to tell apart rather than two.
+  const layout = useSessions((s) => s.layout);
+  const shownIds = useMemo(
+    () => new Set(layout ? paneIds(layout) : activeTabId ? [activeTabId] : []),
+    [layout, activeTabId],
+  );
   const stripRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef<HTMLDivElement | null>(null);
   const listBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -42,6 +64,9 @@ export function TabBar({
   const [listOpen, setListOpen] = useState(false);
   const [plusOpen, setPlusOpen] = useState(false);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  // Which tab is being renamed, and the draft text. Committed on Enter or
+  // blur, abandoned on Escape.
+  const [renaming, setRenaming] = useState<{ id: string; draft: string } | null>(null);
 
   // Recompute overflow state on scroll, resize, or tabs change. Runs on
   // ResizeObserver ticks so the Titlebar chrome adjusts as the window
@@ -123,15 +148,70 @@ export function TabBar({
     else ids.forEach((id) => onClose(id));
   }
 
-  function buildCtxItems(id: string) {
-    const idx = tabs.findIndex((t) => t.id === id);
-    const leftIds = idx > 0 ? tabs.slice(0, idx).map((t) => t.id) : [];
-    const rightIds = idx >= 0 ? tabs.slice(idx + 1).map((t) => t.id) : [];
-    const items: Array<{ label: string; onClick: () => void; variant?: "danger" }> = [];
+  /** Reopen this tab's target: a second session to the same saved host,
+   *  or a second local terminal. Returns null when neither applies (an
+   *  ad-hoc connection with no saved host behind it). */
+  function duplicateAction(tab: Tab): (() => void) | null {
+    if (tab.kind === "local") {
+      return onNewLocalTerminal ? () => onNewLocalTerminal() : null;
+    }
+    const host = savedHosts.find((h) => h.id === tab.hostId);
+    if (!host || !onConnectHost) return null;
+    return () => onConnectHost(host, true);
+  }
+
+  function addressOf(tab: Tab): string | null {
+    const host = savedHosts.find((h) => h.id === tab.hostId);
+    if (!host) return null;
+    return host.username ? `${host.username}@${host.host}` : host.host;
+  }
+
+  function buildCtxItems(id: string): MenuItem[] {
+    const idx = tabs.findIndex((tab) => tab.id === id);
+    const target = tabs[idx];
+    if (!target) return [];
+    const leftIds = idx > 0 ? tabs.slice(0, idx).map((tab) => tab.id) : [];
+    const rightIds = idx >= 0 ? tabs.slice(idx + 1).map((tab) => tab.id) : [];
+    const otherIds = tabs.filter((tab) => tab.id !== id).map((tab) => tab.id);
+    const items: MenuItem[] = [];
+
+    const duplicate = duplicateAction(target);
+    if (duplicate) items.push({ label: t("Duplicate host"), onClick: duplicate });
+
+    const address = addressOf(target);
+    if (onRename || address) items.push({ kind: "separator" });
+    if (onRename) {
+      items.push({
+        label: t("Rename tab…"),
+        onClick: () => setRenaming({ id, draft: target.title }),
+      });
+    }
+    if (address) {
+      items.push({
+        label: t("Copy address"),
+        onClick: () => void navigator.clipboard.writeText(address),
+      });
+    }
+
+    items.push({ kind: "separator" });
+    items.push({ label: t("Close"), onClick: () => onClose(id) });
+    if (otherIds.length > 0) {
+      items.push({ label: `${t("Close other")} ${otherIds.length}`, onClick: () => closeMany(otherIds) });
+    }
     if (leftIds.length > 0) items.push({ label: `${t("Close")} ${leftIds.length} ${t("to the left")}`, onClick: () => closeMany(leftIds) });
     if (rightIds.length > 0) items.push({ label: `${t("Close")} ${rightIds.length} ${t("to the right")}`, onClick: () => closeMany(rightIds) });
     items.push({ label: t("Close all"), onClick: () => closeMany(tabs.map((tab) => tab.id)), variant: "danger" });
     return items;
+  }
+
+  function commitRename() {
+    if (!renaming) return;
+    const trimmed = renaming.draft.trim();
+    const original = tabs.find((tab) => tab.id === renaming.id);
+    if (onRename && trimmed && original && trimmed !== original.title) {
+      onRename(renaming.id, trimmed);
+    }
+    setRenaming(null);
   }
 
   return (
@@ -188,11 +268,22 @@ export function TabBar({
           scrollbarWidth: "none",
         }}
       >
-        {tabs.map((t) => (
-          <div key={t.id} role="tab" aria-selected={t.id === activeTabId}
+        {tabs.map((t) => {
+          const focused = t.id === activeTabId;
+          const onScreen = shownIds.has(t.id);
+          return (
+          <div key={t.id} role="tab" aria-selected={focused}
+            data-shown={onScreen ? "true" : undefined}
             ref={t.id === activeTabId ? activeRef : undefined}
             title={t.title}
             onClick={() => onSelect(t.id)}
+            onPointerDown={(e) => {
+              // Arms a pane drag; a press that never travels 4px stays a
+              // plain click and onClick still selects the tab.
+              if ((e.target as HTMLElement).closest("[data-tab-close]")) return;
+              if (renaming) return;
+              usePaneDrag.getState().arm(t.id, e.clientX, e.clientY);
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -200,11 +291,21 @@ export function TabBar({
             }}
             style={{
               padding: "6px 12px", borderRadius: "5px 5px 0 0", fontSize: "var(--font-ui-size)",
-              background: t.id === activeTabId ? "var(--panel-2)" : "transparent",
-              color: t.id === activeTabId ? "var(--text-1)" : "var(--text-3)",
+              // Three states, told apart by ground and edge rather than an
+              // accent bar: the focused tab is a filled card with a
+              // hairline lip, a tab that's on screen in another pane is
+              // filled but edgeless, and everything else is bare. In light
+              // themes panel-2 alone is within a hair of the titlebar's
+              // panel-1, which is why the fill has to come from --border.
+              background: focused ? "var(--border)" : onScreen ? "var(--panel-2)" : "transparent",
+              boxShadow: focused
+                ? "inset 1px 1px 0 var(--border-hi), inset -1px 0 0 var(--border-hi)"
+                : "none",
+              color: focused ? "var(--text-1)" : onScreen ? "var(--text-2)" : "var(--text-3)",
+              fontWeight: focused ? 500 : 400,
               display: "flex", alignItems: "center", gap: 8,
               cursor: "pointer", flexShrink: 0,
-              whiteSpace: "nowrap",
+              whiteSpace: "nowrap", userSelect: "none",
               opacity: t.state === "closed" ? 0.4 : 1,
               filter: t.state === "closed" ? "grayscale(0.6)" : "none",
               transition: "opacity 300ms, filter 300ms",
@@ -221,15 +322,39 @@ export function TabBar({
                 strip; full name lives in the tooltip. The × never shrinks.
                 150px ≈ the text width of a HOSTS drawer row, so tab and
                 sidebar truncate a long label at the same point. */}
-            <span style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis" }}>
-              {t.title}
-            </span>
+            {renaming && renaming.id === t.id ? (
+              <input
+                autoFocus
+                value={renaming.draft}
+                aria-label="rename tab"
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setRenaming({ id: t.id, draft: e.target.value })}
+                onBlur={commitRename}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") commitRename();
+                  if (e.key === "Escape") setRenaming(null);
+                }}
+                style={{
+                  width: 130, background: "var(--panel-1)", color: "var(--text-1)",
+                  border: "1px solid var(--accent)", borderRadius: 4,
+                  fontSize: "var(--font-ui-size)", padding: "1px 5px",
+                  fontFamily: "inherit",
+                }}
+              />
+            ) : (
+              <span style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis" }}>
+                {t.title}
+              </span>
+            )}
             <span
+              data-tab-close
               onClick={(e) => { e.stopPropagation(); onClose(t.id); }}
               aria-label={`close ${t.title}`}
-              style={{ opacity: 0.6, fontSize: 12, flexShrink: 0 }}>×</span>
+              style={{ opacity: focused ? 0.85 : 0.6, fontSize: 12, flexShrink: 0 }}>×</span>
           </div>
-        ))}
+          );
+        })}
         {onNewConnection && (
           <button
             ref={plusBtnRef}
