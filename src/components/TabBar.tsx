@@ -6,6 +6,7 @@ import { useHostsStore } from "../state/hosts";
 import { usePaneDrag } from "../state/paneDrag";
 import { useSessions } from "../state/sessions";
 import { paneIds } from "../state/paneTree";
+import { PaneBadge } from "./paneChrome";
 import type { HostInfo } from "../types/host";
 import { useT } from "../i18n";
 
@@ -48,9 +49,13 @@ export function TabBar({
   // are visible at once and only one of them has the focus, so the strip
   // has three states to tell apart rather than two.
   const layout = useSessions((s) => s.layout);
+  // Visual order of the panes, so a tab can wear the same number as the
+  // pane it is showing in. Empty when nothing is split — one pane needs
+  // no marker to be found.
+  const paneOrder = useMemo(() => (layout ? paneIds(layout) : []), [layout]);
   const shownIds = useMemo(
-    () => new Set(layout ? paneIds(layout) : activeTabId ? [activeTabId] : []),
-    [layout, activeTabId],
+    () => new Set(layout ? paneOrder : activeTabId ? [activeTabId] : []),
+    [layout, paneOrder, activeTabId],
   );
   const stripRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef<HTMLDivElement | null>(null);
@@ -311,6 +316,9 @@ export function TabBar({
               transition: "opacity 300ms, filter 300ms",
               pointerEvents: t.state === "closed" ? "none" : "auto",
             }}>
+            {onScreen && paneOrder.length > 1 && (
+              <PaneBadge position={paneOrder.indexOf(t.id) + 1} focused={focused} />
+            )}
             <span style={{
               width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
               // Green = live session, regardless of kind (ssh / local);

@@ -78,3 +78,25 @@ export function ActivitySwitcherSlot({ sessionId }: { sessionId: string }) {
     </span>
   );
 }
+
+/**
+ * A pane's place in visual order, worn by the pane header and by its tab.
+ * Two panes look alike and two tabs look alike; the number is what says
+ * this tab is that pane. Filled on the focused one, so clicking a pane
+ * lights up its tab and nothing else.
+ */
+export function PaneBadge({ position, focused }: { position: number; focused: boolean }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        flex: "none", minWidth: 14, height: 14, borderRadius: 3,
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        fontFamily: '"JetBrains Mono", var(--font-mono)',
+        fontSize: "calc(var(--font-ui-size) - 4px)", lineHeight: 1,
+        background: focused ? "var(--accent)" : "var(--border-hi)",
+        color: focused ? "var(--text-on-accent)" : "var(--text-2)",
+      }}
+    >{position}</span>
+  );
+}

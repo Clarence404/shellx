@@ -87,6 +87,20 @@ describe("PaneLayout", () => {
       .querySelectorAll('[aria-label="Files"]')).toHaveLength(1);
   });
 
+  it("numbers each pane so its tab can be told apart", () => {
+    useSessions.setState({
+      layout: tree.splitPane(tree.splitPane(tree.leaf("a"), "a", "right", "b"), "b", "right", "c"),
+    });
+    render(<PaneLayout />);
+    // Visual order, left to right: the number a pane wears is the one its
+    // tab wears in the strip.
+    const headers = [...document.querySelectorAll("[data-pane-id]")]
+      .map((p) => p.textContent ?? "");
+    expect(headers[0].startsWith("1")).toBe(true);
+    expect(headers[1].startsWith("2")).toBe(true);
+    expect(headers[2].startsWith("3")).toBe(true);
+  });
+
   it("renders one box per pane, with headers, once split", () => {
     useSessions.setState({ layout: tree.splitPane(tree.leaf("a"), "a", "right", "b") });
     render(<PaneLayout />);

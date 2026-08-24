@@ -6,7 +6,7 @@ import type { DragTarget } from "../state/paneDrag";
 import * as tree from "../state/paneTree";
 import type { DropZone, PaneNode } from "../state/paneTree";
 import { placeSurfaces, surfaceHost } from "./SessionSurfaces";
-import { ActivitySwitcher } from "./paneChrome";
+import { ActivitySwitcher, PaneBadge } from "./paneChrome";
 import { useHostsStore } from "../state/hosts";
 import { activitiesFor, clampActivity } from "../state/activities";
 import type { ActivityKind } from "../types/connection";
@@ -200,6 +200,7 @@ export function PaneLayout() {
         path=""
         multi={multi}
         activeId={activeId}
+        order={shown}
         registerSlot={registerSlot}
       />
       <div ref={parkRef} style={{ display: "none" }} />
@@ -228,12 +229,15 @@ export function PaneLayout() {
 }
 
 function PaneNodeView({
-  node, path, multi, activeId, registerSlot,
+  node, path, multi, activeId, order, registerSlot,
 }: {
   node: PaneNode;
   path: string;
   multi: boolean;
   activeId: string | null;
+  /** Session ids in visual order — a pane's place in it is the number it
+   *  and its tab both wear, so the strip says which tab is which pane. */
+  order: string[];
   registerSlot: (sessionId: string, el: HTMLElement | null) => void;
 }) {
   if (node.kind === "leaf") {
@@ -242,6 +246,7 @@ function PaneNodeView({
         sessionId={node.sessionId}
         focused={multi && node.sessionId === activeId}
         split={multi}
+        position={order.indexOf(node.sessionId) + 1}
         registerSlot={registerSlot}
       />
     );
@@ -259,6 +264,7 @@ function PaneNodeView({
             path={path === "" ? String(i) : `${path}.${i}`}
             multi={multi}
             activeId={activeId}
+            order={order}
             registerSlot={registerSlot}
           />
         </Slot>
@@ -330,10 +336,12 @@ function Gutter({ path, index, row }: { path: string; index: number; row: boolea
 }
 
 function Pane({
-  sessionId, focused, split, registerSlot,
+  sessionId, focused, split, position, registerSlot,
 }: {
   sessionId: string;
   focused: boolean;
+  /** 1-based place in visual order; shown in the header and on the tab. */
+  position: number;
   /** True once there are several panes. A lone pane keeps the original
    *  chrome — the toolbar above the area — and shows no header at all. */
   split: boolean;
@@ -368,6 +376,7 @@ function Pane({
           label={label}
           closed={!!closed}
           focused={focused}
+          position={position}
         />
       )}
       {/* The session's real body is a detached host div that PaneLayout
@@ -403,9 +412,9 @@ const ACTIVITY_ICON: Record<ActivityKind, React.ReactNode> = {
 };
 
 function PaneHeader({
-  sessionId, label, closed, focused,
+  sessionId, label, closed, focused, position,
 }: {
-  sessionId: string; label: string; closed: boolean; focused: boolean;
+  sessionId: string; label: string; closed: boolean; focused: boolean; position: number;
 }) {
   const t = useT();
   return (
@@ -427,6 +436,9 @@ function PaneHeader({
         whiteSpace: "nowrap", overflow: "hidden", userSelect: "none",
       }}
     >
+      {/* Same number the tab wears, so the strip tells you which tab is
+          which pane — and both light up on the side you clicked. */}
+      <PaneBadge position={position} focused={focused} />
       <span style={{
         width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
         background: closed ? "var(--text-3)" : "var(--success)",
