@@ -335,6 +335,8 @@ const zh: Record<string, string> = {
   "Monitoring is not supported on this host (Linux only)":
     "此主机不支持监控（仅支持 Linux）",
   "Collecting data…": "正在采集数据…",
+  "Terminal, files and tunnels still work here.": "终端、文件、隧道在这台主机上照常可用。",
+  "First sample due in": "首个采样还有",
   "Monitor render error": "监控渲染错误",
   // Host info card
   "Hostname": "主机名",

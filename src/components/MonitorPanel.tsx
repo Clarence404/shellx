@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { ShieldAlert } from "lucide-react";
 import { useMonitorStore } from "../state/monitor";
 import { startMonitor, stopMonitor, onMonitorSnapshot, onMonitorUnsupported } from "../ipc/monitor";
 import { HostInfoCard } from "./monitor/HostInfoCard";
@@ -13,6 +14,56 @@ type SubTab = "performance" | "process" | "disk";
 /** Height of the sticky sub-tab bar. The process table's own sticky
  *  header parks directly under it. */
 export const SUBTAB_HEIGHT = 36;
+
+/**
+ * What the Monitor tab shows before the first snapshot lands, and on a host
+ * that can't be monitored at all. Rendered under the sub-tab bar rather
+ * than in place of the whole panel, so the activity switcher living in that
+ * bar stays reachable.
+ */
+function MonitorWaiting({ unsupported, intervalSecs }: {
+  unsupported: boolean;
+  intervalSecs: number;
+}) {
+  const t = useT();
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", gap: 10, textAlign: "center",
+      padding: "56px 24px", color: "var(--text-2)",
+    }}>
+      {unsupported ? (
+        <>
+          <ShieldAlert size={26} strokeWidth={1.5} style={{ color: "var(--warn)" }} />
+          <div style={{ fontSize: "var(--font-ui-size)", color: "var(--text-1)" }}>
+            {t("Monitoring is not supported on this host (Linux only)")}
+          </div>
+          <div style={{ fontSize: "calc(var(--font-ui-size) - 2px)", color: "var(--text-3)" }}>
+            {t("Terminal, files and tunnels still work here.")}
+          </div>
+        </>
+      ) : (
+        <>
+          <span style={{
+            display: "inline-flex", gap: 4, fontSize: 20, lineHeight: 1,
+            color: "var(--accent)", letterSpacing: 1,
+          }}>
+            <span style={{ animation: "shellx-dot-pulse 1.4s ease-in-out infinite" }}>·</span>
+            <span style={{ animation: "shellx-dot-pulse 1.4s ease-in-out 0.2s infinite" }}>·</span>
+            <span style={{ animation: "shellx-dot-pulse 1.4s ease-in-out 0.4s infinite" }}>·</span>
+          </span>
+          <div style={{ fontSize: "var(--font-ui-size)", color: "var(--text-1)" }}>
+            {t("Collecting data…")}
+          </div>
+          <div style={{ fontSize: "calc(var(--font-ui-size) - 2px)", color: "var(--text-3)" }}>
+            {t("First sample due in")} {intervalSecs}s
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 
 const INTERVALS = [1, 2, 5, 10, 30] as const;
 type IntervalSecs = typeof INTERVALS[number];
@@ -65,30 +116,12 @@ export function MonitorPanel({ connectionId }: Props) {
     };
   }, [connectionId, intervalSecs]);
 
-  if (unsupported) {
-    return (
-      <div style={{
-        height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-        color: "var(--text-3)", fontSize: 13, flexDirection: "column", gap: 8,
-        background: "var(--panel-2)",
-      }}>
-        <span style={{ fontSize: 24 }}>&#9888;</span>
-        {t("Monitoring is not supported on this host (Linux only)")}
-      </div>
-    );
-  }
-
-  if (snapshots.length === 0) {
-    return (
-      <div style={{
-        height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-        color: "var(--text-3)", fontSize: 13,
-        background: "var(--panel-2)",
-      }}>
-        {t("Collecting data…")}
-      </div>
-    );
-  }
+  // These used to `return` before the sub-tab bar rendered — and since the
+  // activity switcher docks into that bar, a host that was still sampling
+  // (or isn't Linux at all) left no way back to Terminal or Files from
+  // inside the pane. The bar always renders now; only the content below it
+  // changes.
+  const waiting = unsupported || snapshots.length === 0;
 
   return (
     // One scroll container for the whole panel: the host card scrolls
@@ -99,11 +132,13 @@ export function MonitorPanel({ connectionId }: Props) {
       height: "100%", display: "flex", flexDirection: "column",
       background: "var(--panel-2)", overflowY: "auto",
     }}>
-      <HostInfoCard
-        system={latest?.system ?? EMPTY_SYSTEM}
-        memory={latest?.memory ?? EMPTY_MEMORY}
-        connectionId={connectionId}
-      />
+      {!waiting && (
+        <HostInfoCard
+          system={latest?.system ?? EMPTY_SYSTEM}
+          memory={latest?.memory ?? EMPTY_MEMORY}
+          connectionId={connectionId}
+        />
+      )}
 
       {/* Sub-tab bar */}
       <div style={{
@@ -154,11 +189,17 @@ export function MonitorPanel({ connectionId }: Props) {
 
       {/* Sub-tab content — flows; the panel above owns the scrolling. */}
       <div style={{ display: "flex", flexDirection: "column" }}>
-        {subTab === "performance" && (
+        {waiting && (
+          <MonitorWaiting
+            unsupported={unsupported}
+            intervalSecs={intervalSecs}
+          />
+        )}
+        {!waiting && subTab === "performance" && (
           <PerformanceTab snapshots={snapshots} diskIo={latest?.diskIo ?? EMPTY_DISK_IO} />
         )}
-        {subTab === "process" && <ProcessTab processes={latest?.processes ?? []} />}
-        {subTab === "disk" && (
+        {!waiting && subTab === "process" && <ProcessTab processes={latest?.processes ?? []} />}
+        {!waiting && subTab === "disk" && (
           <DiskTab
             disks={latest?.disks ?? []}
             diskIo={latest?.diskIo ?? EMPTY_DISK_IO}

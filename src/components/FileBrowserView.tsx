@@ -27,8 +27,15 @@ function basename(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
 
+const EMPTY_LISTING = { cwd: "/", entries: [], loading: true, error: null } as const;
+
 export function FileBrowserView({ connectionId }: Props) {
-  const state = useFilesStore((s) => s.perConnection[connectionId]);
+  const listing = useFilesStore((s) => s.perConnection[connectionId]);
+  // Never bail out before the header renders: it carries the activity
+  // switcher, and a session whose first listing hadn't arrived used to be
+  // a dead end with no way back to Terminal. An empty stand-in keeps the
+  // body's reads safe until the real listing lands.
+  const state = listing ?? EMPTY_LISTING;
   const loadDir = useFilesStore((s) => s.loadDir);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [mkdirName, setMkdirName] = useState("");
@@ -131,9 +138,6 @@ export function FileBrowserView({ connectionId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionId, state?.cwd]);
 
-  if (!state) {
-    return <div style={{ padding: 20, color: "var(--text-3)" }}>Loading…</div>;
-  }
 
   async function handleUploadClick() {
     const selected = await openDialog({ multiple: true, directory: false });
@@ -241,7 +245,7 @@ export function FileBrowserView({ connectionId }: Props) {
         {state.error && (
           <div style={{ padding: "8px 10px", color: "var(--error)", fontSize: 11 }}>{state.error}</div>
         )}
-        {state.loading && (
+        {(state.loading || !listing) && (
           <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>Loading…</div>
         )}
         {state.cwd !== "/" && (
