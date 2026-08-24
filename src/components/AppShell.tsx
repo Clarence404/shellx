@@ -13,6 +13,7 @@ interface Props {
   onTabClose?: (id: string) => void;
   onTabsClose?: (ids: string[]) => void;
   onNewConnection?: () => void;
+  onImportConfig?: () => void;
   onNewLocalTerminal?: () => void;
   onRename?: (id: string, title: string) => void;
   onEditHost?: (host: HostInfo) => void;
@@ -33,6 +34,7 @@ export function AppShell({
   onTabClose = () => {},
   onTabsClose,
   onNewConnection,
+  onImportConfig,
   onNewLocalTerminal,
   onRename,
   onEditHost,
@@ -57,6 +59,7 @@ export function AppShell({
         <ActivityRail />
         <Drawer view={view}
           onNewConnection={onNewConnection}
+          onImportConfig={onImportConfig}
           onEditHost={onEditHost}
           onConnectHost={onConnectHost} />
         <main style={{ flex: 1, minWidth: 0, overflow: "hidden",

@@ -1,4 +1,4 @@
-import { Plus, PanelLeftClose } from "lucide-react";
+import { Plus, PanelLeftClose, FileDown } from "lucide-react";
 import { HostRow } from "./HostRow";
 import { SectionHeader } from "./SectionHeader";
 import { useHostsStore } from "../state/hosts";
@@ -12,11 +12,12 @@ import { useT } from "../i18n";
 interface Props {
   view: RailView;
   onNewConnection?: () => void;
+  onImportConfig?: () => void;
   onEditHost?: (host: HostInfo) => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
 }
 
-export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Props) {
+export function Drawer({ view, onNewConnection, onImportConfig, onEditHost, onConnectHost }: Props) {
   const t = useT();
   const hosts = useHostsStore((s) => s.hosts);
   const deleteHostById = useHostsStore((s) => s.deleteHostById);
@@ -139,16 +140,33 @@ export function Drawer({ view, onNewConnection, onEditHost, onConnectHost }: Pro
         })}
       </div>
       {view === "hosts" && onNewConnection && (
-        <button onClick={onNewConnection}
-          style={{
-            padding: "6px 8px", borderRadius: 5,
-            background: "var(--accent-fade)", color: "var(--text-1)",
-            border: "1px solid var(--accent)", fontSize: "var(--font-ui-size)",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          }}>
-          <Plus size={12} strokeWidth={2.5} />
-          {t("New connection")}
-        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={onNewConnection}
+            style={{
+              flex: 1, minWidth: 0,
+              padding: "6px 8px", borderRadius: 5,
+              background: "var(--accent-fade)", color: "var(--text-1)",
+              border: "1px solid var(--accent)", fontSize: "var(--font-ui-size)",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            }}>
+            <Plus size={12} strokeWidth={2.5} />
+            {t("New connection")}
+          </button>
+          {onImportConfig && (
+            <button
+              aria-label={t("Import from SSH config")}
+              title={t("Import from SSH config")}
+              onClick={onImportConfig}
+              style={{
+                flexShrink: 0, padding: "6px 8px", borderRadius: 5,
+                background: "var(--panel-2)", color: "var(--text-2)",
+                border: "1px solid var(--border)",
+                display: "flex", alignItems: "center",
+              }}>
+              <FileDown size={12} strokeWidth={2.5} />
+            </button>
+          )}
+        </div>
       )}
     </aside>
   );

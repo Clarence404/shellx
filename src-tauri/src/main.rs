@@ -102,6 +102,7 @@ fn main() {
             ipc::hosts::set_host_passphrase,
             ipc::hosts::keychain_available,
             ipc::keys::keys_discover,
+            ipc::sshconfig::ssh_config_scan,
             ipc::sftp::sftp_list_dir,
             ipc::sftp::sftp_stat,
             ipc::sftp::sftp_rename,

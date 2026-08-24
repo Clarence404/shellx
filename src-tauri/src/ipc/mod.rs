@@ -12,6 +12,7 @@ pub mod logs;
 pub mod monitor;
 pub mod settings;
 pub mod sftp;
+pub mod sshconfig;
 pub mod transfer;
 pub mod tunnels;
 

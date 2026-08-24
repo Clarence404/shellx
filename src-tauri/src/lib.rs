@@ -8,6 +8,7 @@ pub mod logs;
 pub mod protocol;
 pub mod session;
 pub mod settings;
+pub mod sshconfig;
 pub mod store;
 pub mod transfer;
 pub mod transport;

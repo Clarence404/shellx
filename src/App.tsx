@@ -14,6 +14,7 @@ import { PaneLayout } from "./components/PaneLayout";
 import { activitiesFor, clampActivity } from "./state/activities";
 import { SessionSurfaces } from "./components/SessionSurfaces";
 import { ConnectDialog } from "./components/ConnectDialog";
+import { SshConfigImport } from "./components/SshConfigImport";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsView } from "./components/settings/SettingsView";
 import { useSessions } from "./state/sessions";
@@ -96,6 +97,7 @@ export function App() {
     | { mode: "edit"; initial: HostInfo }
     | null
   >(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   // In-app error banner. Replaces window.alert() which uses the OS's
   // native positioning (WebView2 opens it at the top-left of the app
@@ -469,6 +471,7 @@ export function App() {
           ids.forEach((id) => { void closeSession(id); removeSession(id); });
         }}
         onNewConnection={() => setDialog({ mode: "create" })}
+        onImportConfig={() => setImportOpen(true)}
         onNewLocalTerminal={() => void handleNewLocalTerminal()}
         onEditHost={(host) => setDialog({ mode: "edit", initial: host })}
         onConnectHost={(host, forceNew) => void handleConnectSavedHost(host, forceNew)}
@@ -511,7 +514,10 @@ export function App() {
           />
         )}
         {railView === "hosts" && !activeId && !displayConnectingHostId && (
-          <EmptyState onNewConnection={() => setDialog({ mode: "create" })} />
+          <EmptyState
+            onNewConnection={() => setDialog({ mode: "create" })}
+            onImportConfig={() => setImportOpen(true)}
+          />
         )}
         {railView === "files" && (
           <RailFilesView onConnectSavedHost={(host) => void handleConnectSavedHost(host)} />
@@ -567,6 +573,7 @@ export function App() {
           );
         }}
       />
+      <SshConfigImport open={importOpen} onClose={() => setImportOpen(false)} />
       <ConnectDialog
         open={dialog !== null}
         mode={dialog?.mode ?? "create"}

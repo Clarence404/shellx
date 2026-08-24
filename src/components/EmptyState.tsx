@@ -9,7 +9,10 @@ const kbdStyle = {
   fontFamily: '"JetBrains Mono", var(--font-mono)', fontSize: 10,
 } as const;
 
-export function EmptyState({ onNewConnection }: { onNewConnection?: () => void }) {
+export function EmptyState({ onNewConnection, onImportConfig }: {
+  onNewConnection?: () => void;
+  onImportConfig?: () => void;
+}) {
   const t = useT();
   const hasHosts = useHostsStore((s) => s.hosts.length > 0);
 
@@ -49,6 +52,16 @@ export function EmptyState({ onNewConnection }: { onNewConnection?: () => void }
           <div style={{ fontSize: 11, color: "var(--text-3)" }}>
             {t("or press")} <kbd style={kbdStyle}>⌘K</kbd> {t("to open a saved host")}
           </div>
+          {onImportConfig && (
+            <button
+              onClick={onImportConfig}
+              style={{
+                fontSize: 11, color: "var(--text-2)", textDecoration: "underline",
+                textUnderlineOffset: 3, cursor: "pointer",
+              }}>
+              {t("Import from SSH config")}
+            </button>
+          )}
         </>
       )}
     </div>
