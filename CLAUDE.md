@@ -8,6 +8,8 @@ Standing rules for anyone (Claude, another agent, or a human) working on this re
 
 **Every new feature, bug fix, or non-trivial change starts on its own branch.** `main` is only touched via merge / fast-forward from a feature branch that the user has explicitly asked to land. Do not commit new work directly on `main` — even if the previous cycle committed there.
 
+**No size exemption.** A one-line fix, a follow-up to something that just shipped, a typo in a comment: branch first. The tempting case is the minutes right after a release merge, when you are already standing on `main` and the change is small — that is exactly when this gets broken (it was broken in v0.21.1). Being on `main` is not a reason to commit on `main`.
+
 The flow is:
 
 1. **Create a feature branch** at the start of the work. Name it after the feature (kebab-case): `feat/directory-transfer`, `fix/cancel-signal`, `polish/appearance-panel`. If the user's request implies a specific scope, use that scope name.
