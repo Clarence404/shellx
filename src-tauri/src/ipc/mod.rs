@@ -1,6 +1,7 @@
 //! Tauri IPC surface: commands the frontend invokes plus the bridge that
 //! forwards each connection's byte stream to the frontend as events.
 
+pub mod bundle;
 pub mod config;
 pub mod events;
 pub mod hostkeys;

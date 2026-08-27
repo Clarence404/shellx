@@ -1,3 +1,4 @@
+pub mod bundle;
 pub mod config_paths;
 pub mod error;
 pub mod hostkeys;
