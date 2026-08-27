@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.21.1** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.22.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -18,7 +18,8 @@ ShellX is a desktop app that gives you:
 - **Structured logs** — Settings → Logs shows a real-time stream of every event across tunnels, sessions, file transfers, sftp, monitor, host-key checks, keychain and updater. Filter by level / category / free-text, click any row for full JSON, and export a jsonl dump for bug reports; daily-rotated files at `~/.shellx/logs/` with 7-day retention
 - **SFTP file browser** — WinSCP-style dual-pane (local ↔ remote) with drag-and-drop upload / download, folder transfers, pause / resume / cancel
 - **Session monitor** — live CPU / memory / network / disk / process view for any Linux host over the same SSH connection; adjustable 1–30 s poll interval
-- **Saved hosts + keychain** — store your servers once, quick-connect from the sidebar or the `+` menu; passwords live in the OS keychain, not a plaintext config
+- **Saved hosts + keychain** — store your servers once, quick-connect from the sidebar or the `+` menu; passwords live in the OS keychain, not a plaintext config. Ctrl-click / Shift-click to pick several rows and delete them in one confirmation
+- **Import & export** — pull machines straight out of `~/.ssh/config` (wildcards, `Match` blocks and `Include` lines are reported as skipped rather than dropped), or carry a whole setup to another computer as one JSON file: hosts, tunnel rules, and optionally your settings. Passwords and key passphrases stay in the OS keychain and are never written to the file — the file only records which hosts had one, so the import can tell you what will ask again
 - **Light or dark theme** — Light is default; toggle to Dark in Settings and the whole app (including the terminal palette) follows
 - **Bilingual interface** — switch the whole UI between English and Chinese in Settings, applied live
 - **Split panes** — drag a tab onto the edge of a pane to split it, onto the middle to swap the two, or onto the outer band of the area for a full-width row or full-height column. Same-direction splits stay evenly divided; drag a divider to resize, double-click it to level the row. Each pane switches its own Terminal / Files / Tunnels / Monitor
