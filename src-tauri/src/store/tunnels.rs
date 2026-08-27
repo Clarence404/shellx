@@ -263,6 +263,19 @@ impl TunnelStore {
         Ok(())
     }
 
+    /// Drops every rule belonging to a host, returning how many went.
+    /// A rule is only ever reachable through its host, so one left
+    /// behind by a deleted host is unreachable garbage rather than
+    /// data someone might come back for.
+    pub async fn delete_for_host(&self, host_id: Uuid) -> Result<usize> {
+        let conn = self.conn.lock().await;
+        conn.execute(
+            "DELETE FROM tunnels WHERE host_id=?1",
+            params![host_id.to_string()],
+        )
+        .map_err(|e| Error::Protocol(e.to_string()))
+    }
+
     /// Assigns contiguous sort_order values (0, 1, 2, …) to the given rules
     /// in the order supplied.  Only rules belonging to `host_id` are touched;
     /// any extra IDs in `rule_ids` that don't match are silently ignored.
@@ -320,6 +333,39 @@ mod tests {
         assert_eq!(list[0].host_id, host_id);
         assert_eq!(list[0].local_port, 15432);
         assert!(list[0].enabled);
+    }
+
+    #[tokio::test]
+    async fn delete_for_host_takes_that_hosts_rules_and_no_others() {
+        let store = make_store();
+        let doomed = Uuid::new_v4();
+        let keeper = Uuid::new_v4();
+        for (host_id, port) in [(doomed, 5432u16), (doomed, 6379), (keeper, 8080)] {
+            store
+                .insert(NewTunnelRule {
+                    host_id,
+                    label: String::new(),
+                    local_port: port,
+                    remote_host: "127.0.0.1".into(),
+                    remote_port: port,
+                    enabled: None,
+                    bind_all: None,
+                    auto_reconnect: None,
+                    autostart: None,
+                })
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(store.delete_for_host(doomed).await.unwrap(), 2);
+        assert!(store.list_for_host(doomed).await.unwrap().is_empty());
+        assert_eq!(store.list_for_host(keeper).await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn deleting_the_rules_of_a_host_with_none_is_not_an_error() {
+        let store = make_store();
+        assert_eq!(store.delete_for_host(Uuid::new_v4()).await.unwrap(), 0);
     }
 
     #[tokio::test]

@@ -172,14 +172,19 @@ pub async fn update_host(
 pub async fn delete_host(
     args: DeleteHostArgs,
     store: State<'_, HostStore>,
+    tunnels: State<'_, crate::store::TunnelStore>,
     keychain: State<'_, KeychainStore>,
 ) -> Result<()> {
+    // Rules go with the host. They are only ever reachable through it,
+    // so leaving them behind buries rows nothing can ever show again.
+    let rules_dropped = tunnels.delete_for_host(args.id).await.unwrap_or(0);
     store.delete(args.id).await?;
     let _ = keychain.delete_password(args.id);
     let _ = keychain.delete_passphrase(args.id);
     crate::log_info!(
         crate::logs::categories::HOST, "host deleted, keychain entries removed",
         "host_id": args.id.to_string(),
+        "tunnel_rules": rules_dropped,
     );
     Ok(())
 }

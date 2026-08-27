@@ -1,4 +1,5 @@
-import { Plus, PanelLeftClose, FileDown } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Plus, PanelLeftClose, FileDown, Trash2 } from "lucide-react";
 import { HostRow } from "./HostRow";
 import { SectionHeader } from "./SectionHeader";
 import { useHostsStore } from "../state/hosts";
@@ -7,6 +8,8 @@ import { useRailFiles } from "../state/railFiles";
 import { closeSession } from "../ipc/commands";
 import type { HostInfo } from "../types/host";
 import type { RailView } from "./ActivityRail";
+import { ConfirmDeleteHosts } from "./ConfirmDeleteHosts";
+import * as select from "../state/hostSelection";
 import { useT } from "../i18n";
 
 interface Props {
@@ -29,6 +32,36 @@ export function Drawer({ view, onNewConnection, onImportConfig, onEditHost, onCo
   const activeHostId = useSessions((s) => s.sessions.find((x) => x.id === s.activeId)?.host_id ?? null);
   const drawerCollapsed = useSessions((s) => s.drawerCollapsed);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
+  // Multi-select lives here rather than in a store: it is drawer-local,
+  // dies with the drawer, and nothing else in the app cares about it.
+  const [selection, setSelection] = useState<select.Selection>(select.EMPTY);
+  const [pending, setPending] = useState<HostInfo[] | null>(null);
+  const ids = hosts.map((h) => h.id);
+  const idKey = ids.join(",");
+  const selecting = select.isSelecting(selection);
+
+  // Rows that went away (deleted elsewhere, or by us) must not linger in
+  // the selection, or the footer would offer to delete nothing.
+  useEffect(() => {
+    setSelection((s) => select.prune(s, idKey ? idKey.split(",") : []));
+  }, [idKey]);
+
+  const clearSelection = useCallback(() => setSelection(select.EMPTY), []);
+
+  useEffect(() => {
+    if (!selecting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") clearSelection();
+      // Select-all only once a selection exists — an unqualified Ctrl+A
+      // belongs to whatever has focus, usually a terminal.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        setSelection(select.selectAll(idKey ? idKey.split(",") : []));
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selecting, idKey, clearSelection]);
 
   // Views that own their own internal chrome (RailFilesView has its own
   // rail+drawer replacement, SettingsView has SettingsSidebar) don't need the
@@ -42,9 +75,8 @@ export function Drawer({ view, onNewConnection, onImportConfig, onEditHost, onCo
   // via rail click still respected once hosts.length > 0.
   if (hosts.length === 0) return null;
 
-  async function handleDelete(host: HostInfo) {
-    if (!confirm(`Delete "${host.label}"?`)) return;
-    // Cascade cleanup before removing the row: any tab whose session's
+  async function deleteOne(host: HostInfo) {
+    // Cascade cleanup before removing the row: any tab whose session’s
     // host_id matches gets its backend closed + removed from the store,
     // and if the RemotePane was pointing at one of those sessions, reset
     // it to "Pick a host". Order matters — do this BEFORE deleteHostById
@@ -64,6 +96,22 @@ export function Drawer({ view, onNewConnection, onImportConfig, onEditHost, onCo
     }
     await deleteHostById(host.id);
   }
+
+  // One confirmation covers the whole batch; the work itself is the same
+  // per-host cascade, run in order so a failure part-way through leaves
+  // every host it has not reached yet untouched.
+  async function handleConfirmedDelete() {
+    const doomed = pending ?? [];
+    setPending(null);
+    for (const host of doomed) await deleteOne(host);
+    clearSelection();
+  }
+
+  function askDelete(hostsToDelete: HostInfo[]) {
+    if (hostsToDelete.length) setPending(hostsToDelete);
+  }
+
+  const selectedHosts = hosts.filter((h) => selection.ids.includes(h.id));
 
   async function handleDuplicate(host: HostInfo) {
     await addHost({
@@ -99,7 +147,7 @@ export function Drawer({ view, onNewConnection, onImportConfig, onEditHost, onCo
       display: "flex", flexDirection: "column",
     }}>
       <SectionHeader
-        label={t("Hosts")}
+        label={selecting ? `${t("Hosts")} · ${t("selected")} ${selection.ids.length}` : t("Hosts")}
         action={
           <button
             aria-label="Collapse drawer"
@@ -116,13 +164,40 @@ export function Drawer({ view, onNewConnection, onImportConfig, onEditHost, onCo
           </button>
         }
       />
-      <div style={{ flex: 1, overflow: "auto", marginBottom: 8 }}>
-        {view === "hosts" && hosts.map((h) => {
+      <div
+        // A click that lands on the list itself rather than a row is the
+        // usual way people expect to drop a selection.
+        onClick={(e) => { if (e.target === e.currentTarget) clearSelection(); }}
+        style={{ flex: 1, overflow: "auto", marginBottom: 8 }}
+      >
+        {view === "hosts" && hosts.map((h, index) => {
           const connected = hostIsConnected(h.id);
           return (
             <HostRow
               key={h.id}
               host={h}
+              selected={selection.ids.includes(h.id)}
+              selecting={selecting}
+              onSelect={(mods) => {
+                const outcome = select.clickRow(selection, index, ids, mods);
+                setSelection(outcome.selection);
+                if (outcome.kind === "connect") onConnectHost?.(h);
+              }}
+              onContextMenuOpen={() => {
+                setSelection(select.contextRow(selection, index, ids).selection);
+              }}
+              bulkItems={
+                selection.ids.includes(h.id) && selection.ids.length > 1
+                  ? [
+                      {
+                        label: `${t("Delete")} ${selection.ids.length} ${t("hosts")}`,
+                        onClick: () => askDelete(selectedHosts),
+                        variant: "danger" as const,
+                      },
+                      { label: t("Clear selection"), onClick: clearSelection },
+                    ]
+                  : undefined
+              }
               isConnected={connected}
               isConnecting={!!connecting[h.id]}
               isActive={h.id === activeHostId}
@@ -134,12 +209,37 @@ export function Drawer({ view, onNewConnection, onImportConfig, onEditHost, onCo
               onDisconnect={connected ? () => void handleDisconnect(h) : undefined}
               onEdit={() => onEditHost?.(h)}
               onDuplicate={() => handleDuplicate(h)}
-              onDelete={() => handleDelete(h)}
+              onDelete={() => askDelete([h])}
             />
           );
         })}
       </div>
-      {view === "hosts" && onNewConnection && (
+      {view === "hosts" && selecting && (
+        <div style={{ display: "flex", gap: 6 }}>
+          <button
+            onClick={() => askDelete(selectedHosts)}
+            style={{
+              flex: 1, minWidth: 0,
+              padding: "6px 8px", borderRadius: 5,
+              background: "var(--error-fade)", color: "var(--error)",
+              border: "1px solid var(--error)", fontSize: "var(--font-ui-size)",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            }}>
+            <Trash2 size={12} strokeWidth={2.5} />
+            {t("Delete")} {selection.ids.length}
+          </button>
+          <button
+            onClick={clearSelection}
+            style={{
+              flexShrink: 0, padding: "6px 10px", borderRadius: 5,
+              background: "var(--panel-2)", color: "var(--text-2)",
+              border: "1px solid var(--border)", fontSize: "var(--font-ui-size)",
+            }}>
+            {t("Cancel")}
+          </button>
+        </div>
+      )}
+      {view === "hosts" && !selecting && onNewConnection && (
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={onNewConnection}
             style={{
@@ -168,6 +268,11 @@ export function Drawer({ view, onNewConnection, onImportConfig, onEditHost, onCo
           )}
         </div>
       )}
+      <ConfirmDeleteHosts
+        hosts={pending}
+        onCancel={() => setPending(null)}
+        onConfirm={() => void handleConfirmedDelete()}
+      />
     </aside>
   );
 }

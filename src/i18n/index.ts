@@ -56,6 +56,10 @@ const zh: Record<string, string> = {
   "Edit": "编辑",
   "Duplicate": "复制主机",
   "Delete": "删除",
+  "Clear selection": "取消选择",
+  "Open sessions close, and the tunnel rules go too.": "会断开已打开的会话，隧道规则一并删除。",
+  "and": "还有",
+  "more": "台",
   "Collapse": "收起",
   "host options": "主机选项",
 

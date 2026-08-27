@@ -24,11 +24,24 @@ interface Props {
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  /** Part of the current multi-selection. */
+  selected?: boolean;
+  /** Any row is selected — a plain click then means "pick this one"
+   *  rather than "connect", so the click/double-click timer is skipped. */
+  selecting?: boolean;
+  /** Fires instead of onConnect for every click that is about picking
+   *  rows rather than opening one. */
+  onSelect?: (mods: { ctrl: boolean; shift: boolean }) => void;
+  /** Fires before the context menu opens, so the drawer can decide
+   *  whether this right-click keeps or drops the selection. */
+  onContextMenuOpen?: () => void;
+  /** Shown in place of the ordinary menu when several rows are picked. */
+  bulkItems?: { label: string; onClick: () => void; variant?: "danger" }[];
 }
 
 const DOUBLE_CLICK_MS = 250;
 
-export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, onOpenNewShell, onDisconnect, onEdit, onDuplicate, onDelete }: Props) {
+export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, onOpenNewShell, onDisconnect, onEdit, onDuplicate, onDelete, selected, selecting, onSelect, onContextMenuOpen, bulkItems }: Props) {
   const t = useT();
   const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -42,7 +55,19 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
   useEffect(() => () => {
     if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
   }, []);
-  const handleRowClick = () => {
+  const handleRowClick = (e: React.MouseEvent) => {
+    // Anything to do with picking rows happens at once: waiting 250ms to
+    // find out whether a Ctrl-click was a double-click would make the
+    // selection feel broken, and there is no second shell to open here.
+    const picking = e.ctrlKey || e.metaKey || e.shiftKey || selecting;
+    if (picking && onSelect) {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+      onSelect({ ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
+      return;
+    }
     if (clickTimerRef.current) return; // a click is already pending
     clickTimerRef.current = setTimeout(() => {
       clickTimerRef.current = null;
@@ -50,6 +75,7 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
     }, DOUBLE_CLICK_MS);
   };
   const handleRowDoubleClick = () => {
+    if (selecting) return;
     if (clickTimerRef.current) {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
@@ -61,7 +87,7 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
   // actions cluster, followed by a separator, then the saved-host
   // actions (Edit / Duplicate / Delete). Delete stays danger-red at the
   // bottom to keep destructive actions where the eye expects them.
-  const items = [
+  const items = bulkItems ?? [
     { label: t("Connect"), onClick: onConnect },
     ...(onDisconnect ? [{ label: t("Disconnect"), onClick: onDisconnect }] : []),
     { kind: "separator" as const },
@@ -72,6 +98,8 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
 
   function handleContextMenu(e: React.MouseEvent) {
     e.preventDefault();
+    e.stopPropagation();
+    onContextMenuOpen?.();
     setMenu({ x: e.clientX, y: e.clientY });
   }
 
@@ -94,10 +122,17 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
         role="group"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        data-selected={selected ? "true" : undefined}
         style={{
-          width: "100%", borderRadius: 5,
+          width: "100%",
+          // A selected row squares off its left edge so the accent bar
+          // reads as one continuous rail down the picked span.
+          borderRadius: selected ? "0 5px 5px 0" : 5,
+          borderLeft: `2px solid ${selected ? "var(--accent)" : "transparent"}`,
           display: "flex", alignItems: "center", gap: 4,
-          background: (hovered || isActive) ? "var(--border)" : "transparent",
+          background: selected
+            ? "var(--accent-fade)"
+            : (hovered || isActive) ? "var(--border)" : "transparent",
         }}>
         <button
           aria-label={host.label}
@@ -108,7 +143,8 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
           onContextMenu={handleContextMenu}
           style={{
             flex: 1, minWidth: 0, padding: "6px 8px", borderRadius: 5,
-            fontSize: "var(--font-ui-size)", color: "var(--text-1)",
+            fontSize: "var(--font-ui-size)",
+            color: selected ? "var(--accent)" : "var(--text-1)",
             display: "flex", alignItems: "center", gap: 8,
             background: "transparent",
             textAlign: "left",
