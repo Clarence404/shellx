@@ -18,6 +18,7 @@ async fn sftp_list_dir_upload_download_roundtrip() {
             method: AuthMethod::Password("pw".into()),
         },
         Arc::new(AcceptAllPolicy),
+        &Default::default(),
     )
     .await
     .unwrap();
@@ -62,4 +63,98 @@ async fn sftp_list_dir_upload_download_roundtrip() {
 
     let entries = sftp.list_dir(".").await.unwrap();
     assert!(entries.is_empty());
+}
+
+/// The path the tab's Files activity takes: a session opened through the
+/// manager (shell open, byte pump subscribed — the whole tab shape), then
+/// SFTP operations on the same session. Guards against anything holding
+/// the session's lock across an await, which turns the first realpath
+/// into a forever-pending "Loading…".
+#[tokio::test]
+async fn files_activity_path_realpath_then_list_alongside_a_live_shell() {
+    use shellx::session::manager::SessionManager;
+    use std::sync::Arc;
+
+    let tmp = TempDir::new().unwrap();
+    let (port, _server) =
+        shellx::protocol::ssh::testing::start_sftp_server(tmp.path().to_path_buf()).await;
+
+    let mgr = SessionManager::new();
+    let auth = AuthConfig {
+        username: "chen".into(),
+        method: AuthMethod::Password("pw".into()),
+    };
+    let info = mgr
+        .open_connection(
+            "127.0.0.1", port, auth, "tab".into(), None,
+            Arc::new(AcceptAllPolicy), &Default::default(),
+        )
+        .await
+        .unwrap();
+
+    // The tab shape: a live shell with its byte pump running, before any
+    // SFTP is asked for.
+    mgr.open_shell(info.id).await.unwrap();
+    let mut rx = mgr.subscribe(info.id).await.unwrap();
+    mgr.write(info.id, b"hello
+").await.unwrap();
+    let echoed = tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv())
+        .await
+        .expect("shell echo")
+        .unwrap();
+    assert!(echoed.starts_with(b"hello"));
+
+    // Exactly what FileBrowserView does on first open — with a deadline,
+    // because the failure mode being guarded against is a hang.
+    let realpath = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        mgr.sftp_realpath(info.id, "."),
+    )
+    .await
+    .expect("sftp_realpath must not hang")
+    .unwrap();
+    assert!(!realpath.is_empty());
+
+    let entries = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        mgr.sftp_list_dir(info.id, &realpath),
+    )
+    .await
+    .expect("sftp_list_dir must not hang")
+    .unwrap();
+    assert!(entries.is_empty(), "fresh temp dir");
+
+    // A second manager session against the same server — the FTP view's
+    // shape — must not affect the first one's SFTP.
+    let auth2 = AuthConfig {
+        username: "chen".into(),
+        method: AuthMethod::Password("pw".into()),
+    };
+    let info2 = mgr
+        .open_connection(
+            "127.0.0.1", port, auth2, "ftp-view".into(), None,
+            Arc::new(AcceptAllPolicy), &Default::default(),
+        )
+        .await
+        .unwrap();
+    let rp2 = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        mgr.sftp_realpath(info2.id, "."),
+    )
+    .await
+    .expect("second session's realpath must not hang")
+    .unwrap();
+    assert!(!rp2.is_empty());
+
+    let again = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        mgr.sftp_list_dir(info.id, &realpath),
+    )
+    .await
+    .expect("first session must still answer")
+    .unwrap();
+    assert!(again.is_empty());
+
+    mgr.close(info2.id).await.unwrap();
+    mgr.close(info.id).await.unwrap();
 }

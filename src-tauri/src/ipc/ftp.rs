@@ -144,6 +144,24 @@ fn store_password(keychain: &KeychainStore, id: Uuid, password: Option<&str>) ->
     }
 }
 
+
+/// Same rule the sftp commands follow: a browsing operation is one
+/// request and one reply, so a deadline turns a wedged connection into
+/// an error instead of a forever-pending promise.
+const BROWSE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+
+async fn deadline<T>(
+    what: &str,
+    fut: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+    match tokio::time::timeout(BROWSE_DEADLINE, fut).await {
+        Ok(r) => r,
+        Err(_) => Err(Error::Protocol(format!(
+            "{what} timed out — the connection may be dead; reconnect and try again"
+        ))),
+    }
+}
+
 // ------------------------------------------------------- live connections
 
 #[derive(Serialize)]
@@ -199,7 +217,7 @@ pub async fn ftp_connect(
         return connect_sftp(&host, &password, app, &keychain, &ftp, &sessions, &settings).await;
     }
 
-    let mut client = FtpClient::connect(
+    let mut client = deadline("connect", FtpClient::connect(
         &host.host,
         host.port,
         &host.username,
@@ -207,7 +225,7 @@ pub async fn ftp_connect(
         Charset::parse(&host.charset),
         host.passive,
         Tls::parse(&host.protocol, &host.tls_mode),
-    )
+    ))
     .await
     .inspect_err(|e| {
         crate::log_error!(
@@ -260,7 +278,7 @@ async fn connect_sftp(
 
     let advanced = crate::settings::advanced_or_default(settings);
     let policy = Arc::new(crate::ipc::hostkeys::TofuPolicy { app });
-    let info = sessions
+    let info = deadline("connect", sessions
         .open_connection(
             &host.host,
             host.port,
@@ -269,7 +287,7 @@ async fn connect_sftp(
             None,
             policy,
             &advanced,
-        )
+        ))
         .await
         .inspect_err(|e| {
             crate::log_error!(
@@ -281,11 +299,16 @@ async fn connect_sftp(
             );
         })?;
 
-    let cwd = sessions
-        .sftp_realpath(info.id, ".")
+    let cwd = deadline("resolve path", sessions.sftp_realpath(info.id, "."))
         .await
         .unwrap_or_else(|_| "/".to_string());
     ftp.bind_sftp(host.id, info.id).await;
+    crate::log_info!(
+        crate::logs::categories::SESSION,
+        "sftp connection established for ftp view",
+        "session": info.id.to_string(),
+        "host": host.host,
+    );
     Ok(FtpConnected { id: host.id, cwd })
 }
 
@@ -323,11 +346,11 @@ pub async fn ftp_list_dir(
     sessions: State<'_, SessionManager>,
 ) -> Result<Vec<Entry>> {
     if let Some(session) = ftp.session_of(args.id).await {
-        return sessions.sftp_list_dir(session, &args.path).await;
+        return deadline("list directory", sessions.sftp_list_dir(session, &args.path)).await;
     }
     let client = ftp.get(args.id).await?;
     let mut client = client.lock().await;
-    client.list_dir(&args.path).await
+    deadline("list directory", client.list_dir(&args.path)).await
 }
 
 #[tauri::command]
@@ -337,11 +360,11 @@ pub async fn ftp_pwd(
     sessions: State<'_, SessionManager>,
 ) -> Result<String> {
     if let Some(session) = ftp.session_of(args.id).await {
-        return sessions.sftp_realpath(session, ".").await;
+        return deadline("resolve path", sessions.sftp_realpath(session, ".")).await;
     }
     let client = ftp.get(args.id).await?;
     let mut client = client.lock().await;
-    client.pwd().await
+    deadline("resolve path", client.pwd()).await
 }
 
 #[derive(Deserialize)]
@@ -357,11 +380,11 @@ pub async fn ftp_mkdir(
     sessions: State<'_, SessionManager>,
 ) -> Result<()> {
     if let Some(session) = ftp.session_of(args.id).await {
-        return sessions.sftp_mkdir(session, &args.path).await;
+        return deadline("new folder", sessions.sftp_mkdir(session, &args.path)).await;
     }
     let client = ftp.get(args.id).await?;
     let mut client = client.lock().await;
-    client.mkdir(&args.path).await
+    deadline("new folder", client.mkdir(&args.path)).await
 }
 
 #[derive(Deserialize)]
@@ -378,11 +401,11 @@ pub async fn ftp_rename(
     sessions: State<'_, SessionManager>,
 ) -> Result<()> {
     if let Some(session) = ftp.session_of(args.id).await {
-        return sessions.sftp_rename(session, &args.from, &args.to).await;
+        return deadline("rename", sessions.sftp_rename(session, &args.from, &args.to)).await;
     }
     let client = ftp.get(args.id).await?;
     let mut client = client.lock().await;
-    client.rename(&args.from, &args.to).await
+    deadline("rename", client.rename(&args.from, &args.to)).await
 }
 
 #[derive(Deserialize)]
