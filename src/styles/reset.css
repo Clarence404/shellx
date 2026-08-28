@@ -132,3 +132,8 @@ input { font: inherit; color: inherit; }
   background-clip: content-box;
 }
 .shellx-transfer-scroll::-webkit-scrollbar-thumb:hover { background: var(--text-3); background-clip: content-box; }
+
+/* Spinner used by the FTP view while a listing or a connect is in
+   flight. One rule, so every spinner in the app turns at one speed. */
+@keyframes shellx-spin { to { transform: rotate(360deg); } }
+.shellx-spin { animation: shellx-spin 800ms linear infinite; }

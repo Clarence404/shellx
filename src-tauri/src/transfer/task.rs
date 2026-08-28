@@ -59,9 +59,9 @@ pub struct DoneEvent {
     pub state: TransferState,
 }
 
-type TaskMap = Arc<Mutex<HashMap<TransferId, LiveTransfer>>>;
+pub(crate) type TaskMap = Arc<Mutex<HashMap<TransferId, LiveTransfer>>>;
 
-async fn mark_active(tasks: &TaskMap, id: TransferId, total_bytes: u64) {
+pub(crate) async fn mark_active(tasks: &TaskMap, id: TransferId, total_bytes: u64) {
     if let Some(t) = tasks.lock().await.get_mut(&id) {
         t.info.total_bytes = total_bytes;
         t.info.state = TransferState::Active;
@@ -110,7 +110,7 @@ async fn maybe_emit_progress(
 /// Maps the loop's terminal `Result` to a `TransferState`, updates the
 /// shared map (clearing `cancel` since there's nothing left to cancel), and
 /// fires the single `transfer:done` event for this transfer.
-async fn finish(app: &AppHandle, tasks: &TaskMap, id: TransferId, result: Result<()>) {
+pub(crate) async fn finish(app: &AppHandle, tasks: &TaskMap, id: TransferId, result: Result<()>) {
     let final_state = match result {
         Ok(()) => TransferState::Done,
         Err(Error::Protocol(msg)) if msg == CANCELLED_MARKER => TransferState::Cancelled,
@@ -186,7 +186,7 @@ async fn wait_while_paused(
 /// Wait for a transfer slot, honouring a cancel that arrives while
 /// queued. Returns the permit, which the caller holds for the rest of the
 /// transfer — dropping it hands the slot to the next queued transfer.
-async fn acquire_slot(
+pub(crate) async fn acquire_slot(
     gate: Arc<tokio::sync::Semaphore>,
     cancel_rx: &mut oneshot::Receiver<()>,
 ) -> Result<tokio::sync::OwnedSemaphorePermit> {
@@ -195,6 +195,52 @@ async fn acquire_slot(
         permit = gate.acquire_owned() => permit
             .map_err(|e| Error::Protocol(format!("transfer gate closed: {e}"))),
     }
+}
+
+/// The chunk loop every transfer runs, whatever protocol feeds it: read,
+/// honour pause and cancel on both sides of each chunk, write, emit
+/// throttled progress. Extracted so the FTP tasks are the same loop
+/// rather than a second copy that drifts.
+pub(crate) async fn pump(
+    app: &AppHandle,
+    tasks: &TaskMap,
+    transfer_id: TransferId,
+    src: &mut (dyn tokio::io::AsyncRead + Send + Unpin),
+    dst: &mut (dyn tokio::io::AsyncWrite + Send + Unpin),
+    total_bytes: u64,
+    cancel_rx: &mut oneshot::Receiver<()>,
+    pause_flag: &AtomicBool,
+) -> Result<()> {
+    let mut src = std::pin::Pin::new(src);
+    let mut dst = std::pin::Pin::new(dst);
+    let mut buf = vec![0u8; CHUNK_SIZE];
+    let mut done: u64 = 0;
+    let start = Instant::now();
+    let mut last_emit = Instant::now();
+    let mut last_emit_bytes: u64 = 0;
+
+    loop {
+        wait_while_paused(pause_flag, cancel_rx).await?;
+        let n = tokio::select! {
+            _ = &mut *cancel_rx => {
+                return Err(Error::Protocol(CANCELLED_MARKER.into()));
+            }
+            r = src.read(&mut buf) => r.map_err(Error::Io)?,
+        };
+        if n == 0 { break; }
+        tokio::select! {
+            _ = &mut *cancel_rx => {
+                return Err(Error::Protocol(CANCELLED_MARKER.into()));
+            }
+            r = dst.write_all(&buf[..n]) => r.map_err(Error::Io)?,
+        }
+        done += n as u64;
+        maybe_emit_progress(
+            app, tasks, transfer_id, done, total_bytes, start,
+            &mut last_emit, &mut last_emit_bytes,
+        ).await;
+    }
+    Ok(())
 }
 
 /// Pumps `local` -> `remote` over the connection's SFTP subsystem (opened
@@ -219,41 +265,10 @@ pub(crate) async fn run_upload(
 
         let mut src = LocalFile::open(&local).await.map_err(Error::Io)?;
         let mut dst = session_mgr.sftp_open_write(conn_id, &remote).await?;
-
-        let mut buf = vec![0u8; CHUNK_SIZE];
-        let mut done: u64 = 0;
-        let start = Instant::now();
-        let mut last_emit = Instant::now();
-        let mut last_emit_bytes: u64 = 0;
-
-        loop {
-            wait_while_paused(&pause_flag, &mut cancel_rx).await?;
-            // Read is quick (local fs); cancel is polled here.
-            let n = tokio::select! {
-                _ = &mut cancel_rx => {
-                    return Err(Error::Protocol(CANCELLED_MARKER.into()));
-                }
-                r = src.read(&mut buf) => r.map_err(Error::Io)?,
-            };
-            if n == 0 { break; }
-            // Write is the slow / potentially-blocked side (shared SFTP
-            // channel with 10 concurrent tasks). Wrap it in a second
-            // select so a `transferCancel` fires immediately even when
-            // the write is stalled — the previous shape only checked
-            // cancel between chunks, so a stuck write would swallow
-            // cancels indefinitely.
-            tokio::select! {
-                _ = &mut cancel_rx => {
-                    return Err(Error::Protocol(CANCELLED_MARKER.into()));
-                }
-                r = dst.write_all(&buf[..n]) => r.map_err(Error::Io)?,
-            }
-            done += n as u64;
-            maybe_emit_progress(
-                &app, &tasks, transfer_id, done, total_bytes, start,
-                &mut last_emit, &mut last_emit_bytes,
-            ).await;
-        }
+        pump(
+            &app, &tasks, transfer_id, &mut src, &mut dst,
+            total_bytes, &mut cancel_rx, &pause_flag,
+        ).await?;
         dst.shutdown().await.map_err(Error::Io)?;
         Ok(())
     }
@@ -291,36 +306,10 @@ pub(crate) async fn run_download(
             let _ = tokio::fs::create_dir_all(parent).await;
         }
         let mut dst = LocalFile::create(&local).await.map_err(Error::Io)?;
-
-        let mut buf = vec![0u8; CHUNK_SIZE];
-        let mut done: u64 = 0;
-        let start = Instant::now();
-        let mut last_emit = Instant::now();
-        let mut last_emit_bytes: u64 = 0;
-
-        loop {
-            wait_while_paused(&pause_flag, &mut cancel_rx).await?;
-            // Read is the slow side for downloads (SFTP-over-SSH); wrap
-            // in select so cancel fires promptly even mid-stream.
-            let n = tokio::select! {
-                _ = &mut cancel_rx => {
-                    return Err(Error::Protocol(CANCELLED_MARKER.into()));
-                }
-                r = src.read(&mut buf) => r.map_err(Error::Io)?,
-            };
-            if n == 0 { break; }
-            tokio::select! {
-                _ = &mut cancel_rx => {
-                    return Err(Error::Protocol(CANCELLED_MARKER.into()));
-                }
-                r = dst.write_all(&buf[..n]) => r.map_err(Error::Io)?,
-            }
-            done += n as u64;
-            maybe_emit_progress(
-                &app, &tasks, transfer_id, done, total_bytes, start,
-                &mut last_emit, &mut last_emit_bytes,
-            ).await;
-        }
+        pump(
+            &app, &tasks, transfer_id, &mut src, &mut dst,
+            total_bytes, &mut cancel_rx, &pause_flag,
+        ).await?;
         dst.flush().await.map_err(Error::Io)?;
         Ok(())
     }

@@ -822,13 +822,55 @@ pub mod testing {
                 if let Some(channel) = self.channels.remove(&channel_id) {
                     session.channel_success(channel_id)?;
                     let backend = SftpBackend::new(self.root.clone());
-                    russh_sftp::server::run(channel.into_stream(), backend).await;
+                    // Serve on a spawned task, the way a real sshd forks a
+                    // subsystem per channel. Awaiting it inline would block
+                    // this handler — and with it every later request on the
+                    // same connection, which is exactly the failure the
+                    // shell-plus-sftp integration test exists to catch.
+                    tokio::spawn(russh_sftp::server::run(channel.into_stream(), backend));
                 } else {
                     session.channel_failure(channel_id)?;
                 }
             } else {
                 session.channel_failure(channel_id)?;
             }
+            Ok(())
+        }
+
+        // The tab shape is a shell channel and an SFTP channel on one
+        // connection, so the fixture accepts a shell too: pty and shell
+        // requests succeed, bytes echo back.
+        async fn pty_request(
+            &mut self,
+            channel: ChannelId,
+            _term: &str,
+            _cols: u32,
+            _rows: u32,
+            _px: u32,
+            _py: u32,
+            _modes: &[(russh::Pty, u32)],
+            session: &mut SrvSession,
+        ) -> std::result::Result<(), Self::Error> {
+            session.channel_success(channel)?;
+            Ok(())
+        }
+
+        async fn shell_request(
+            &mut self,
+            channel: ChannelId,
+            session: &mut SrvSession,
+        ) -> std::result::Result<(), Self::Error> {
+            session.channel_success(channel)?;
+            Ok(())
+        }
+
+        async fn data(
+            &mut self,
+            chan: ChannelId,
+            data: &[u8],
+            session: &mut SrvSession,
+        ) -> std::result::Result<(), Self::Error> {
+            session.data(chan, data.to_vec())?;
             Ok(())
         }
     }

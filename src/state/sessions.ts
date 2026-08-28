@@ -4,7 +4,7 @@ import type { TunnelStatus } from "../types/tunnel";
 import * as tree from "./paneTree";
 import type { DropZone, PaneNode } from "./paneTree";
 
-export type RailView = "hosts" | "files" | "tunnels" | "serial" | "settings";
+export type RailView = "hosts" | "files" | "ftp" | "tunnels" | "serial" | "settings";
 
 interface SessionsState {
   sessions: ConnectionInfo[];

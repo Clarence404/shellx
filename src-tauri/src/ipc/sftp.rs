@@ -16,6 +16,33 @@ use crate::session::{manager::SessionManager, ConnectionId};
 use serde::Deserialize;
 use tauri::State;
 
+
+/// Browsing operations are one request and one reply — seconds, not
+/// minutes. Without a deadline, a wedged transport (half-open TCP after
+/// a sleep or a dropped NAT entry) turns the first SFTP call into a
+/// promise that never settles, and the Files pane into a forever
+/// "Loading…" with nothing in the logs. A timeout converts that into an
+/// error the pane can show and the user can retry.
+const BROWSE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(30);
+
+async fn deadline<T>(
+    what: &str,
+    fut: impl std::future::Future<Output = Result<T>>,
+) -> Result<T> {
+    match tokio::time::timeout(BROWSE_DEADLINE, fut).await {
+        Ok(r) => r,
+        Err(_) => {
+            crate::log_error!(
+                SFTP, "operation timed out",
+                "op": what,
+            );
+            Err(crate::error::Error::Protocol(format!(
+                "{what} timed out — the connection may be dead; reconnect and try again"
+            )))
+        }
+    }
+}
+
 #[derive(Deserialize)]
 pub struct SftpListArgs {
     pub conn_id: ConnectionId,
@@ -27,7 +54,7 @@ pub async fn sftp_list_dir(
     args: SftpListArgs,
     mgr: State<'_, SessionManager>,
 ) -> Result<Vec<Entry>> {
-    match mgr.sftp_list_dir(args.conn_id, &args.path).await {
+    match deadline("list directory", mgr.sftp_list_dir(args.conn_id, &args.path)).await {
         Ok(entries) => {
             crate::log_debug!(
                 SFTP, "listed directory",
@@ -57,7 +84,7 @@ pub struct SftpStatArgs {
 
 #[tauri::command]
 pub async fn sftp_stat(args: SftpStatArgs, mgr: State<'_, SessionManager>) -> Result<Entry> {
-    mgr.sftp_stat(args.conn_id, &args.path).await.map_err(|e| {
+    deadline("stat", mgr.sftp_stat(args.conn_id, &args.path)).await.map_err(|e| {
         crate::log_error!(
             SFTP, "stat failed",
             "session": args.conn_id.to_string(),
@@ -77,7 +104,7 @@ pub struct SftpRenameArgs {
 
 #[tauri::command]
 pub async fn sftp_rename(args: SftpRenameArgs, mgr: State<'_, SessionManager>) -> Result<()> {
-    match mgr.sftp_rename(args.conn_id, &args.from, &args.to).await {
+    match deadline("rename", mgr.sftp_rename(args.conn_id, &args.from, &args.to)).await {
         Ok(()) => {
             crate::log_info!(
                 SFTP, "renamed remote path",
@@ -112,7 +139,7 @@ pub async fn sftp_remove_file(
     mgr: State<'_, SessionManager>,
 ) -> Result<()> {
     log_removal(
-        mgr.sftp_remove_file(args.conn_id, &args.path).await,
+        deadline("delete", mgr.sftp_remove_file(args.conn_id, &args.path)).await,
         args.conn_id,
         &args.path,
         "file",
@@ -131,7 +158,7 @@ pub async fn sftp_remove_dir(
     mgr: State<'_, SessionManager>,
 ) -> Result<()> {
     log_removal(
-        mgr.sftp_remove_dir(args.conn_id, &args.path).await,
+        deadline("delete folder", mgr.sftp_remove_dir(args.conn_id, &args.path)).await,
         args.conn_id,
         &args.path,
         "dir",
@@ -149,7 +176,7 @@ pub async fn sftp_remove_dir_recursive(
     mgr: State<'_, SessionManager>,
 ) -> Result<()> {
     log_removal(
-        mgr.sftp_remove_dir_recursive(args.conn_id, &args.path).await,
+        deadline("delete folder", mgr.sftp_remove_dir_recursive(args.conn_id, &args.path)).await,
         args.conn_id,
         &args.path,
         "dir_recursive",
@@ -196,7 +223,7 @@ pub struct SftpMkdirArgs {
 
 #[tauri::command]
 pub async fn sftp_mkdir(args: SftpMkdirArgs, mgr: State<'_, SessionManager>) -> Result<()> {
-    match mgr.sftp_mkdir(args.conn_id, &args.path).await {
+    match deadline("new folder", mgr.sftp_mkdir(args.conn_id, &args.path)).await {
         Ok(()) => {
             crate::log_info!(
                 SFTP, "created remote directory",
@@ -228,7 +255,7 @@ pub async fn sftp_realpath(
     args: SftpRealpathArgs,
     mgr: State<'_, SessionManager>,
 ) -> Result<String> {
-    mgr.sftp_realpath(args.conn_id, &args.path).await.map_err(|e| {
+    deadline("resolve path", mgr.sftp_realpath(args.conn_id, &args.path)).await.map_err(|e| {
         crate::log_error!(
             SFTP, "realpath failed",
             "session": args.conn_id.to_string(),

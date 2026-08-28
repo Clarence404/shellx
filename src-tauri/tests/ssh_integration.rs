@@ -11,7 +11,7 @@ async fn e2e_open_write_read_close() {
         method: AuthMethod::Password("pw".into()),
     };
     let info = mgr
-        .open_connection("127.0.0.1", port, auth, "e2e".into(), None, Arc::new(AcceptAllPolicy))
+        .open_connection("127.0.0.1", port, auth, "e2e".into(), None, Arc::new(AcceptAllPolicy), &Default::default())
         .await
         .unwrap();
     mgr.open_shell(info.id).await.unwrap();

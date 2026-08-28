@@ -6,7 +6,8 @@ use shellx::ipc;
 use shellx::monitor::manager::MonitorManager;
 use shellx::session::manager::SessionManager;
 use shellx::settings::SettingsStore;
-use shellx::store::{HostStore, KeychainStore, TunnelStore};
+use shellx::ftp::manager::FtpManager;
+use shellx::store::{FtpHostStore, HostStore, KeychainStore, TunnelStore};
 use shellx::transfer::TransferManager;
 
 fn main() {
@@ -17,6 +18,8 @@ fn main() {
 
     let host_store = HostStore::open(&config_dir).expect("failed to open hosts.db");
     let tunnel_store = TunnelStore::new(host_store.conn_arc());
+    let ftp_host_store = FtpHostStore::new(host_store.conn_arc())
+        .expect("failed to prepare ftp_hosts");
     let keychain = KeychainStore::open();
     let settings_store = SettingsStore::open(&config_dir);
     // Advanced knobs are read once here: the log floor and the transfer
@@ -78,6 +81,8 @@ fn main() {
         .manage(transfer_mgr)
         .manage(host_store)
         .manage(tunnel_store)
+        .manage(ftp_host_store)
+        .manage(FtpManager::new())
         .manage(keychain)
         .manage(settings_store)
         .manage(MonitorManager::new())
@@ -103,6 +108,23 @@ fn main() {
             ipc::hosts::keychain_available,
             ipc::keys::keys_discover,
             ipc::sshconfig::ssh_config_scan,
+            ipc::ftp::ftp_host_list,
+            ipc::ftp::ftp_host_save,
+            ipc::ftp::ftp_host_update,
+            ipc::ftp::ftp_host_delete,
+            ipc::ftp::ftp_host_import,
+            ipc::ftp::ftp_connect,
+            ipc::ftp::ftp_disconnect,
+            ipc::ftp::ftp_active_ids,
+            ipc::ftp::ftp_list_dir,
+            ipc::ftp::ftp_pwd,
+            ipc::ftp::ftp_mkdir,
+            ipc::ftp::ftp_rename,
+            ipc::ftp::ftp_remove,
+            ipc::ftp::ftp_upload,
+            ipc::ftp::ftp_download,
+            ipc::ftp::ftp_upload_dir,
+            ipc::ftp::ftp_download_dir,
             ipc::bundle::config_bundle_export,
             ipc::bundle::config_bundle_preview,
             ipc::bundle::config_bundle_import,
@@ -137,6 +159,8 @@ fn main() {
             ipc::settings::load_settings,
             ipc::settings::save_settings,
             ipc::config::get_config_paths,
+            ipc::dragout::drag_out,
+            ipc::dragout::drag_out_staging_dir,
             ipc::hostkeys::hostkey_respond,
             ipc::hostkeys::hostkeys_list,
             ipc::tunnels::tunnel_list_for_host,

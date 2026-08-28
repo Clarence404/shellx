@@ -62,7 +62,10 @@ export function FileBrowserView({ connectionId }: Props) {
   // start. Without this, the breadcrumb renders "." as target "/." and clicking
   // it jumps to root — the reported bug.
   useEffect(() => {
-    if (state) return;
+    // Guard on the raw store entry, not on `state`: `state` is aliased to
+    // EMPTY_LISTING and is therefore always truthy — guarding on it means
+    // this effect never runs and the pane loads nothing, forever.
+    if (listing) return;
     let cancelled = false;
     (async () => {
       try {
@@ -73,7 +76,7 @@ export function FileBrowserView({ connectionId }: Props) {
       }
     })();
     return () => { cancelled = true; };
-  }, [connectionId, state, loadDir]);
+  }, [connectionId, listing, loadDir]);
 
   // Native Tauri drag-drop listener (scoped to this component's lifetime).
   // `cancelled` guards against the async registration race: onDragDropEvent
