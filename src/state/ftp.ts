@@ -40,8 +40,31 @@ interface State {
   disconnect: (id: string) => Promise<void>;
   setActive: (id: string | null) => void;
   navigate: (path: string) => Promise<void>;
+  mkdir: (path: string) => Promise<void>;
+  rename: (from: string, to: string) => Promise<void>;
+  remove: (path: string, isDir: boolean) => Promise<void>;
   refresh: () => Promise<void>;
   clearError: () => void;
+}
+
+/** Every remote change ends the same way: do it, then re-read the
+ *  directory so the pane shows what the server actually has rather than
+ *  what we assumed it would have. A failure leaves the listing alone and
+ *  puts the reason on screen. */
+async function mutate(
+  get: () => State,
+  set: (partial: Partial<State>) => void,
+  run: (id: string) => Promise<void>,
+): Promise<void> {
+  const id = get().activeId;
+  if (!id) return;
+  try {
+    await run(id);
+  } catch (e) {
+    set({ error: String(e) });
+    return;
+  }
+  await get().refresh();
 }
 
 export const useFtpStore = create<State>((set, get) => ({
@@ -151,6 +174,18 @@ export const useFtpStore = create<State>((set, get) => ({
     } finally {
       set({ listing: false });
     }
+  },
+
+  mkdir: async (path) => {
+    await mutate(get, set, (id) => ipc.ftpMkdir(id, path));
+  },
+
+  rename: async (from, to) => {
+    await mutate(get, set, (id) => ipc.ftpRename(id, from, to));
+  },
+
+  remove: async (path, isDir) => {
+    await mutate(get, set, (id) => ipc.ftpRemove(id, path, isDir));
   },
 
   refresh: async () => {

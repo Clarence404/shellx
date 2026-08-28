@@ -1,6 +1,10 @@
-import { useEffect } from "react";
-import { ArrowUp, RefreshCw, Folder, File as FileIcon, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FolderPlus, RefreshCw } from "lucide-react";
 import { ConnectingPanel } from "./ConnectingPanel";
+import { PathBreadcrumb } from "./PathBreadcrumb";
+import { PaneToolbarButton } from "./PaneToolbarButton";
+import { FileRow, buildFolderMenuItems } from "./FileRow";
+import { HostContextMenu } from "./HostContextMenu";
 import { joinPath, useFtpStore } from "../state/ftp";
 import { useT } from "../i18n";
 import type { FtpEntry, FtpHost } from "../types/ftp";
@@ -15,22 +19,13 @@ function sortEntries(entries: FtpEntry[]): FtpEntry[] {
   });
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let i = 0;
-  while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
-  return `${value.toFixed(1)} ${units[i]}`;
-}
-
-function formatTime(ms: number | null): string {
-  if (!ms) return "";
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
+/**
+ * The remote half of the FTP view. Deliberately the same chrome the
+ * Files view uses — toolbar, breadcrumb, and `FileRow` for every row —
+ * so a directory looks the same whichever protocol fetched it. What is
+ * different is the tag strip in the toolbar, because what a connection
+ * is actually doing is the thing FTP makes hard to know.
+ */
 export function FtpRemotePane() {
   const t = useT();
   const activeId = useFtpStore((s) => s.activeId);
@@ -42,6 +37,7 @@ export function FtpRemotePane() {
   const listedKey = useFtpStore((s) => s.listedKey);
   const listing = useFtpStore((s) => s.listing);
   const error = useFtpStore((s) => s.error);
+  const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null);
 
   const host = hosts.find((h) => h.id === activeId) ?? null;
   const live = !!activeId && connected.includes(activeId);
@@ -57,9 +53,21 @@ export function FtpRemotePane() {
     }
   }, [live, listing, listedKey, activeId, cwd]);
 
-  // Same panel the Hosts view shows while a connection is being made,
-  // so the two views do not have their own idea of what connecting looks
-  // like.
+  const store = useFtpStore.getState;
+
+  async function newFolder() {
+    const name = prompt(t("New folder name"));
+    if (!name) return;
+    await store().mkdir(joinPath(cwd, name));
+  }
+
+  const folderActions = {
+    onNewFolder: () => void newFolder(),
+    onRefresh: () => void store().refresh(),
+  };
+
+  // Same panel the Hosts view shows while a connection is being made, so
+  // the two views do not have their own idea of what connecting looks like.
   if (host && !!activeId && connecting.includes(activeId)) {
     return (
       <ConnectingPanel
@@ -84,21 +92,18 @@ export function FtpRemotePane() {
             reason would never reach the screen. */}
         {error && (
           <div style={{
-            color: "var(--error)", maxWidth: 420, lineHeight: 1.6,
-            whiteSpace: "pre-wrap",
+            color: "var(--error)", maxWidth: 420, lineHeight: 1.6, whiteSpace: "pre-wrap",
           }}>{error}</div>
         )}
         <div>
           {hosts.length === 0
             ? t("Add an FTP connection to get started")
-            : host
-              ? t("Not connected")
-              : t("Pick a connection on the left")}
+            : host ? t("Not connected") : t("Pick a connection on the left")}
         </div>
         {host && (
           <button
             type="button"
-            onClick={() => void useFtpStore.getState().connect(host.id)}
+            onClick={() => void store().connect(host.id)}
             style={{
               padding: "5px 12px", borderRadius: 5, fontSize: 12,
               border: "1px solid var(--accent)", background: "var(--accent-fade)",
@@ -112,106 +117,104 @@ export function FtpRemotePane() {
   }
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      {/* Path bar. The tags say what this connection is actually doing —
-          nine out of ten FTP problems are one of these three. */}
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       <div style={{
-        height: 32, flexShrink: 0, display: "flex", alignItems: "center", gap: 6,
-        padding: "0 8px", borderBottom: "1px solid var(--border)", background: "var(--panel-1)",
+        height: 32, padding: "0 10px", display: "flex", alignItems: "center", gap: 6,
+        background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)",
       }}>
-        <IconButton
-          label={t("Up one level")}
-          onClick={() => void useFtpStore.getState().navigate(joinPath(cwd, ".."))}
-          disabled={cwd === "/"}
-        >
-          <ArrowUp size={12} strokeWidth={2} />
-        </IconButton>
-        <IconButton label={t("Refresh")} onClick={() => void useFtpStore.getState().refresh()}>
-          <RefreshCw size={12} strokeWidth={2} />
-        </IconButton>
-        <div style={{
-          flex: 1, minWidth: 0, fontFamily: "var(--font-mono)", fontSize: 11,
-          background: "var(--panel-2)", border: "1px solid var(--border)",
-          borderRadius: 4, padding: "3px 6px",
+        <span style={{
+          fontSize: "var(--font-ui-size)", color: "var(--text-1)",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>{cwd}</div>
+        }}>{host.label}</span>
         <ConnectionTags host={host} />
+        <div style={{ flex: 1 }} />
+        <PaneToolbarButton title={t("New folder")} onClick={() => void newFolder()}>
+          {(size) => <FolderPlus size={size} />}
+        </PaneToolbarButton>
+        <PaneToolbarButton title={t("Refresh")} onClick={() => void store().refresh()}>
+          {(size) => <RefreshCw size={size} />}
+        </PaneToolbarButton>
       </div>
 
-      {/* Column header */}
       <div style={{
-        display: "flex", fontSize: 10, color: "var(--text-3)", padding: "4px 10px",
-        borderBottom: "1px solid var(--border)", textTransform: "uppercase",
-        letterSpacing: 0.4, flexShrink: 0,
+        height: 30, padding: "0 10px", display: "flex", alignItems: "center",
+        background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)",
       }}>
-        <span style={{ flex: 1 }}>{host.label}</span>
-        <span style={{ width: 72, textAlign: "right" }}>{t("File size")}</span>
-        <span style={{ width: 80, textAlign: "right" }}>{t("Modified")}</span>
+        <PathBreadcrumb path={cwd} onNavigate={(p) => void store().navigate(p)} />
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+      <div
+        role="list"
+        style={{ flex: 1, minHeight: 0, overflow: "auto" }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setBlankMenu({ x: e.clientX, y: e.clientY });
+        }}
+      >
         {error && (
           <div style={{
-            fontSize: 11, color: "var(--error)", padding: "8px 10px",
-            borderBottom: "1px solid var(--border)", whiteSpace: "pre-wrap",
+            padding: "8px 10px", color: "var(--error)", fontSize: 11, whiteSpace: "pre-wrap",
           }}>{error}</div>
         )}
         {listing && entries.length === 0 && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 6, justifyContent: "center",
-            color: "var(--text-3)", fontSize: 12, padding: "24px 0",
-          }}>
-            <Loader2 size={12} className="shellx-spin" /> {t("Listing")}…
+          <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>
+            {t("Loading")}…
           </div>
         )}
         {!listing && entries.length === 0 && !error && (
-          <div style={{ color: "var(--text-3)", fontSize: 12, padding: "24px 0", textAlign: "center" }}>
+          <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>
             {t("This folder is empty")}
           </div>
         )}
+        {cwd !== "" && cwd !== "/" && (
+          <FileRow
+            name=".." kind="directory" size={0}
+            onOpen={() => void store().navigate(joinPath(cwd, ".."))}
+            onRename={() => {}} onDelete={() => {}}
+            disabled
+          />
+        )}
         {sortEntries(entries).map((e) => (
-          <div
+          <FileRow
             key={e.name}
-            onDoubleClick={() => {
-              if (e.kind === "directory") void useFtpStore.getState().navigate(joinPath(cwd, e.name));
+            name={e.name}
+            kind={e.kind}
+            size={e.size}
+            onOpen={() => {
+              if (e.kind === "directory") void store().navigate(joinPath(cwd, e.name));
             }}
-            style={{
-              display: "flex", alignItems: "center", fontSize: 12,
-              padding: "4px 10px", gap: 8,
-              cursor: e.kind === "directory" ? "pointer" : "default",
-            }}
-            onMouseEnter={(ev) => { ev.currentTarget.style.background = "var(--panel-1)"; }}
-            onMouseLeave={(ev) => { ev.currentTarget.style.background = "transparent"; }}
-          >
-            <span style={{ flexShrink: 0, color: "var(--text-3)", display: "flex" }}>
-              {e.kind === "directory"
-                ? <Folder size={12} strokeWidth={2} />
-                : <FileIcon size={12} strokeWidth={2} />}
-            </span>
-            <span style={{
-              flex: 1, minWidth: 0, overflow: "hidden",
-              textOverflow: "ellipsis", whiteSpace: "nowrap",
-            }}>{e.name}</span>
-            <span style={{ width: 72, textAlign: "right", fontSize: 11, color: "var(--text-3)" }}>
-              {e.kind === "directory" ? "" : formatBytes(e.size)}
-            </span>
-            <span style={{ width: 80, textAlign: "right", fontSize: 11, color: "var(--text-3)" }}>
-              {formatTime(e.modified)}
-            </span>
-          </div>
+            onRename={(next) => void store().rename(joinPath(cwd, e.name), joinPath(cwd, next))}
+            onDelete={() => void store().remove(joinPath(cwd, e.name), e.kind === "directory")}
+            folderActions={folderActions}
+          />
         ))}
       </div>
+
+      {blankMenu && (
+        <HostContextMenu
+          x={blankMenu.x} y={blankMenu.y}
+          items={buildFolderMenuItems(folderActions)}
+          onClose={() => setBlankMenu(null)}
+        />
+      )}
     </div>
   );
 }
 
+/** What this connection is actually doing. Nine out of ten FTP problems
+ *  are one of these three, so they sit in the toolbar rather than behind
+ *  an edit dialog. */
 function ConnectionTags({ host }: { host: FtpHost }) {
   const t = useT();
   const tags: { text: string; tone: "warn" | "ok" | "muted" }[] = [];
-  if (host.protocol === "ftp") tags.push({ text: t("plaintext"), tone: "warn" });
-  else tags.push({ text: t("encrypted"), tone: "ok" });
+  tags.push(host.protocol === "ftp"
+    ? { text: t("plaintext"), tone: "warn" }
+    : { text: t("encrypted"), tone: "ok" });
   if (host.protocol !== "sftp") {
-    tags.push({ text: host.charset === "auto" ? t("auto") : host.charset.toUpperCase(), tone: "muted" });
+    tags.push({
+      text: host.charset === "auto" ? t("auto") : host.charset.toUpperCase(),
+      tone: "muted",
+    });
     tags.push({ text: host.passive ? t("passive mode") : t("active mode"), tone: "muted" });
   }
   return (
@@ -229,28 +232,5 @@ function ConnectionTags({ host }: { host: FtpHost }) {
         }}>{tag.text}</span>
       ))}
     </span>
-  );
-}
-
-function IconButton({ label, onClick, disabled, children }: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        color: disabled ? "var(--text-4)" : "var(--text-3)",
-        padding: "2px 3px", borderRadius: 3, display: "flex",
-        background: "transparent", border: "none",
-      }}>
-      {children}
-    </button>
   );
 }

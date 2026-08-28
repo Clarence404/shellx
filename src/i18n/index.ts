@@ -20,6 +20,7 @@ const zh: Record<string, string> = {
   "Edit connection": "编辑连接",
   "No FTP connections yet": "还没有 FTP 连接",
   "Not connected": "未连接",
+  "New folder name": "新文件夹名称",
   "Establishing the SSH session.": "正在建立 SSH 会话。",
   "Opening the control connection.": "正在建立控制连接。",
   "Add an FTP connection to get started": "先新建一个 FTP 连接",

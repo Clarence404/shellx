@@ -217,6 +217,33 @@ impl FtpClient {
             .collect())
     }
 
+    pub async fn mkdir(&mut self, path: &str) -> Result<()> {
+        let arg = encode_path(path, self.charset)?;
+        on_conn!(self, |s| s.mkdir(&arg).await)
+            .map_err(|e| Error::Protocol(format!("mkdir {path}: {e}")))
+    }
+
+    pub async fn rename(&mut self, from: &str, to: &str) -> Result<()> {
+        let (a, b) = (encode_path(from, self.charset)?, encode_path(to, self.charset)?);
+        on_conn!(self, |s| s.rename(&a, &b).await)
+            .map_err(|e| Error::Protocol(format!("rename {from}: {e}")))
+    }
+
+    pub async fn remove_file(&mut self, path: &str) -> Result<()> {
+        let arg = encode_path(path, self.charset)?;
+        on_conn!(self, |s| s.rm(&arg).await)
+            .map_err(|e| Error::Protocol(format!("delete {path}: {e}")))
+    }
+
+    /// FTP has no recursive delete, and neither does this: a directory
+    /// with anything in it comes back as a server error saying so, which
+    /// is better than deleting more than was asked for.
+    pub async fn remove_dir(&mut self, path: &str) -> Result<()> {
+        let arg = encode_path(path, self.charset)?;
+        on_conn!(self, |s| s.rmdir(&arg).await)
+            .map_err(|e| Error::Protocol(format!("delete folder {path}: {e}")))
+    }
+
     pub async fn quit(&mut self) {
         let _ = on_conn!(self, |s| s.quit().await);
     }

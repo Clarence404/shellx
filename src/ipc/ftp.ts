@@ -32,3 +32,12 @@ export const ftpListDir = (id: string, path: string) =>
   invoke<FtpEntry[]>("ftp_list_dir", { args: { id, path } });
 
 export const ftpPwd = (id: string) => invoke<string>("ftp_pwd", { args: { id } });
+
+export const ftpMkdir = (id: string, path: string) =>
+  invoke<void>("ftp_mkdir", { args: { id, path } });
+
+export const ftpRename = (id: string, from: string, to: string) =>
+  invoke<void>("ftp_rename", { args: { id, from, to } });
+
+export const ftpRemove = (id: string, path: string, isDir: boolean) =>
+  invoke<void>("ftp_remove", { args: { id, path, isDir } });

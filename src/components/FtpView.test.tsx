@@ -15,6 +15,9 @@ vi.mock("../ipc/ftp", () => ({
   ftpHostUpdate: vi.fn(),
   ftpHostDelete: vi.fn().mockResolvedValue(undefined),
   ftpHostImport: vi.fn(),
+  ftpMkdir: vi.fn(),
+  ftpRename: vi.fn(),
+  ftpRemove: vi.fn(),
   ftpConnect: vi.fn(),
   ftpDisconnect: vi.fn().mockResolvedValue(undefined),
   ftpActiveIds: vi.fn().mockResolvedValue([]),
@@ -49,7 +52,7 @@ describe("FtpView", () => {
     vi.clearAllMocks();
     useFtpStore.setState({
       hosts: [], loaded: true, activeId: null, connected: [], connecting: [],
-      cwd: "/", entries: [], listing: false, error: null,
+      cwd: "/", entries: [], listedKey: null, listing: false, error: null,
     });
     useHostsStore.setState({ hosts: [], keychainAvailable: false, loaded: true });
     useSessions.setState({ drawerCollapsed: false });
@@ -75,7 +78,9 @@ describe("FtpView", () => {
     await user.click(screen.getByRole("button", { name: "产线 A" }));
     await waitFor(() => expect(ipc.ftpConnect).toHaveBeenCalledWith("h1"));
     expect(await screen.findByText("report.dat")).toBeInTheDocument();
-    expect(screen.getByText("/upload")).toBeInTheDocument();
+    // The path is a breadcrumb, the same one the Files view uses, so it
+    // renders as segments rather than one string.
+    expect(screen.getByText("upload")).toBeInTheDocument();
     // Directories sort above files whatever order the server sent.
     const names = [...document.querySelectorAll("div")]
       .map((d) => d.textContent).filter(Boolean);
@@ -317,5 +322,45 @@ describe("FtpView", () => {
     expect(screen.queryByLabelText("ftp connections")).toBeNull();
     // The panes keep the whole width rather than leaving a gap.
     expect(screen.getByTestId("local-pane")).toBeInTheDocument();
+  });
+
+  it("renames and deletes through the same row menu the Files view uses", async () => {
+    const user = userEvent.setup();
+    (ipc.ftpRemove as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { name: "old.dat", kind: "file", size: 10, modified: null, permissions: 0 },
+    ]);
+    useFtpStore.setState({
+      hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/upload",
+    });
+    render(<FtpView />);
+    await screen.findByText("old.dat");
+
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("old.dat") });
+    await user.click(await screen.findByText("Delete"));
+    // The path is joined against the directory on screen, not sent bare.
+    await waitFor(() =>
+      expect(ipc.ftpRemove).toHaveBeenCalledWith("h1", "/upload/old.dat", false));
+    // And the directory is re-read rather than the row being removed
+    // locally, so what shows is what the server actually has.
+    await waitFor(() => expect(ipc.ftpListDir).toHaveBeenCalledWith("h1", "/upload"));
+  });
+
+  it("a refused delete leaves the listing alone and says why", async () => {
+    const user = userEvent.setup();
+    (ipc.ftpRemove as ReturnType<typeof vi.fn>).mockRejectedValue("550 Directory not empty");
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { name: "logs", kind: "directory", size: 0, modified: null, permissions: 0 },
+    ]);
+    useFtpStore.setState({
+      hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/upload",
+    });
+    render(<FtpView />);
+    await screen.findByText("logs");
+
+    await user.pointer({ keys: "[MouseRight]", target: screen.getByText("logs") });
+    await user.click(await screen.findByText("Delete"));
+    expect(await screen.findByText(/550 Directory not empty/)).toBeInTheDocument();
+    expect(screen.getByText("logs")).toBeInTheDocument();
   });
 });

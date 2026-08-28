@@ -341,6 +341,77 @@ pub async fn ftp_pwd(
 }
 
 #[derive(Deserialize)]
+pub struct FtpPathArgs {
+    pub id: Uuid,
+    pub path: String,
+}
+
+#[tauri::command]
+pub async fn ftp_mkdir(
+    args: FtpPathArgs,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+) -> Result<()> {
+    if let Some(session) = ftp.session_of(args.id).await {
+        return sessions.sftp_mkdir(session, &args.path).await;
+    }
+    let client = ftp.get(args.id).await?;
+    let mut client = client.lock().await;
+    client.mkdir(&args.path).await
+}
+
+#[derive(Deserialize)]
+pub struct FtpRenameArgs {
+    pub id: Uuid,
+    pub from: String,
+    pub to: String,
+}
+
+#[tauri::command]
+pub async fn ftp_rename(
+    args: FtpRenameArgs,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+) -> Result<()> {
+    if let Some(session) = ftp.session_of(args.id).await {
+        return sessions.sftp_rename(session, &args.from, &args.to).await;
+    }
+    let client = ftp.get(args.id).await?;
+    let mut client = client.lock().await;
+    client.rename(&args.from, &args.to).await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FtpRemoveArgs {
+    pub id: Uuid,
+    pub path: String,
+    pub is_dir: bool,
+}
+
+#[tauri::command]
+pub async fn ftp_remove(
+    args: FtpRemoveArgs,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+) -> Result<()> {
+    if let Some(session) = ftp.session_of(args.id).await {
+        return if args.is_dir {
+            sessions.sftp_remove_dir(session, &args.path).await
+        } else {
+            sessions.sftp_remove_file(session, &args.path).await
+        };
+    }
+    let client = ftp.get(args.id).await?;
+    let mut client = client.lock().await;
+    if args.is_dir {
+        client.remove_dir(&args.path).await
+    } else {
+        client.remove_file(&args.path).await
+    }
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportArgs {
     /// Ids from the saved-hosts list.

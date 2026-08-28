@@ -9,6 +9,9 @@ vi.mock("../ipc/ftp", () => ({
   ftpHostUpdate: vi.fn(),
   ftpHostDelete: vi.fn(),
   ftpHostImport: vi.fn(),
+  ftpMkdir: vi.fn(),
+  ftpRename: vi.fn(),
+  ftpRemove: vi.fn(),
   ftpConnect: vi.fn(),
   ftpDisconnect: vi.fn(),
   ftpActiveIds: vi.fn(),
@@ -28,7 +31,7 @@ function host(over: Partial<FtpHost> = {}): FtpHost {
 
 const RESET = {
   hosts: [], loaded: false, activeId: null, connected: [], connecting: [],
-  cwd: "/", entries: [], listing: false, error: null,
+  cwd: "/", entries: [], listedKey: null, listing: false, error: null,
 };
 
 describe("joinPath", () => {
