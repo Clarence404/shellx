@@ -5,6 +5,7 @@ import { useRailFiles } from "../state/railFiles";
 import { useSessions } from "../state/sessions";
 import { localOpenInOs, localMkdir, localRename, localRemoveFile, localRemoveDir, localDefaultRoots, localCopyInto, localListDisks } from "../ipc/local";
 import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
+import { dragOut } from "../dragOut";
 import { LocalPathDropdown } from "./LocalPathDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow, buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
@@ -328,9 +329,22 @@ export function LocalPane({ remote }: { remote?: RemoteAdapter } = {}) {
                   hoverTarget,
                 });
               };
+              // The pointer crossing the window edge with the button
+              // held is the drag leaving the app: hand the gesture to
+              // the OS, with the file's real path.
+              const onOut = (oe: MouseEvent) => {
+                if (oe.relatedTarget || !dragging) return;
+                document.removeEventListener("mousemove", onMove);
+                document.removeEventListener("mouseup", onUp);
+                document.removeEventListener("mouseout", onOut);
+                document.body.style.cursor = "";
+                useRailFiles.getState().setCurrentDrag(null);
+                void dragOut([joinPath(useRailFiles.getState().leftPath, e.name)]);
+              };
               const onUp = (up: MouseEvent) => {
                 document.removeEventListener("mousemove", onMove);
                 document.removeEventListener("mouseup", onUp);
+                document.removeEventListener("mouseout", onOut);
                 document.body.style.cursor = "";
                 if (!dragging) return;
                 const drag = useRailFiles.getState().currentDrag;
@@ -355,6 +369,7 @@ export function LocalPane({ remote }: { remote?: RemoteAdapter } = {}) {
               };
               document.addEventListener("mousemove", onMove);
               document.addEventListener("mouseup", onUp);
+              document.addEventListener("mouseout", onOut);
             }}
           >
             <FileRow

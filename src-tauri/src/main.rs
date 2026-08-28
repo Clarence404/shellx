@@ -159,6 +159,8 @@ fn main() {
             ipc::settings::load_settings,
             ipc::settings::save_settings,
             ipc::config::get_config_paths,
+            ipc::dragout::drag_out,
+            ipc::dragout::drag_out_staging_dir,
             ipc::hostkeys::hostkey_respond,
             ipc::hostkeys::hostkeys_list,
             ipc::tunnels::tunnel_list_for_host,

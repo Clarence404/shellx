@@ -8,6 +8,8 @@ import { PaneToolbarButton } from "./PaneToolbarButton";
 import { FileRow, buildFolderMenuItems } from "./FileRow";
 import { HostContextMenu } from "./HostContextMenu";
 import { joinPath, useFtpStore } from "../state/ftp";
+import { ftpDownload, ftpDownloadDir } from "../ipc/ftp";
+import { dragOutRemote } from "../dragOut";
 import { useT } from "../i18n";
 import type { FtpEntry, FtpHost } from "../types/ftp";
 
@@ -257,9 +259,29 @@ export function FtpRemotePane() {
                   hoverTarget: paneAttr === "left" || paneAttr === "right" ? paneAttr : null,
                 });
               };
+              // Pointer left the window with the button held: stage the
+              // file through the queue, then let the OS carry the copy.
+              const onOut = (oe: MouseEvent) => {
+                if (oe.relatedTarget || !dragging) return;
+                document.removeEventListener("mousemove", onMove);
+                document.removeEventListener("mouseup", onUp);
+                document.removeEventListener("mouseout", onOut);
+                document.body.style.cursor = "";
+                useRailFiles.getState().setCurrentDrag(null);
+                const st = useFtpStore.getState();
+                const id = st.activeId;
+                if (!id) return;
+                const src = joinPath(st.cwd, e.name);
+                void dragOutRemote(e.name, async (dest) =>
+                  e.kind === "directory"
+                    ? (await ftpDownloadDir(id, src, dest)).transferIds
+                    : [await ftpDownload(id, src, dest)],
+                );
+              };
               const onUp = (up: MouseEvent) => {
                 document.removeEventListener("mousemove", onMove);
                 document.removeEventListener("mouseup", onUp);
+                document.removeEventListener("mouseout", onOut);
                 document.body.style.cursor = "";
                 if (!dragging) return;
                 const drag = useRailFiles.getState().currentDrag;
@@ -275,6 +297,7 @@ export function FtpRemotePane() {
               };
               document.addEventListener("mousemove", onMove);
               document.addEventListener("mouseup", onUp);
+              document.addEventListener("mouseout", onOut);
             }}
           >
             <FileRow

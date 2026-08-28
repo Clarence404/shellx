@@ -11,6 +11,7 @@ import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc
 import { localIsDir } from "../ipc/local";
 import { HostDropdown } from "./HostDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
+import { dragOutRemote } from "../dragOut";
 import { FileRow, buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
 import { PaneToolbarButton } from "./PaneToolbarButton";
 import { HostContextMenu } from "./HostContextMenu";
@@ -404,9 +405,28 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                       hoverTarget,
                     });
                   };
+                  // Pointer left the window with the button held: stage
+                  // the file through the transfer queue, then let the OS
+                  // carry the staged copy.
+                  const onOut = (oe: MouseEvent) => {
+                    if (oe.relatedTarget || !dragging) return;
+                    document.removeEventListener("mousemove", onMove);
+                    document.removeEventListener("mouseup", onUp);
+                    document.removeEventListener("mouseout", onOut);
+                    document.body.style.cursor = "";
+                    useRailFiles.getState().setCurrentDrag(null);
+                    if (!rightHost) return;
+                    const src = joinPath(useRailFiles.getState().rightPath, e.name);
+                    void dragOutRemote(e.name, async (dest) =>
+                      e.kind === "directory"
+                        ? (await sftpDownloadDir(rightHost, src, dest)).transferIds
+                        : [await sftpDownload(rightHost, src, dest)],
+                    );
+                  };
                   const onUp = (up: MouseEvent) => {
                     document.removeEventListener("mousemove", onMove);
                     document.removeEventListener("mouseup", onUp);
+                    document.removeEventListener("mouseout", onOut);
                     document.body.style.cursor = "";
                     if (!dragging) return;
                     const drag = useRailFiles.getState().currentDrag;
@@ -427,6 +447,7 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                   };
                   document.addEventListener("mousemove", onMove);
                   document.addEventListener("mouseup", onUp);
+                  document.addEventListener("mouseout", onOut);
                 }}
               >
                 <FileRow

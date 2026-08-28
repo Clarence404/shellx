@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { DirTransferInit } from "./transfers";
 import type {
   FtpConnected, FtpEntry, FtpHost, FtpHostSaveResult,
   SaveFtpHostArgs, UpdateFtpHostArgs,
@@ -51,7 +52,7 @@ export const ftpDownload = (id: string, remotePath: string, localPath: string) =
   invoke<string>("ftp_download", { args: { id, localPath, remotePath } });
 
 export const ftpUploadDir = (id: string, localDir: string, remoteDir: string) =>
-  invoke<unknown>("ftp_upload_dir", { args: { id, localDir, remoteDir } });
+  invoke<DirTransferInit>("ftp_upload_dir", { args: { id, localDir, remoteDir } });
 
 export const ftpDownloadDir = (id: string, remoteDir: string, localDir: string) =>
-  invoke<unknown>("ftp_download_dir", { args: { id, localDir, remoteDir } });
+  invoke<DirTransferInit>("ftp_download_dir", { args: { id, localDir, remoteDir } });
