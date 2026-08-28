@@ -34,6 +34,16 @@ CREATE TABLE IF NOT EXISTS ftp_hosts (
 );
 CREATE INDEX IF NOT EXISTS idx_ftp_hosts_sort ON ftp_hosts(sort_order);";
 
+/// Columns added after the table first shipped. `CREATE TABLE IF NOT
+/// EXISTS` silently leaves an existing table alone, so every one of
+/// these has to be added by hand — a database from an earlier build is
+/// otherwise missing them and every query fails.
+const ADDED_COLUMNS: &[(&str, &str)] = &[
+    ("auth_method", "TEXT NOT NULL DEFAULT 'password'"),
+    ("key_path", "TEXT"),
+    ("tls_mode", "TEXT NOT NULL DEFAULT 'explicit'"),
+];
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct FtpHost {
     pub id: Uuid,
@@ -107,6 +117,18 @@ impl FtpHostStore {
             guard
                 .execute_batch(SCHEMA)
                 .map_err(|e| Error::Protocol(format!("ftp_hosts schema: {e}")))?;
+            for (name, decl) in ADDED_COLUMNS {
+                let present: bool = guard
+                    .prepare("SELECT 1 FROM pragma_table_info('ftp_hosts') WHERE name=?1")
+                    .map_err(|e| Error::Protocol(format!("ftp_hosts migration check: {e}")))?
+                    .exists([name])
+                    .map_err(|e| Error::Protocol(format!("ftp_hosts migration check: {e}")))?;
+                if !present {
+                    guard
+                        .execute_batch(&format!("ALTER TABLE ftp_hosts ADD COLUMN {name} {decl};"))
+                        .map_err(|e| Error::Protocol(format!("ftp_hosts migration {name}: {e}")))?;
+                }
+            }
         }
         Ok(Self { conn })
     }
@@ -263,6 +285,56 @@ mod tests {
             key_path: None,
             tls_mode: None,
         }
+    }
+
+    /// The shape the table had before auth_method / key_path / tls_mode
+    /// existed. Anyone who ran a build from that window has this on disk.
+    const OLD_SCHEMA: &str = "\
+CREATE TABLE ftp_hosts (
+  id          TEXT PRIMARY KEY,
+  label       TEXT    NOT NULL,
+  protocol    TEXT    NOT NULL DEFAULT 'ftp',
+  host        TEXT    NOT NULL,
+  port        INTEGER NOT NULL DEFAULT 21,
+  username    TEXT    NOT NULL,
+  charset     TEXT    NOT NULL DEFAULT 'auto',
+  passive     INTEGER NOT NULL DEFAULT 1,
+  created_at  INTEGER NOT NULL,
+  sort_order  INTEGER NOT NULL
+);";
+
+    #[tokio::test]
+    async fn an_older_table_gains_the_columns_it_is_missing() {
+        // CREATE TABLE IF NOT EXISTS does nothing to a table that is
+        // already there, so without the migration every query against an
+        // upgraded database fails with "no such column".
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(OLD_SCHEMA).unwrap();
+        conn.execute(
+            "INSERT INTO ftp_hosts (id, label, protocol, host, port, username, charset, \
+             passive, created_at, sort_order) \
+             VALUES ('11111111-1111-4111-8111-111111111111', 'old row', 'ftp', '10.0.0.1', \
+             21, 'ftpuser', 'auto', 1, 1, 1)",
+            [],
+        )
+        .unwrap();
+
+        let s = FtpHostStore::new(Arc::new(Mutex::new(conn))).unwrap();
+        let rows = s.list().await.unwrap();
+        assert_eq!(rows.len(), 1, "the existing row survives the migration");
+        // The defaults are what a row written before these columns
+        // existed should read as.
+        assert_eq!(rows[0].auth_method, "password");
+        assert_eq!(rows[0].key_path, None);
+        assert_eq!(rows[0].tls_mode, "explicit");
+    }
+
+    #[tokio::test]
+    async fn migrating_twice_is_harmless() {
+        let conn = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        FtpHostStore::new(conn.clone()).unwrap();
+        let s = FtpHostStore::new(conn).unwrap();
+        assert!(s.list().await.unwrap().is_empty());
     }
 
     #[tokio::test]
