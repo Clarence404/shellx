@@ -15,6 +15,11 @@ export const ftpHostUpdate = (args: UpdateFtpHostArgs) =>
 export const ftpHostDelete = (id: string) =>
   invoke<void>("ftp_host_delete", { args: { id } });
 
+/** Copies saved SSH hosts in as SFTP rows. Their keychain secrets are
+ *  moved across on the Rust side, so nothing passes through here. */
+export const ftpHostImport = (hostIds: string[]) =>
+  invoke<FtpHost[]>("ftp_host_import", { args: { hostIds } });
+
 export const ftpConnect = (id: string, password?: string) =>
   invoke<FtpConnected>("ftp_connect", { args: { id, password: password ?? null } });
 

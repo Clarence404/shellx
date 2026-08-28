@@ -35,6 +35,7 @@ interface State {
   addHost: (args: SaveFtpHostArgs) => Promise<FtpHost>;
   updateHost: (args: UpdateFtpHostArgs) => Promise<void>;
   deleteHost: (id: string) => Promise<void>;
+  importFromHosts: (hostIds: string[]) => Promise<number>;
   connect: (id: string) => Promise<void>;
   disconnect: (id: string) => Promise<void>;
   setActive: (id: string | null) => void;
@@ -86,6 +87,12 @@ export const useFtpStore = create<State>((set, get) => ({
       connected: s.connected.filter((x) => x !== id),
       ...(s.activeId === id ? { activeId: null, entries: [], listedKey: null, cwd: "/" } : {}),
     }));
+  },
+
+  importFromHosts: async (hostIds) => {
+    const added = await ipc.ftpHostImport(hostIds);
+    set((s) => ({ hosts: [...s.hosts, ...added] }));
+    return added.length;
   },
 
   connect: async (id) => {

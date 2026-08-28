@@ -1,13 +1,17 @@
 use crate::error::{Error, Result};
 use crate::ftp::charset::Charset;
-use crate::ftp::client::FtpClient;
+use crate::ftp::client::{FtpClient, Tls};
 use crate::ftp::manager::FtpManager;
 use crate::protocol::sftp_types::Entry;
+use crate::protocol::{AuthConfig, AuthMethod};
+use crate::session::manager::SessionManager;
+use crate::settings::SettingsStore;
 use crate::store::{
-    KeychainStore, NewFtpHost, FtpHost, FtpHostStore, FtpHostUpdate,
+    FtpHost, FtpHostStore, FtpHostUpdate, HostStore, KeychainStore, NewFtpHost,
 };
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use std::sync::Arc;
+use tauri::{AppHandle, State};
 use uuid::Uuid;
 
 // ------------------------------------------------------ saved connections
@@ -18,6 +22,8 @@ pub struct SaveFtpHostArgs {
     pub host: NewFtpHost,
     /// Routed to the keychain, never to the database.
     pub password: Option<String>,
+    /// Likewise, for an encrypted private key.
+    pub passphrase: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -34,6 +40,7 @@ pub struct UpdateFtpHostArgs {
     #[serde(flatten)]
     pub patch: FtpHostUpdate,
     pub password: Option<String>,
+    pub passphrase: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -56,6 +63,7 @@ pub async fn ftp_host_save(
 ) -> Result<FtpHostSaveResult> {
     let host = store.insert(args.host).await?;
     let password_stored = store_password(&keychain, host.id, args.password.as_deref());
+    store_passphrase(&keychain, host.id, args.passphrase.as_deref());
     crate::log_info!(
         crate::logs::categories::HOST,
         "FTP-view connection saved",
@@ -73,6 +81,7 @@ pub async fn ftp_host_update(
 ) -> Result<FtpHostSaveResult> {
     let host = store.update(args.id, args.patch).await?;
     let password_stored = store_password(&keychain, host.id, args.password.as_deref());
+    store_passphrase(&keychain, host.id, args.passphrase.as_deref());
     Ok(FtpHostSaveResult { host, password_stored })
 }
 
@@ -88,6 +97,7 @@ pub async fn ftp_host_delete(
     ftp.close(args.id).await;
     store.delete(args.id).await?;
     let _ = keychain.delete_password(args.id);
+    let _ = keychain.delete_passphrase(args.id);
     crate::log_info!(
         crate::logs::categories::HOST,
         "FTP-view connection deleted",
@@ -99,6 +109,19 @@ pub async fn ftp_host_delete(
 /// These rows have their own ids, so their keychain accounts never
 /// collide with a saved SSH host's — the same machine can appear in both
 /// lists under different credentials.
+fn store_passphrase(keychain: &KeychainStore, id: Uuid, passphrase: Option<&str>) {
+    if let Some(p) = passphrase.filter(|p| !p.is_empty()) {
+        if let Err(e) = keychain.set_passphrase(id, p) {
+            crate::log_warn!(
+                crate::logs::categories::KEYCHAIN,
+                "could not store FTP-view key passphrase",
+                "host_id": id.to_string(),
+                "error": e.to_string(),
+            );
+        }
+    }
+}
+
 fn store_password(keychain: &KeychainStore, id: Uuid, password: Option<&str>) -> bool {
     match password {
         Some(p) if !p.is_empty() => match keychain.set_password(id, p) {
@@ -136,22 +159,20 @@ pub struct FtpConnectArgs {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn ftp_connect(
     args: FtpConnectArgs,
+    app: AppHandle,
     store: State<'_, FtpHostStore>,
     keychain: State<'_, KeychainStore>,
     ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+    settings: State<'_, SettingsStore>,
 ) -> Result<FtpConnected> {
     let host = store
         .get(args.id)
         .await?
         .ok_or_else(|| Error::Protocol(format!("no FTP-view connection {}", args.id)))?;
-    if host.protocol != "ftp" {
-        return Err(Error::Protocol(format!(
-            "{} is not supported yet in this build",
-            host.protocol.to_uppercase()
-        )));
-    }
 
     let password = match args.password {
         Some(p) => p,
@@ -163,13 +184,16 @@ pub async fn ftp_connect(
 
     crate::log_info!(
         crate::logs::categories::SESSION,
-        "opening ftp connection",
+        "opening file-transfer connection",
+        "protocol": host.protocol,
         "host": host.host,
         "port": host.port,
         "user": host.username,
-        "charset": host.charset,
-        "passive": host.passive,
     );
+
+    if host.protocol == "sftp" {
+        return connect_sftp(&host, &password, app, &keychain, &ftp, &sessions, &settings).await;
+    }
 
     let mut client = FtpClient::connect(
         &host.host,
@@ -178,6 +202,7 @@ pub async fn ftp_connect(
         &password,
         Charset::parse(&host.charset),
         host.passive,
+        Tls::parse(&host.protocol, &host.tls_mode),
     )
     .await
     .inspect_err(|e| {
@@ -197,8 +222,79 @@ pub async fn ftp_connect(
     Ok(FtpConnected { id: host.id, cwd })
 }
 
+/// An SFTP row is an ordinary SSH connection with no shell opened on it:
+/// this view has no terminal, so a shell channel would be a resource
+/// nobody could see and nobody would close.
+#[allow(clippy::too_many_arguments)]
+async fn connect_sftp(
+    host: &FtpHost,
+    password: &str,
+    app: AppHandle,
+    keychain: &KeychainStore,
+    ftp: &FtpManager,
+    sessions: &SessionManager,
+    settings: &SettingsStore,
+) -> Result<FtpConnected> {
+    let auth = if host.auth_method == "publickey" {
+        let path = host
+            .key_path
+            .clone()
+            .ok_or_else(|| Error::Protocol("key authentication needs a key file".into()))?;
+        AuthConfig {
+            username: host.username.clone(),
+            method: AuthMethod::Key {
+                path,
+                passphrase: keychain.get_passphrase(host.id).unwrap_or(None),
+            },
+        }
+    } else {
+        AuthConfig {
+            username: host.username.clone(),
+            method: AuthMethod::Password(password.to_string()),
+        }
+    };
+
+    let advanced = crate::settings::advanced_or_default(settings);
+    let policy = Arc::new(crate::ipc::hostkeys::TofuPolicy { app });
+    let info = sessions
+        .open_connection(
+            &host.host,
+            host.port,
+            auth,
+            host.label.clone(),
+            None,
+            policy,
+            &advanced,
+        )
+        .await
+        .inspect_err(|e| {
+            crate::log_error!(
+                crate::logs::categories::SESSION,
+                "sftp connection failed",
+                "host": host.host,
+                "port": host.port,
+                "error": e.to_string(),
+            );
+        })?;
+
+    let cwd = sessions
+        .sftp_realpath(info.id, ".")
+        .await
+        .unwrap_or_else(|_| "/".to_string());
+    ftp.bind_sftp(host.id, info.id).await;
+    Ok(FtpConnected { id: host.id, cwd })
+}
+
 #[tauri::command]
-pub async fn ftp_disconnect(args: IdArgs, ftp: State<'_, FtpManager>) -> Result<()> {
+pub async fn ftp_disconnect(
+    args: IdArgs,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+) -> Result<()> {
+    if let Some(session) = ftp.take_sftp(args.id).await {
+        let _ = sessions.close(session).await;
+        return Ok(());
+    }
     ftp.close(args.id).await;
     Ok(())
 }
@@ -214,16 +310,83 @@ pub struct FtpListArgs {
     pub path: String,
 }
 
+/// Routed here rather than in the frontend: the view asks for a
+/// directory, and which protocol answers is this layer's problem.
 #[tauri::command]
-pub async fn ftp_list_dir(args: FtpListArgs, ftp: State<'_, FtpManager>) -> Result<Vec<Entry>> {
+pub async fn ftp_list_dir(
+    args: FtpListArgs,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+) -> Result<Vec<Entry>> {
+    if let Some(session) = ftp.session_of(args.id).await {
+        return sessions.sftp_list_dir(session, &args.path).await;
+    }
     let client = ftp.get(args.id).await?;
     let mut client = client.lock().await;
     client.list_dir(&args.path).await
 }
 
 #[tauri::command]
-pub async fn ftp_pwd(args: IdArgs, ftp: State<'_, FtpManager>) -> Result<String> {
+pub async fn ftp_pwd(
+    args: IdArgs,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+) -> Result<String> {
+    if let Some(session) = ftp.session_of(args.id).await {
+        return sessions.sftp_realpath(session, ".").await;
+    }
     let client = ftp.get(args.id).await?;
     let mut client = client.lock().await;
     client.pwd().await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportArgs {
+    /// Ids from the saved-hosts list.
+    pub host_ids: Vec<Uuid>,
+}
+
+/// Copies saved SSH hosts in as SFTP rows, secrets included — the
+/// password and passphrase are moved keychain-to-keychain here so they
+/// never travel through the frontend to be copied.
+#[tauri::command]
+pub async fn ftp_host_import(
+    args: ImportArgs,
+    hosts: State<'_, HostStore>,
+    store: State<'_, FtpHostStore>,
+    keychain: State<'_, KeychainStore>,
+) -> Result<Vec<FtpHost>> {
+    let saved = hosts.list().await?;
+    let mut created = Vec::new();
+    for id in args.host_ids {
+        let Some(h) = saved.iter().find(|h| h.id == id) else { continue };
+        let row = store
+            .insert(NewFtpHost {
+                label: h.label.clone(),
+                protocol: "sftp".into(),
+                host: h.host.clone(),
+                port: h.port,
+                username: h.username.clone(),
+                charset: None,
+                passive: None,
+                auth_method: Some(h.auth_method.clone()),
+                key_path: h.key_path.clone(),
+                tls_mode: None,
+            })
+            .await?;
+        if let Ok(Some(p)) = keychain.get_password(h.id) {
+            let _ = keychain.set_password(row.id, &p);
+        }
+        if let Ok(Some(p)) = keychain.get_passphrase(h.id) {
+            let _ = keychain.set_passphrase(row.id, &p);
+        }
+        created.push(row);
+    }
+    crate::log_info!(
+        crate::logs::categories::HOST,
+        "imported saved hosts into the FTP view",
+        "count": created.len(),
+    );
+    Ok(created)
 }

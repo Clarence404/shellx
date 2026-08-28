@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { Plus, Plug, Unplug, Loader2 } from "lucide-react";
+import { Plus, Plug, Unplug, Loader2, Download } from "lucide-react";
 import { LocalPane } from "./LocalPane";
 import { PaneSplitter } from "./PaneSplitter";
 import { FtpRemotePane } from "./FtpRemotePane";
 import { FtpHostForm } from "./FtpHostForm";
+import { FtpImportHosts } from "./FtpImportHosts";
 import { ConfirmDeleteHosts } from "./ConfirmDeleteHosts";
 import { HostContextMenu } from "./HostContextMenu";
 import { SectionHeader } from "./SectionHeader";
 import { useFtpStore } from "../state/ftp";
+import { useHostsStore } from "../state/hosts";
 import { useRailFiles } from "../state/railFiles";
 import type { FtpHost } from "../types/ftp";
 import type { HostInfo } from "../types/host";
@@ -33,8 +35,15 @@ export function FtpView() {
   const [form, setForm] = useState<{ initial: FtpHost | null } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; host: FtpHost } | null>(null);
   const [pending, setPending] = useState<FtpHost | null>(null);
+  const [importing, setImporting] = useState(false);
+  const savedHostsLoaded = useHostsStore((s) => s.loaded);
 
   useEffect(() => { if (!loaded) void useFtpStore.getState().load(); }, [loaded]);
+  // The import dialog offers saved hosts, which this view may be the
+  // first thing to open.
+  useEffect(() => {
+    if (!savedHostsLoaded) void useHostsStore.getState().load();
+  }, [savedHostsLoaded]);
 
   function open(host: FtpHost) {
     if (connected.includes(host.id)) {
@@ -109,17 +118,32 @@ export function FtpView() {
             );
           })}
         </div>
-        <button
-          onClick={() => setForm({ initial: null })}
-          style={{
-            padding: "6px 8px", borderRadius: 5,
-            background: "var(--accent-fade)", color: "var(--text-1)",
-            border: "1px solid var(--accent)", fontSize: "var(--font-ui-size)",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-          }}>
-          <Plus size={12} strokeWidth={2.5} />
-          {t("New FTP connection")}
-        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button
+            onClick={() => setForm({ initial: null })}
+            style={{
+              flex: 1, minWidth: 0,
+              padding: "6px 8px", borderRadius: 5,
+              background: "var(--accent-fade)", color: "var(--text-1)",
+              border: "1px solid var(--accent)", fontSize: "var(--font-ui-size)",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+            }}>
+            <Plus size={12} strokeWidth={2.5} />
+            {t("New FTP connection")}
+          </button>
+          <button
+            aria-label={t("Import from saved hosts")}
+            title={t("Import from saved hosts")}
+            onClick={() => setImporting(true)}
+            style={{
+              flexShrink: 0, padding: "6px 8px", borderRadius: 5,
+              background: "var(--panel-2)", color: "var(--text-2)",
+              border: "1px solid var(--border)",
+              display: "flex", alignItems: "center",
+            }}>
+            <Download size={12} strokeWidth={2.5} />
+          </button>
+        </div>
       </aside>
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", minHeight: 0 }}>
@@ -161,6 +185,8 @@ export function FtpView() {
           ]}
         />
       )}
+
+      <FtpImportHosts open={importing} onClose={() => setImporting(false)} />
 
       {form && (
         <div

@@ -4901,6 +4901,7 @@ dependencies = [
  "rusqlite",
  "russh",
  "russh-sftp",
+ "rustls-native-certs",
  "serde",
  "serde_json",
  "suppaftp",
@@ -4913,6 +4914,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-rustls",
  "uuid",
 ]
 

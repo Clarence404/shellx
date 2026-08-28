@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { Lock, TriangleAlert } from "lucide-react";
 import { useFtpStore } from "../state/ftp";
-import type { FtpCharset, FtpHost, FtpProtocol } from "../types/ftp";
+import type {
+  FtpAuthMethod, FtpCharset, FtpHost, FtpProtocol, FtpTlsMode,
+} from "../types/ftp";
 import { useT } from "../i18n";
 
 interface Props {
@@ -31,6 +34,10 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
   const [password, setPassword] = useState("");
   const [charset, setCharset] = useState<FtpCharset>(initial?.charset ?? "auto");
   const [passive, setPassive] = useState(initial?.passive ?? true);
+  const [authMethod, setAuthMethod] = useState<FtpAuthMethod>(initial?.auth_method ?? "password");
+  const [keyPath, setKeyPath] = useState(initial?.key_path ?? "");
+  const [passphrase, setPassphrase] = useState("");
+  const [tlsMode, setTlsMode] = useState<FtpTlsMode>(initial?.tls_mode ?? "explicit");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -43,9 +50,27 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
     setProtocol(next);
   }
 
+  // Implicit FTPS has its own conventional port, so switching to it
+  // moves 21 out of the way the same as switching protocol does.
+  function pickTlsMode(next: FtpTlsMode) {
+    setPort((current) => {
+      if (next === "implicit" && current === "21") return "990";
+      if (next === "explicit" && current === "990") return "21";
+      return current;
+    });
+    setTlsMode(next);
+  }
+
+  const usesKey = protocol === "sftp" && authMethod === "publickey";
   const portNum = Number(port);
   const portValid = Number.isInteger(portNum) && portNum >= 1 && portNum <= 65535;
-  const canSave = !!host.trim() && !!username.trim() && portValid && !busy;
+  const canSave =
+    !!host.trim() && !!username.trim() && portValid && !busy && (!usesKey || !!keyPath.trim());
+
+  async function browseForKey() {
+    const picked = await openDialog({ multiple: false, directory: false });
+    if (picked) setKeyPath(String(picked));
+  }
 
   async function handleSave() {
     if (!canSave) return;
@@ -53,21 +78,22 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
     setErr(null);
     try {
       const name = label.trim() || `${username.trim()}@${host.trim()}`;
+      const common = {
+        label: name, protocol, host: host.trim(), port: portNum,
+        username: username.trim(), charset, passive,
+        auth_method: authMethod,
+        key_path: usesKey ? keyPath.trim() : null,
+        tls_mode: tlsMode,
+        // Secrets are omitted rather than sent empty: an empty string
+        // would overwrite what is already in the keychain.
+        ...(password ? { password } : {}),
+        ...(passphrase ? { passphrase } : {}),
+      };
       if (editing && initial) {
-        await useFtpStore.getState().updateHost({
-          id: initial.id,
-          label: name, protocol, host: host.trim(), port: portNum,
-          username: username.trim(), charset, passive,
-          ...(password ? { password } : {}),
-        });
+        await useFtpStore.getState().updateHost({ id: initial.id, ...common });
         onDone(initial.id);
       } else {
-        const saved = await useFtpStore.getState().addHost({
-          label: name, protocol, host: host.trim(), port: portNum,
-          username: username.trim(), charset, passive,
-          ...(password ? { password } : {}),
-        });
-        onDone(saved.id);
+        onDone((await useFtpStore.getState().addHost(common)).id);
       }
     } catch (e) {
       setErr(String(e));
@@ -90,22 +116,11 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
       </h3>
 
       <Field label={t("Protocol")}>
-        <div style={{ display: "flex", gap: 4 }}>
-          {(["sftp", "ftp", "ftps"] as FtpProtocol[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => pickProtocol(p)}
-              style={{
-                flex: 1, height: 26, borderRadius: 4, fontSize: 12,
-                border: `1px solid ${protocol === p ? "var(--accent)" : "var(--border-hi)"}`,
-                background: protocol === p ? "var(--accent-fade)" : "transparent",
-                color: protocol === p ? "var(--accent)" : "var(--text-2)",
-              }}>
-              {p.toUpperCase()}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          options={[["sftp", "SFTP"], ["ftp", "FTP"], ["ftps", "FTPS"]]}
+          value={protocol}
+          onChange={(v) => pickProtocol(v as FtpProtocol)}
+        />
       </Field>
 
       {protocol === "ftp" ? (
@@ -118,12 +133,6 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
             ? t("SFTP runs over SSH, the same way the Hosts view connects.")
             : t("FTPS is FTP with TLS. Both the control and data connections are encrypted.")}
         </Banner>
-      )}
-
-      {protocol !== "ftp" && (
-        <div style={{ fontSize: 11, color: "var(--warn)", marginBottom: 10 }}>
-          {t("Only FTP connects in this build.")}
-        </div>
       )}
 
       <Field label={t("Name")}>
@@ -144,14 +153,65 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
       <Field label={t("Username")}>
         <Input value={username} onChange={setUsername} placeholder="ftpuser" />
       </Field>
-      <Field label={t("Password")}>
-        <Input
-          value={password}
-          onChange={setPassword}
-          type="password"
-          placeholder={editing ? t("leave blank to keep the stored one") : ""}
-        />
-      </Field>
+
+      {protocol === "sftp" && (
+        <Field label={t("Authentication")}>
+          <Segmented
+            options={[["password", t("Password")], ["publickey", t("Key")]]}
+            value={authMethod}
+            onChange={(v) => setAuthMethod(v as FtpAuthMethod)}
+          />
+        </Field>
+      )}
+
+      {usesKey ? (
+        <>
+          <Field label={t("Private key")}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Input value={keyPath} onChange={setKeyPath} placeholder="~/.ssh/id_ed25519" />
+              </div>
+              <button
+                type="button"
+                onClick={() => void browseForKey()}
+                style={{
+                  flexShrink: 0, height: 26, padding: "0 10px", borderRadius: 4,
+                  fontSize: 12, border: "1px solid var(--border-hi)",
+                  background: "var(--panel-1)", color: "var(--text-2)",
+                }}>
+                {t("Browse…")}
+              </button>
+            </div>
+          </Field>
+          <Field label={t("Key passphrase")}>
+            <Input
+              value={passphrase}
+              onChange={setPassphrase}
+              type="password"
+              placeholder={t("leave blank if the key has none")}
+            />
+          </Field>
+        </>
+      ) : (
+        <Field label={t("Password")}>
+          <Input
+            value={password}
+            onChange={setPassword}
+            type="password"
+            placeholder={editing ? t("leave blank to keep the stored one") : ""}
+          />
+        </Field>
+      )}
+
+      {protocol === "ftps" && (
+        <Field label={t("TLS mode")}>
+          <Segmented
+            options={[["explicit", t("Explicit · 21")], ["implicit", t("Implicit · 990")]]}
+            value={tlsMode}
+            onChange={(v) => pickTlsMode(v as FtpTlsMode)}
+          />
+        </Field>
+      )}
 
       {protocol !== "sftp" && (
         <>
@@ -160,22 +220,11 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
             {t("Passive mode (PASV)")}
           </label>
           <Field label={t("Filename encoding")}>
-            <div style={{ display: "flex", gap: 4 }}>
-              {(["auto", "utf8", "gbk"] as FtpCharset[]).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCharset(c)}
-                  style={{
-                    flex: 1, height: 26, borderRadius: 4, fontSize: 12,
-                    border: `1px solid ${charset === c ? "var(--accent)" : "var(--border-hi)"}`,
-                    background: charset === c ? "var(--accent-fade)" : "transparent",
-                    color: charset === c ? "var(--accent)" : "var(--text-2)",
-                  }}>
-                  {c === "auto" ? t("Auto") : c === "utf8" ? "UTF-8" : "GBK"}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              options={[["auto", t("Auto")], ["utf8", "UTF-8"], ["gbk", "GBK"]]}
+              value={charset}
+              onChange={(v) => setCharset(v as FtpCharset)}
+            />
           </Field>
         </>
       )}
@@ -206,6 +255,33 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
           {t("Cancel")}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** One row of mutually exclusive choices. Every switch in this form is
+ *  one of these, so they cannot drift apart. */
+function Segmented({ options, value, onChange }: {
+  options: [string, string][];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      {options.map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onChange(id)}
+          style={{
+            flex: 1, height: 26, borderRadius: 4, fontSize: 12,
+            border: `1px solid ${value === id ? "var(--accent)" : "var(--border-hi)"}`,
+            background: value === id ? "var(--accent-fade)" : "transparent",
+            color: value === id ? "var(--accent)" : "var(--text-2)",
+          }}>
+          {label}
+        </button>
+      ))}
     </div>
   );
 }

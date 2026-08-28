@@ -8,6 +8,7 @@ vi.mock("../ipc/ftp", () => ({
   ftpHostSave: vi.fn(),
   ftpHostUpdate: vi.fn(),
   ftpHostDelete: vi.fn(),
+  ftpHostImport: vi.fn(),
   ftpConnect: vi.fn(),
   ftpDisconnect: vi.fn(),
   ftpActiveIds: vi.fn(),
@@ -19,6 +20,7 @@ function host(over: Partial<FtpHost> = {}): FtpHost {
   return {
     id: "h1", label: "产线 A", protocol: "ftp", host: "10.20.1.40", port: 21,
     username: "ftpuser", charset: "auto", passive: true,
+    auth_method: "password", key_path: null, tls_mode: "explicit",
     created_at: 0, sort_order: 0,
     ...over,
   };

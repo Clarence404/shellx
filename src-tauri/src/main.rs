@@ -112,6 +112,7 @@ fn main() {
             ipc::ftp::ftp_host_save,
             ipc::ftp::ftp_host_update,
             ipc::ftp::ftp_host_delete,
+            ipc::ftp::ftp_host_import,
             ipc::ftp::ftp_connect,
             ipc::ftp::ftp_disconnect,
             ipc::ftp::ftp_active_ids,

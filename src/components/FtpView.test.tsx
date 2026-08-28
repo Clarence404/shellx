@@ -4,18 +4,27 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FtpView } from "./FtpView";
 import { useFtpStore } from "../state/ftp";
 import * as ipc from "../ipc/ftp";
+import { useHostsStore } from "../state/hosts";
 import type { FtpHost } from "../types/ftp";
+import type { HostInfo } from "../types/host";
 
 vi.mock("../ipc/ftp", () => ({
   ftpHostList: vi.fn().mockResolvedValue([]),
   ftpHostSave: vi.fn(),
   ftpHostUpdate: vi.fn(),
   ftpHostDelete: vi.fn().mockResolvedValue(undefined),
+  ftpHostImport: vi.fn(),
   ftpConnect: vi.fn(),
   ftpDisconnect: vi.fn().mockResolvedValue(undefined),
   ftpActiveIds: vi.fn().mockResolvedValue([]),
   ftpListDir: vi.fn().mockResolvedValue([]),
   ftpPwd: vi.fn(),
+}));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
+vi.mock("../ipc/hosts", () => ({
+  listHosts: vi.fn().mockResolvedValue([]),
+  keychainAvailable: vi.fn().mockResolvedValue(false),
+  saveHost: vi.fn(), updateHost: vi.fn(), deleteHost: vi.fn(),
 }));
 vi.mock("../ipc/settings", () => ({
   loadSettings: vi.fn().mockResolvedValue(null),
@@ -28,7 +37,8 @@ vi.mock("./LocalPane", () => ({ LocalPane: () => <div data-testid="local-pane" /
 function host(over: Partial<FtpHost> = {}): FtpHost {
   return {
     id: "h1", label: "产线 A", protocol: "ftp", host: "10.20.1.40", port: 21,
-    username: "ftpuser", charset: "auto", passive: true, created_at: 0, sort_order: 0,
+    username: "ftpuser", charset: "auto", passive: true,
+    auth_method: "password", key_path: null, tls_mode: "explicit", created_at: 0, sort_order: 0,
     ...over,
   };
 }
@@ -40,6 +50,7 @@ describe("FtpView", () => {
       hosts: [], loaded: true, activeId: null, connected: [], connecting: [],
       cwd: "/", entries: [], listing: false, error: null,
     });
+    useHostsStore.setState({ hosts: [], keychainAvailable: false, loaded: true });
   });
   afterEach(cleanup);
 
@@ -139,5 +150,114 @@ describe("FtpView", () => {
     expect(args).toMatchObject({ protocol: "ftp", host: "10.20.1.40", username: "ftpuser", port: 21 });
     // No name typed, so it falls back to user@host the way the SSH form does.
     expect(args.label).toBe("ftpuser@10.20.1.40");
+  });
+
+  it("offers key authentication for SFTP, and only for SFTP", async () => {
+    const user = userEvent.setup();
+    render(<FtpView />);
+    await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
+
+    // FTP has no key authentication, so the switch is not there at all.
+    expect(screen.queryByText("Authentication")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "SFTP" }));
+    expect(screen.getByText("Authentication")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Key" }));
+
+    // A key replaces the password field rather than sitting beside it.
+    // "Password" still appears once — as the other half of the switch.
+    expect(screen.getByText("Private key")).toBeInTheDocument();
+    expect(screen.getByText("Key passphrase")).toBeInTheDocument();
+    expect(screen.getAllByText("Password")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Password" })).toBeInTheDocument();
+  });
+
+  it("will not save a key connection with no key chosen", async () => {
+    const user = userEvent.setup();
+    render(<FtpView />);
+    await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
+    await user.click(screen.getByRole("button", { name: "SFTP" }));
+    await user.click(screen.getByRole("button", { name: "Key" }));
+    await user.type(screen.getByPlaceholderText("10.20.1.40"), "10.0.0.5");
+    await user.type(screen.getByPlaceholderText("ftpuser"), "deploy");
+
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await user.type(screen.getByPlaceholderText("~/.ssh/id_ed25519"), "/home/me/.ssh/id_ed25519");
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+  });
+
+  it("sends the key path and leaves the passphrase out when blank", async () => {
+    const user = userEvent.setup();
+    (ipc.ftpHostSave as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...host({ protocol: "sftp" }), password_stored: false,
+    });
+    render(<FtpView />);
+    await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
+    await user.click(screen.getByRole("button", { name: "SFTP" }));
+    await user.click(screen.getByRole("button", { name: "Key" }));
+    await user.type(screen.getByPlaceholderText("10.20.1.40"), "10.0.0.5");
+    await user.type(screen.getByPlaceholderText("ftpuser"), "deploy");
+    await user.type(screen.getByPlaceholderText("~/.ssh/id_ed25519"), "/home/me/.ssh/id_ed25519");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(ipc.ftpHostSave).toHaveBeenCalled());
+    const args = (ipc.ftpHostSave as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args).toMatchObject({
+      protocol: "sftp", auth_method: "publickey", key_path: "/home/me/.ssh/id_ed25519", port: 22,
+    });
+    // An empty passphrase would overwrite whatever the keychain holds,
+    // so it is omitted rather than sent blank.
+    expect("passphrase" in args).toBe(false);
+  });
+
+  it("FTPS offers a TLS mode, and implicit moves the port to 990", async () => {
+    const user = userEvent.setup();
+    render(<FtpView />);
+    await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
+    expect(screen.queryByText("TLS mode")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "FTPS" }));
+    expect(screen.getByText("TLS mode")).toBeInTheDocument();
+    expect(document.querySelector('input[value="21"]')).not.toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /Implicit/ }));
+    await waitFor(() => expect(document.querySelector('input[value="990"]')).not.toBeNull());
+    // And back again, so a mis-click is not a trap.
+    await user.click(screen.getByRole("button", { name: /Explicit/ }));
+    await waitFor(() => expect(document.querySelector('input[value="21"]')).not.toBeNull());
+  });
+
+  function savedHost(over: Partial<HostInfo> = {}): HostInfo {
+    return {
+      id: "s1", label: "192.168.3.250", host: "192.168.3.250", port: 22, username: "root",
+      notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
+      auth_method: "password", key_path: null, connection_mode: "terminal_only",
+      ...over,
+    } as HostInfo;
+  }
+
+  it("imports saved hosts as SFTP rows, leaving the ones already here unticked", async () => {
+    const user = userEvent.setup();
+    useHostsStore.setState({
+      hosts: [savedHost(), savedHost({ id: "s2", label: "web-1", host: "web.example.com" })],
+    });
+    // The first one is already an SFTP row at the same address.
+    useFtpStore.setState({
+      hosts: [host({
+        id: "f1", protocol: "sftp", host: "192.168.3.250", port: 22, username: "root",
+      })],
+    });
+    (ipc.ftpHostImport as ReturnType<typeof vi.fn>).mockResolvedValue([
+      host({ id: "f2", protocol: "sftp", label: "web-1", host: "web.example.com" }),
+    ]);
+    render(<FtpView />);
+
+    await user.click(screen.getByRole("button", { name: "Import from saved hosts" }));
+    expect(await screen.findByText("Already here")).toBeInTheDocument();
+    // Only the new one is offered by default, so the button says 1.
+    await user.click(screen.getByRole("button", { name: "Import 1" }));
+
+    await waitFor(() => expect(ipc.ftpHostImport).toHaveBeenCalledWith(["s2"]));
+    expect(useFtpStore.getState().hosts.map((h) => h.id)).toEqual(["f1", "f2"]);
   });
 });

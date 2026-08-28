@@ -15,6 +15,11 @@ use uuid::Uuid;
 #[derive(Default, Clone)]
 pub struct FtpManager {
     live: Arc<Mutex<HashMap<Uuid, Arc<Mutex<FtpClient>>>>>,
+    /// SFTP rows in this view are ordinary SSH sessions with no shell,
+    /// so what is tracked here is which session belongs to which saved
+    /// row. Keeping it on this side rather than in the frontend means a
+    /// reload cannot orphan a live SSH connection.
+    sftp: Arc<Mutex<HashMap<Uuid, Uuid>>>,
 }
 
 impl FtpManager {
@@ -35,6 +40,22 @@ impl FtpManager {
             .ok_or_else(|| Error::Protocol(format!("no live FTP session {id}")))
     }
 
+    /// Records that a saved row is being served by an SSH session.
+    pub async fn bind_sftp(&self, host_id: Uuid, session_id: Uuid) {
+        self.sftp.lock().await.insert(host_id, session_id);
+    }
+
+    /// The SSH session serving this row, if it is an SFTP one.
+    pub async fn session_of(&self, host_id: Uuid) -> Option<Uuid> {
+        self.sftp.lock().await.get(&host_id).copied()
+    }
+
+    /// Forgets the SSH session for a row and hands its id back, so the
+    /// caller can close it through the session manager.
+    pub async fn take_sftp(&self, host_id: Uuid) -> Option<Uuid> {
+        self.sftp.lock().await.remove(&host_id)
+    }
+
     /// Drops the connection, saying goodbye first when the server is
     /// still listening. Never fails: a session the caller wants gone is
     /// gone either way.
@@ -45,7 +66,10 @@ impl FtpManager {
         }
     }
 
+    /// Every row with something live behind it, of either kind.
     pub async fn ids(&self) -> Vec<Uuid> {
-        self.live.lock().await.keys().copied().collect()
+        let mut ids: Vec<Uuid> = self.live.lock().await.keys().copied().collect();
+        ids.extend(self.sftp.lock().await.keys().copied());
+        ids
     }
 }

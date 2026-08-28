@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS ftp_hosts (
   username    TEXT    NOT NULL,
   charset     TEXT    NOT NULL DEFAULT 'auto',
   passive     INTEGER NOT NULL DEFAULT 1,
+  auth_method TEXT    NOT NULL DEFAULT 'password',
+  key_path    TEXT,
+  tls_mode    TEXT    NOT NULL DEFAULT 'explicit',
   created_at  INTEGER NOT NULL,
   sort_order  INTEGER NOT NULL
 );
@@ -44,6 +47,14 @@ pub struct FtpHost {
     /// filenames as UTF-8, and hidden rather than disabled in the form.
     pub charset: String,
     pub passive: bool,
+    /// "password" | "publickey" — SFTP only; FTP and FTPS have no
+    /// concept of key authentication.
+    pub auth_method: String,
+    pub key_path: Option<String>,
+    /// "explicit" (AUTH TLS on port 21) | "implicit" (TLS from the first
+    /// byte, port 990). FTPS only, and not detectable — the two look the
+    /// same until one of them fails.
+    pub tls_mode: String,
     pub created_at: i64,
     pub sort_order: i64,
 }
@@ -57,6 +68,9 @@ pub struct NewFtpHost {
     pub username: String,
     pub charset: Option<String>,
     pub passive: Option<bool>,
+    pub auth_method: Option<String>,
+    pub key_path: Option<String>,
+    pub tls_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -68,6 +82,10 @@ pub struct FtpHostUpdate {
     pub username: Option<String>,
     pub charset: Option<String>,
     pub passive: Option<bool>,
+    pub auth_method: Option<String>,
+    #[serde(default, deserialize_with = "crate::store::hosts::double_option_deserialize")]
+    pub key_path: Option<Option<String>>,
+    pub tls_mode: Option<String>,
 }
 
 #[derive(Clone)]
@@ -98,7 +116,7 @@ impl FtpHostStore {
         let mut stmt = conn
             .prepare(
                 "SELECT id, label, protocol, host, port, username, charset, passive, \
-                 created_at, sort_order FROM ftp_hosts ORDER BY sort_order",
+                 auth_method, key_path, tls_mode, created_at, sort_order FROM ftp_hosts ORDER BY sort_order",
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
         let rows = stmt
@@ -114,7 +132,7 @@ impl FtpHostStore {
         let mut stmt = conn
             .prepare(
                 "SELECT id, label, protocol, host, port, username, charset, passive, \
-                 created_at, sort_order FROM ftp_hosts WHERE id=?1",
+                 auth_method, key_path, tls_mode, created_at, sort_order FROM ftp_hosts WHERE id=?1",
             )
             .map_err(|e| Error::Protocol(e.to_string()))?;
         let mut rows = stmt
@@ -137,6 +155,9 @@ impl FtpHostStore {
             username: new.username,
             charset: new.charset.unwrap_or_else(|| "auto".into()),
             passive: new.passive.unwrap_or(true),
+            auth_method: new.auth_method.unwrap_or_else(|| "password".into()),
+            key_path: new.key_path,
+            tls_mode: new.tls_mode.unwrap_or_else(|| "explicit".into()),
             created_at: now,
             sort_order: now,
         };
@@ -168,6 +189,9 @@ impl FtpHostStore {
             username: patch.username.unwrap_or(existing.username),
             charset: patch.charset.unwrap_or(existing.charset),
             passive: patch.passive.unwrap_or(existing.passive),
+            auth_method: patch.auth_method.unwrap_or(existing.auth_method),
+            key_path: patch.key_path.unwrap_or(existing.key_path),
+            tls_mode: patch.tls_mode.unwrap_or(existing.tls_mode),
             ..existing
         };
         let conn = self.conn.lock().await;
@@ -202,8 +226,11 @@ fn row_to_host(r: &rusqlite::Row) -> rusqlite::Result<FtpHost> {
         username: r.get(5)?,
         charset: r.get(6)?,
         passive: r.get::<_, i64>(7)? != 0,
-        created_at: r.get(8)?,
-        sort_order: r.get(9)?,
+        auth_method: r.get(8)?,
+        key_path: r.get(9)?,
+        tls_mode: r.get(10)?,
+        created_at: r.get(11)?,
+        sort_order: r.get(12)?,
     })
 }
 
@@ -232,6 +259,9 @@ mod tests {
             username: "ftpuser".into(),
             charset: None,
             passive: None,
+            auth_method: None,
+            key_path: None,
+            tls_mode: None,
         }
     }
 
