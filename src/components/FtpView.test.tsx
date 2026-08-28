@@ -5,6 +5,7 @@ import { FtpView } from "./FtpView";
 import { useFtpStore } from "../state/ftp";
 import * as ipc from "../ipc/ftp";
 import { useHostsStore } from "../state/hosts";
+import { useSessions } from "../state/sessions";
 import type { FtpHost } from "../types/ftp";
 import type { HostInfo } from "../types/host";
 
@@ -51,6 +52,7 @@ describe("FtpView", () => {
       cwd: "/", entries: [], listing: false, error: null,
     });
     useHostsStore.setState({ hosts: [], keychainAvailable: false, loaded: true });
+    useSessions.setState({ drawerCollapsed: false });
   });
   afterEach(cleanup);
 
@@ -259,5 +261,61 @@ describe("FtpView", () => {
 
     await waitFor(() => expect(ipc.ftpHostImport).toHaveBeenCalledWith(["s2"]));
     expect(useFtpStore.getState().hosts.map((h) => h.id)).toEqual(["f1", "f2"]);
+  });
+
+  it("shows the same connecting animation the Hosts view uses", async () => {
+    const user = userEvent.setup();
+    let release: (v: unknown) => void = () => {};
+    (ipc.ftpConnect as ReturnType<typeof vi.fn>).mockReturnValue(
+      new Promise((r) => { release = r; }),
+    );
+    useFtpStore.setState({ hosts: [host()] });
+    render(<FtpView />);
+
+    await user.click(screen.getByRole("button", { name: "产线 A" }));
+    expect(await screen.findByText("Connecting to 产线 A…")).toBeInTheDocument();
+    // The default subtitle names an SSH session, which is not what a
+    // plain FTP connection is doing.
+    expect(screen.getByText("Opening the control connection.")).toBeInTheDocument();
+
+    release({ id: "h1", cwd: "/upload" });
+    await waitFor(() => expect(screen.queryByText("Connecting to 产线 A…")).toBeNull());
+  });
+
+  it("names the SSH session when the row is SFTP", async () => {
+    const user = userEvent.setup();
+    (ipc.ftpConnect as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    useFtpStore.setState({ hosts: [host({ protocol: "sftp", label: "web-1" })] });
+    render(<FtpView />);
+
+    await user.click(screen.getByRole("button", { name: "web-1" }));
+    expect(await screen.findByText("Establishing the SSH session.")).toBeInTheDocument();
+  });
+
+  it("a failed connect leaves the reason on screen with a way to retry", async () => {
+    const user = userEvent.setup();
+    (ipc.ftpConnect as ReturnType<typeof vi.fn>).mockRejectedValue("530 Login incorrect");
+    useFtpStore.setState({ hosts: [host()] });
+    render(<FtpView />);
+
+    await user.click(screen.getByRole("button", { name: "产线 A" }));
+    // Nothing is live, so without this the reason would never be seen.
+    expect(await screen.findByText(/530 Login incorrect/)).toBeInTheDocument();
+    expect(screen.getByText("Not connected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument();
+  });
+
+  it("the connection list collapses on the same toggle the Hosts drawer uses", async () => {
+    const user = userEvent.setup();
+    useFtpStore.setState({ hosts: [host()] });
+    const { rerender } = render(<FtpView />);
+    expect(screen.getByLabelText("ftp connections")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Collapse drawer" }));
+    expect(useSessions.getState().drawerCollapsed).toBe(true);
+    rerender(<FtpView />);
+    expect(screen.queryByLabelText("ftp connections")).toBeNull();
+    // The panes keep the whole width rather than leaving a gap.
+    expect(screen.getByTestId("local-pane")).toBeInTheDocument();
   });
 });

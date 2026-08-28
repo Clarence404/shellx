@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Plug, Unplug, Loader2, Download } from "lucide-react";
+import { Plus, Plug, Unplug, Loader2, Download, PanelLeftClose } from "lucide-react";
 import { LocalPane } from "./LocalPane";
 import { PaneSplitter } from "./PaneSplitter";
 import { FtpRemotePane } from "./FtpRemotePane";
@@ -10,6 +10,7 @@ import { HostContextMenu } from "./HostContextMenu";
 import { SectionHeader } from "./SectionHeader";
 import { useFtpStore } from "../state/ftp";
 import { useHostsStore } from "../state/hosts";
+import { useSessions } from "../state/sessions";
 import { useRailFiles } from "../state/railFiles";
 import type { FtpHost } from "../types/ftp";
 import type { HostInfo } from "../types/host";
@@ -37,6 +38,11 @@ export function FtpView() {
   const [pending, setPending] = useState<FtpHost | null>(null);
   const [importing, setImporting] = useState(false);
   const savedHostsLoaded = useHostsStore((s) => s.loaded);
+  // The same flag and the same toggle the Hosts drawer uses, so the rail
+  // click and the keyboard shortcut work here without knowing which view
+  // they are in.
+  const drawerCollapsed = useSessions((s) => s.drawerCollapsed);
+  const toggleDrawer = useSessions((s) => s.toggleDrawer);
 
   useEffect(() => { if (!loaded) void useFtpStore.getState().load(); }, [loaded]);
   // The import dialog offers saved hosts, which this view may be the
@@ -58,12 +64,30 @@ export function FtpView() {
     <div data-testid="ftp-view" style={{
       height: "100%", minHeight: 0, display: "flex", background: "var(--panel-2)",
     }}>
+      {!drawerCollapsed && (
       <aside aria-label="ftp connections" style={{
         width: "var(--drawer-w)", flexShrink: 0, background: "var(--panel-1)",
         borderRight: "1px solid var(--border)", padding: "10px 12px",
         display: "flex", flexDirection: "column",
       }}>
-        <SectionHeader label={t("FTP")} />
+        <SectionHeader
+          label={t("FTP")}
+          action={
+            <button
+              aria-label="Collapse drawer"
+              title={navigator.userAgent.includes("Mac") ? "Collapse (⌘+B)" : "Collapse (Ctrl+Shift+B)"}
+              onClick={toggleDrawer}
+              style={{
+                color: "var(--text-3)", padding: "2px 4px", borderRadius: 3,
+                display: "flex", alignItems: "center",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-1)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}
+            >
+              <PanelLeftClose size={12} strokeWidth={2} />
+            </button>
+          }
+        />
         <div style={{ flex: 1, overflow: "auto", marginBottom: 8 }}>
           {hosts.length === 0 && (
             <div style={{ fontSize: 11, color: "var(--text-3)", padding: "8px 4px", lineHeight: 1.7 }}>
@@ -145,6 +169,7 @@ export function FtpView() {
           </button>
         </div>
       </aside>
+      )}
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", minHeight: 0 }}>
         <div style={{

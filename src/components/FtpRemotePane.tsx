@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { ArrowUp, RefreshCw, Folder, File as FileIcon, Loader2 } from "lucide-react";
+import { ConnectingPanel } from "./ConnectingPanel";
 import { joinPath, useFtpStore } from "../state/ftp";
 import { useT } from "../i18n";
 import type { FtpEntry, FtpHost } from "../types/ftp";
@@ -35,6 +36,7 @@ export function FtpRemotePane() {
   const activeId = useFtpStore((s) => s.activeId);
   const hosts = useFtpStore((s) => s.hosts);
   const connected = useFtpStore((s) => s.connected);
+  const connecting = useFtpStore((s) => s.connecting);
   const cwd = useFtpStore((s) => s.cwd);
   const entries = useFtpStore((s) => s.entries);
   const listedKey = useFtpStore((s) => s.listedKey);
@@ -55,15 +57,56 @@ export function FtpRemotePane() {
     }
   }, [live, listing, listedKey, activeId, cwd]);
 
+  // Same panel the Hosts view shows while a connection is being made,
+  // so the two views do not have their own idea of what connecting looks
+  // like.
+  if (host && !!activeId && connecting.includes(activeId)) {
+    return (
+      <ConnectingPanel
+        hostLabel={host.label}
+        // The default subtitle names the SSH session, which is only true
+        // for one of the three protocols this view speaks.
+        subtitle={host.protocol === "sftp"
+          ? t("Establishing the SSH session.")
+          : t("Opening the control connection.")}
+      />
+    );
+  }
+
   if (!host || !live) {
     return (
       <div style={{
-        height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+        height: "100%", display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center", gap: 10,
         color: "var(--text-3)", fontSize: 12, padding: 20, textAlign: "center",
       }}>
-        {hosts.length === 0
-          ? t("Add an FTP connection to get started")
-          : t("Pick a connection on the left")}
+        {/* A failed connect leaves nothing live, so without this the
+            reason would never reach the screen. */}
+        {error && (
+          <div style={{
+            color: "var(--error)", maxWidth: 420, lineHeight: 1.6,
+            whiteSpace: "pre-wrap",
+          }}>{error}</div>
+        )}
+        <div>
+          {hosts.length === 0
+            ? t("Add an FTP connection to get started")
+            : host
+              ? t("Not connected")
+              : t("Pick a connection on the left")}
+        </div>
+        {host && (
+          <button
+            type="button"
+            onClick={() => void useFtpStore.getState().connect(host.id)}
+            style={{
+              padding: "5px 12px", borderRadius: 5, fontSize: 12,
+              border: "1px solid var(--accent)", background: "var(--accent-fade)",
+              color: "var(--text-1)",
+            }}>
+            {t("Connect")}
+          </button>
+        )}
       </div>
     );
   }

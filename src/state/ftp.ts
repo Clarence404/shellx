@@ -97,7 +97,16 @@ export const useFtpStore = create<State>((set, get) => ({
 
   connect: async (id) => {
     if (get().connecting.includes(id)) return;
-    set((s) => ({ connecting: [...s.connecting, id], error: null }));
+    // Focus the row now, not when it succeeds: the pane shows the
+    // connecting animation for whichever row it is pointed at, and on
+    // failure that is also where the error belongs.
+    set((s) => ({
+      connecting: [...s.connecting, id],
+      activeId: id,
+      entries: [],
+      listedKey: null,
+      error: null,
+    }));
     try {
       const { cwd } = await ipc.ftpConnect(id);
       set((s) => ({
