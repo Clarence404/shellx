@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.22.1** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.23.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -16,7 +16,8 @@ ShellX is a desktop app that gives you:
 - **Local terminal** — open a shell on your own machine (PowerShell by default on Windows; any shell via Settings) in a tab right next to your SSH sessions
 - **SSH tunnels (port forwarding)** — a dedicated Tunnels view lists every saved forward across every host in one place; start any rule directly (shellx opens the SSH transport silently when the host isn't already connected), auto-reconnect with backoff when a tunnel drops, autostart selected rules on app launch, drag rows to reorder, move a rule between hosts without recreating, share on the LAN (bind 0.0.0.0), or paste an `ssh -L …` command to bulk-import rules
 - **Structured logs** — Settings → Logs shows a real-time stream of every event across tunnels, sessions, file transfers, sftp, monitor, host-key checks, keychain and updater. Filter by level / category / free-text, click any row for full JSON, and export a jsonl dump for bug reports; daily-rotated files at `~/.shellx/logs/` with 7-day retention
-- **SFTP file browser** — WinSCP-style dual-pane (local ↔ remote) with drag-and-drop upload / download, folder transfers, pause / resume / cancel
+- **SFTP file browser** — WinSCP-style dual-pane (local ↔ remote) with drag-and-drop upload / download, folder transfers, pause / resume / cancel, and drag-out: drop a row past the window edge straight into Explorer or onto the desktop
+- **FTP view** — a dedicated view for SFTP / FTP / FTPS connections with the same dual-pane, queue and drag. Made for old machines: filename encoding (auto / UTF-8 / GBK), passive or active mode, explicit or implicit TLS — and plain FTP is clearly tagged as plaintext. Saved SSH hosts import as SFTP connections in one click
 - **Session monitor** — live CPU / memory / network / disk / process view for any Linux host over the same SSH connection; adjustable 1–30 s poll interval
 - **Saved hosts + keychain** — store your servers once, quick-connect from the sidebar or the `+` menu; passwords live in the OS keychain, not a plaintext config. Ctrl-click / Shift-click to pick several rows and delete them in one confirmation
 - **Import & export** — pull machines straight out of `~/.ssh/config` (wildcards, `Match` blocks and `Include` lines are reported as skipped rather than dropped), or carry a whole setup to another computer as one JSON file: hosts, tunnel rules, and optionally your settings. Passwords and key passphrases stay in the OS keychain and are never written to the file — the file only records which hosts had one, so the import can tell you what will ask again
