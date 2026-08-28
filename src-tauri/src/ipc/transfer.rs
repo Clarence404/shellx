@@ -311,7 +311,7 @@ pub async fn sftp_download_dir(
 /// Recursive local walk. Returns:
 /// - subdirectories: forward-slash relative paths, sorted parents-first
 /// - files: `(rel_path, size)` in stable iteration order
-async fn walk_local(root: &Path) -> Result<(Vec<String>, Vec<(String, u64)>)> {
+pub(crate) async fn walk_local(root: &Path) -> Result<(Vec<String>, Vec<(String, u64)>)> {
     let mut dirs: Vec<String> = Vec::new();
     let mut files: Vec<(String, u64)> = Vec::new();
     let mut stack: Vec<(PathBuf, String)> = vec![(root.to_path_buf(), String::new())];
@@ -340,14 +340,14 @@ async fn walk_local(root: &Path) -> Result<(Vec<String>, Vec<(String, u64)>)> {
 }
 
 /// Compose a remote destination from a base + forward-slash relative path.
-fn join_remote(base: &str, rel: &str) -> String {
+pub(crate) fn join_remote(base: &str, rel: &str) -> String {
     format!("{}/{}", base.trim_end_matches('/'), rel)
 }
 
 /// Convert a forward-slash relative path into a platform-native `PathBuf`
 /// so `local_root.join(rel_to_path(rel))` produces the right thing on
 /// Windows (backslashes) as well as macOS/Linux (forward slashes).
-fn rel_to_path(rel: &str) -> PathBuf {
+pub(crate) fn rel_to_path(rel: &str) -> PathBuf {
     let mut pb = PathBuf::new();
     for part in rel.split('/') {
         if !part.is_empty() {

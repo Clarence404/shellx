@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Plug, Unplug, Loader2, Download, PanelLeftClose } from "lucide-react";
-import { LocalPane } from "./LocalPane";
+import { Folder, File as FileIcon } from "lucide-react";
+import { LocalPane, type RemoteAdapter } from "./LocalPane";
+import { TransferStripSection } from "./TransferStripSection";
 import { PaneSplitter } from "./PaneSplitter";
 import { FtpRemotePane } from "./FtpRemotePane";
 import { FtpHostForm } from "./FtpHostForm";
@@ -50,6 +52,15 @@ export function FtpView() {
   useEffect(() => {
     if (!savedHostsLoaded) void useHostsStore.getState().load();
   }, [savedHostsLoaded]);
+
+  // Cross-pane gestures in the shared LocalPane land here instead of on
+  // the Files view's SFTP session.
+  const dragGhost = useRailFiles((s) => s.currentDrag);
+  const remoteAdapter: RemoteAdapter = {
+    ready: !!activeId && connected.includes(activeId),
+    send: (localAbs, name, kind) => void useFtpStore.getState().upload(localAbs, name, kind),
+    fetch: (name, kind, localDir) => void useFtpStore.getState().download(name, kind, localDir),
+  };
 
   function open(host: FtpHost) {
     if (connected.includes(host.id)) {
@@ -171,18 +182,50 @@ export function FtpView() {
       </aside>
       )}
 
-      <div style={{ flex: 1, minWidth: 0, display: "flex", minHeight: 0 }}>
-        <div style={{
-          flexBasis: `${splitterPercent}%`, minWidth: 0,
-          borderRight: "0.5px solid var(--border)",
-        }}>
-          <LocalPane />
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+          <div style={{
+            flexBasis: `${splitterPercent}%`, minWidth: 0,
+            borderRight: "0.5px solid var(--border)",
+          }}>
+            <LocalPane remote={remoteAdapter} />
+          </div>
+          <PaneSplitter percent={splitterPercent} onChange={setSplitterDraft} onCommit={setSplitter} />
+          <div style={{ flexBasis: `${100 - splitterPercent}%`, minWidth: 0 }}>
+            <FtpRemotePane />
+          </div>
         </div>
-        <PaneSplitter percent={splitterPercent} onChange={setSplitterDraft} onCommit={setSplitter} />
-        <div style={{ flexBasis: `${100 - splitterPercent}%`, minWidth: 0 }}>
-          <FtpRemotePane />
-        </div>
+        {/* Same queue strip as the Files view — FTP transfers are rows in
+            the same list, with the same pause / resume / cancel. */}
+        <TransferStripSection showAll />
       </div>
+
+      {/* Drag ghost following the pointer — the same one the Files view
+          renders, since the drag state itself is shared. */}
+      {dragGhost && (
+        <div style={{
+          position: "fixed",
+          left: dragGhost.x + 12, top: dragGhost.y + 8,
+          zIndex: 1000, pointerEvents: "none",
+          background: "var(--panel-2)",
+          border: `0.5px solid ${dragGhost.hoverTarget && dragGhost.hoverTarget !== dragGhost.pane ? "var(--accent)" : "var(--border)"}`,
+          borderRadius: 4, padding: "5px 10px",
+          boxShadow: "0 6px 18px rgba(0,0,0,0.45)",
+          fontSize: "var(--font-body)",
+          fontFamily: '"JetBrains Mono", var(--font-mono)',
+          color: "var(--text-1)",
+          display: "flex", alignItems: "center", gap: 6,
+          maxWidth: 320,
+          opacity: 0.94,
+        }}>
+          {dragGhost.kind === "directory"
+            ? <Folder size={13} color="var(--text-2)" />
+            : <FileIcon size={13} color="var(--text-3)" />}
+          <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {dragGhost.name}
+          </span>
+        </div>
+      )}
 
       {menu && (
         <HostContextMenu

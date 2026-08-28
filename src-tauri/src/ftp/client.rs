@@ -14,7 +14,39 @@ use std::sync::Arc;
 use suppaftp::tokio::{AsyncFtpStream, AsyncRustlsConnector, AsyncRustlsFtpStream};
 use suppaftp::types::FileType;
 use suppaftp::{Mode, Status};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
+
+/// Everything needed to open a connection, detached from the saved row so
+/// a transfer task can carry it into its own tokio task. Each transfer
+/// opens a fresh connection: FTP allows one data channel per control
+/// channel, so sharing the browsing connection would freeze the directory
+/// pane for the whole length of a download — separate connections are
+/// what every serious FTP client does.
+#[derive(Clone)]
+pub struct FtpSpec {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub password: String,
+    pub charset: Charset,
+    pub passive: bool,
+    pub tls: Tls,
+}
+
+impl FtpSpec {
+    pub async fn connect(&self) -> Result<FtpClient> {
+        FtpClient::connect(
+            &self.host,
+            self.port,
+            &self.username,
+            &self.password,
+            self.charset,
+            self.passive,
+            self.tls,
+        )
+        .await
+    }
+}
 
 /// How TLS is reached, when it is reached at all.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -215,6 +247,63 @@ impl FtpClient {
             .into_iter()
             .map(|line| charset::decode(line, self.charset))
             .collect())
+    }
+
+    /// Size of a remote file, when the server can say. `SIZE` is an
+    /// extension some old boxes lack, and a transfer with an unknown
+    /// total is still a transfer — so absence is `None`, not an error.
+    pub async fn size(&mut self, path: &str) -> Option<u64> {
+        let arg = encode_path(path, self.charset).ok()?;
+        on_conn!(self, |s| s.size(&arg).await).ok().map(|n| n as u64)
+    }
+
+    /// Opens the data channel for a download. The control channel is
+    /// busy until `finish_read` is called with the stream handed back.
+    pub async fn open_read(
+        &mut self,
+        path: &str,
+    ) -> Result<Box<dyn AsyncRead + Send + Unpin>> {
+        let arg = encode_path(path, self.charset)?;
+        match &mut self.conn {
+            Conn::Plain(s) => s
+                .retr_as_stream(&arg)
+                .await
+                .map(|d| Box::new(d) as Box<dyn AsyncRead + Send + Unpin>),
+            Conn::Tls(s) => s
+                .retr_as_stream(&arg)
+                .await
+                .map(|d| Box::new(d) as Box<dyn AsyncRead + Send + Unpin>),
+        }
+        .map_err(|e| Error::Protocol(format!("download {path}: {e}")))
+    }
+
+    pub async fn finish_read(&mut self, stream: Box<dyn AsyncRead + Send + Unpin>) -> Result<()> {
+        on_conn!(self, |s| s.finalize_retr_stream(stream).await)
+            .map_err(|e| Error::Protocol(format!("download (finish): {e}")))
+    }
+
+    /// Opens the data channel for an upload; same contract as `open_read`.
+    pub async fn open_write(
+        &mut self,
+        path: &str,
+    ) -> Result<Box<dyn AsyncWrite + Send + Unpin>> {
+        let arg = encode_path(path, self.charset)?;
+        match &mut self.conn {
+            Conn::Plain(s) => s
+                .put_with_stream(&arg)
+                .await
+                .map(|d| Box::new(d) as Box<dyn AsyncWrite + Send + Unpin>),
+            Conn::Tls(s) => s
+                .put_with_stream(&arg)
+                .await
+                .map(|d| Box::new(d) as Box<dyn AsyncWrite + Send + Unpin>),
+        }
+        .map_err(|e| Error::Protocol(format!("upload {path}: {e}")))
+    }
+
+    pub async fn finish_write(&mut self, stream: Box<dyn AsyncWrite + Send + Unpin>) -> Result<()> {
+        on_conn!(self, |s| s.finalize_put_stream(stream).await)
+            .map_err(|e| Error::Protocol(format!("upload (finish): {e}")))
     }
 
     pub async fn mkdir(&mut self, path: &str) -> Result<()> {

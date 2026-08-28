@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { joinPath, useFtpStore } from "./ftp";
 import * as ipc from "../ipc/ftp";
+
+vi.mock("../ipc/local", () => ({ localIsDir: vi.fn().mockResolvedValue(false) }));
 import type { FtpHost } from "../types/ftp";
 
 vi.mock("../ipc/ftp", () => ({
@@ -12,6 +14,10 @@ vi.mock("../ipc/ftp", () => ({
   ftpMkdir: vi.fn(),
   ftpRename: vi.fn(),
   ftpRemove: vi.fn(),
+  ftpUpload: vi.fn(),
+  ftpDownload: vi.fn(),
+  ftpUploadDir: vi.fn(),
+  ftpDownloadDir: vi.fn(),
   ftpConnect: vi.fn(),
   ftpDisconnect: vi.fn(),
   ftpActiveIds: vi.fn(),
@@ -169,5 +175,35 @@ describe("ftp store", () => {
     });
     expect("password_stored" in saved).toBe(false);
     expect(useFtpStore.getState().hosts).toHaveLength(1);
+  });
+
+  it("uploads into the directory on screen, asking the filesystem when the kind is unknown", async () => {
+    // OS drops hand over bare paths — Explorer does not say what they
+    // are, so the local filesystem is asked before routing.
+    const { localIsDir } = await import("../ipc/local");
+    (localIsDir as ReturnType<typeof vi.fn>).mockResolvedValueOnce(true);
+    (ipc.ftpUploadDir as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/upload" });
+
+    await useFtpStore.getState().upload("C:/data/reports", "reports", "unknown");
+    expect(ipc.ftpUploadDir).toHaveBeenCalledWith("h1", "C:/data/reports", "/upload/reports");
+
+    (ipc.ftpUpload as ReturnType<typeof vi.fn>).mockResolvedValue("t1");
+    await useFtpStore.getState().upload("C:/data/a.csv", "a.csv", "file");
+    expect(ipc.ftpUpload).toHaveBeenCalledWith("h1", "C:/data/a.csv", "/upload/a.csv");
+  });
+
+  it("downloads join the remote cwd and the local pane's directory", async () => {
+    (ipc.ftpDownloadDir as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/upload" });
+    await useFtpStore.getState().download("2026-08", "directory", "D:/reports");
+    expect(ipc.ftpDownloadDir).toHaveBeenCalledWith("h1", "/upload/2026-08", "D:/reports/2026-08");
+  });
+
+  it("a refused transfer surfaces instead of vanishing", async () => {
+    (ipc.ftpUpload as ReturnType<typeof vi.fn>).mockRejectedValue("550 Access denied");
+    useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/upload" });
+    await useFtpStore.getState().upload("C:/a.csv", "a.csv", "file");
+    expect(useFtpStore.getState().error).toContain("550");
   });
 });

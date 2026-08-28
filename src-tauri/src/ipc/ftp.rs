@@ -1,6 +1,10 @@
 use crate::error::{Error, Result};
 use crate::ftp::charset::Charset;
-use crate::ftp::client::{FtpClient, Tls};
+use crate::ftp::client::{FtpClient, FtpSpec, Tls};
+use crate::ipc::transfer::{join_remote, rel_to_path, walk_local, DirTransferInit};
+use crate::session::manager::WalkedKind;
+use crate::transfer::{TransferId, TransferManager};
+use std::path::PathBuf;
 use crate::ftp::manager::FtpManager;
 use crate::protocol::sftp_types::Entry;
 use crate::protocol::{AuthConfig, AuthMethod};
@@ -409,6 +413,330 @@ pub async fn ftp_remove(
     } else {
         client.remove_file(&args.path).await
     }
+}
+
+/// Connection parameters for a transfer task, with the password pulled
+/// from the keychain. Built here so the spec never leaves the Rust side.
+async fn spec_for(
+    store: &FtpHostStore,
+    keychain: &KeychainStore,
+    id: Uuid,
+) -> Result<(FtpHost, FtpSpec)> {
+    let host = store
+        .get(id)
+        .await?
+        .ok_or_else(|| Error::Protocol(format!("no FTP-view connection {id}")))?;
+    let spec = FtpSpec {
+        host: host.host.clone(),
+        port: host.port,
+        username: host.username.clone(),
+        password: keychain.get_password(id).unwrap_or(None).unwrap_or_default(),
+        charset: Charset::parse(&host.charset),
+        passive: host.passive,
+        tls: Tls::parse(&host.protocol, &host.tls_mode),
+    };
+    Ok((host, spec))
+}
+
+fn apply_concurrency(
+    transfer_mgr: &TransferManager,
+    settings: &SettingsStore,
+) {
+    // Same knob the SFTP commands read: one queue, one limit.
+    transfer_mgr.set_concurrency(
+        crate::settings::advanced_or_default(settings).sftp_concurrency,
+    );
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FtpTransferArgs {
+    pub id: Uuid,
+    pub local_path: String,
+    pub remote_path: String,
+}
+
+/// One file, either direction decided by the command. SFTP rows go to
+/// the session-backed transfer; FTP and FTPS rows get a task that opens
+/// its own connection. Both land in the same queue, with the same pause,
+/// cancel and progress.
+#[tauri::command]
+pub async fn ftp_upload(
+    args: FtpTransferArgs,
+    app: AppHandle,
+    store: State<'_, FtpHostStore>,
+    keychain: State<'_, KeychainStore>,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+    transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, SettingsStore>,
+) -> Result<TransferId> {
+    apply_concurrency(&transfer_mgr, &settings);
+    if let Some(session) = ftp.session_of(args.id).await {
+        return Ok(transfer_mgr
+            .start_upload(
+                app,
+                (*sessions).clone(),
+                session,
+                PathBuf::from(args.local_path),
+                args.remote_path,
+                None,
+            )
+            .await);
+    }
+    let (_, spec) = spec_for(&store, &keychain, args.id).await?;
+    Ok(transfer_mgr
+        .start_ftp_upload(
+            app,
+            spec,
+            args.id,
+            PathBuf::from(args.local_path),
+            args.remote_path,
+            None,
+        )
+        .await)
+}
+
+#[tauri::command]
+pub async fn ftp_download(
+    args: FtpTransferArgs,
+    app: AppHandle,
+    store: State<'_, FtpHostStore>,
+    keychain: State<'_, KeychainStore>,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+    transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, SettingsStore>,
+) -> Result<TransferId> {
+    apply_concurrency(&transfer_mgr, &settings);
+    if let Some(session) = ftp.session_of(args.id).await {
+        return Ok(transfer_mgr
+            .start_download(
+                app,
+                (*sessions).clone(),
+                session,
+                args.remote_path,
+                PathBuf::from(args.local_path),
+                None,
+            )
+            .await);
+    }
+    let (_, spec) = spec_for(&store, &keychain, args.id).await?;
+    Ok(transfer_mgr
+        .start_ftp_download(
+            app,
+            spec,
+            args.id,
+            args.remote_path,
+            PathBuf::from(args.local_path),
+            None,
+        )
+        .await)
+}
+
+/// Recursive remote walk over the live browsing connection: `(rel_path,
+/// size)` for files, plus every subdirectory parents-first. The listing
+/// connection is only held while enumerating — the transfers themselves
+/// each open their own.
+async fn walk_remote_ftp(
+    ftp: &FtpManager,
+    id: Uuid,
+    root: &str,
+) -> Result<(Vec<String>, Vec<(String, u64)>)> {
+    let client = ftp.get(id).await?;
+    let mut dirs = Vec::new();
+    let mut files = Vec::new();
+    let mut stack: Vec<String> = vec![String::new()];
+    while let Some(rel) = stack.pop() {
+        let abs = if rel.is_empty() { root.to_string() } else { join_remote(root, &rel) };
+        let entries = client.lock().await.list_dir(&abs).await?;
+        for e in entries {
+            let child = if rel.is_empty() { e.name.clone() } else { format!("{rel}/{}", e.name) };
+            match e.kind {
+                crate::protocol::sftp_types::EntryKind::Directory => {
+                    dirs.push(child.clone());
+                    stack.push(child);
+                }
+                crate::protocol::sftp_types::EntryKind::File => files.push((child, e.size)),
+                // Symlinks and oddities are skipped rather than guessed
+                // at — following FTP symlinks invites cycles.
+                _ => {}
+            }
+        }
+    }
+    dirs.sort_by_key(|d| d.matches('/').count());
+    Ok((dirs, files))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FtpDirTransferArgs {
+    pub id: Uuid,
+    pub local_dir: String,
+    pub remote_dir: String,
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn ftp_upload_dir(
+    args: FtpDirTransferArgs,
+    app: AppHandle,
+    store: State<'_, FtpHostStore>,
+    keychain: State<'_, KeychainStore>,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+    transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, SettingsStore>,
+) -> Result<DirTransferInit> {
+    apply_concurrency(&transfer_mgr, &settings);
+    let group_id = Uuid::new_v4();
+    let local_root = PathBuf::from(&args.local_dir);
+    let (dirs, files) = walk_local(&local_root).await?;
+
+    let sftp_session = ftp.session_of(args.id).await;
+    let spec = match sftp_session {
+        Some(_) => None,
+        None => Some(spec_for(&store, &keychain, args.id).await?.1),
+    };
+
+    // Destination root and subdirectories parents-first, over whichever
+    // channel this row browses with.
+    match sftp_session {
+        Some(session) => {
+            let _ = sessions.sftp_mkdir(session, &args.remote_dir).await;
+            for d in &dirs {
+                if transfer_mgr.is_group_cancelled(group_id).await {
+                    return Ok(DirTransferInit {
+                        group_id, file_count: 0, transfer_ids: vec![], total_bytes: 0,
+                    });
+                }
+                let _ = sessions.sftp_mkdir(session, &join_remote(&args.remote_dir, d)).await;
+            }
+        }
+        None => {
+            let client = ftp.get(args.id).await?;
+            let _ = client.lock().await.mkdir(&args.remote_dir).await;
+            for d in &dirs {
+                if transfer_mgr.is_group_cancelled(group_id).await {
+                    return Ok(DirTransferInit {
+                        group_id, file_count: 0, transfer_ids: vec![], total_bytes: 0,
+                    });
+                }
+                let _ = client.lock().await.mkdir(&join_remote(&args.remote_dir, d)).await;
+            }
+        }
+    }
+
+    let mut ids = Vec::with_capacity(files.len());
+    let mut total_bytes = 0u64;
+    for (rel, size) in files {
+        if transfer_mgr.is_group_cancelled(group_id).await {
+            break;
+        }
+        let local_abs = local_root.join(rel_to_path(&rel));
+        let remote_abs = join_remote(&args.remote_dir, &rel);
+        let id = match (sftp_session, &spec) {
+            (Some(session), _) => transfer_mgr
+                .start_upload(
+                    app.clone(), (*sessions).clone(), session,
+                    local_abs, remote_abs, Some(group_id),
+                )
+                .await,
+            (None, Some(spec)) => transfer_mgr
+                .start_ftp_upload(
+                    app.clone(), spec.clone(), args.id,
+                    local_abs, remote_abs, Some(group_id),
+                )
+                .await,
+            (None, None) => unreachable!("spec built for every non-sftp row"),
+        };
+        ids.push(id);
+        total_bytes += size;
+    }
+
+    Ok(DirTransferInit { group_id, file_count: ids.len(), transfer_ids: ids, total_bytes })
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn ftp_download_dir(
+    args: FtpDirTransferArgs,
+    app: AppHandle,
+    store: State<'_, FtpHostStore>,
+    keychain: State<'_, KeychainStore>,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+    transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, SettingsStore>,
+) -> Result<DirTransferInit> {
+    apply_concurrency(&transfer_mgr, &settings);
+    let group_id = Uuid::new_v4();
+    let local_root = PathBuf::from(&args.local_dir);
+    tokio::fs::create_dir_all(&local_root).await.map_err(Error::Io)?;
+
+    let sftp_session = ftp.session_of(args.id).await;
+
+    // Enumerate over the browsing channel; mirror directories locally.
+    let (dirs, files) = match sftp_session {
+        Some(session) => {
+            let walked = sessions.sftp_walk_dir(session, &args.remote_dir).await?;
+            let mut dirs = Vec::new();
+            let mut files = Vec::new();
+            for e in walked {
+                match e.kind {
+                    WalkedKind::Directory => dirs.push(e.rel_path),
+                    WalkedKind::File => files.push((e.rel_path, e.size)),
+                }
+            }
+            (dirs, files)
+        }
+        None => walk_remote_ftp(&ftp, args.id, &args.remote_dir).await?,
+    };
+
+    for d in &dirs {
+        if transfer_mgr.is_group_cancelled(group_id).await {
+            return Ok(DirTransferInit {
+                group_id, file_count: 0, transfer_ids: vec![], total_bytes: 0,
+            });
+        }
+        tokio::fs::create_dir_all(local_root.join(rel_to_path(d)))
+            .await
+            .map_err(Error::Io)?;
+    }
+
+    let spec = match sftp_session {
+        Some(_) => None,
+        None => Some(spec_for(&store, &keychain, args.id).await?.1),
+    };
+
+    let mut ids = Vec::with_capacity(files.len());
+    let mut total_bytes = 0u64;
+    for (rel, size) in files {
+        if transfer_mgr.is_group_cancelled(group_id).await {
+            break;
+        }
+        let remote_abs = join_remote(&args.remote_dir, &rel);
+        let local_abs = local_root.join(rel_to_path(&rel));
+        let id = match (sftp_session, &spec) {
+            (Some(session), _) => transfer_mgr
+                .start_download(
+                    app.clone(), (*sessions).clone(), session,
+                    remote_abs, local_abs, Some(group_id),
+                )
+                .await,
+            (None, Some(spec)) => transfer_mgr
+                .start_ftp_download(
+                    app.clone(), spec.clone(), args.id,
+                    remote_abs, local_abs, Some(group_id),
+                )
+                .await,
+            (None, None) => unreachable!("spec built for every non-sftp row"),
+        };
+        ids.push(id);
+        total_bytes += size;
+    }
+
+    Ok(DirTransferInit { group_id, file_count: ids.len(), transfer_ids: ids, total_bytes })
 }
 
 #[derive(Deserialize)]

@@ -25,6 +25,7 @@ use tauri::{AppHandle, Emitter};
 use tokio::sync::{oneshot, Mutex};
 use uuid::Uuid;
 
+pub mod ftp_task;
 pub mod task;
 
 pub type TransferId = Uuid;
@@ -426,6 +427,99 @@ impl TransferManager {
             pause_flag,
             session_mgr,
             conn_id,
+            self.gate_handle(),
+        ));
+        id
+    }
+
+    /// FTP twin of `start_upload`: the task carries connection
+    /// parameters rather than a session id, and opens its own connection
+    /// once it holds a queue slot. Everything else — registration, the
+    /// events, cancel, pause, the concurrency gate — is shared.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn start_ftp_upload(
+        &self,
+        app: AppHandle,
+        spec: crate::ftp::client::FtpSpec,
+        host_id: ConnectionId,
+        local: PathBuf,
+        remote: String,
+        group_id: Option<TransferId>,
+    ) -> TransferId {
+        let id = Uuid::new_v4();
+        let (tx, rx) = oneshot::channel();
+        let info = TransferInfo {
+            id,
+            connection_id: host_id,
+            direction: Direction::Upload,
+            local_path: local.to_string_lossy().into_owned(),
+            remote_path: remote.clone(),
+            total_bytes: 0,
+            bytes_done: 0,
+            state: TransferState::Queued,
+            started_at: Self::now_ms(),
+            group_id,
+        };
+        let pause_flag = Arc::new(AtomicBool::new(false));
+        self.tasks.lock().await.insert(
+            id,
+            LiveTransfer { info: info.clone(), cancel: Some(tx), pause_flag: pause_flag.clone() },
+        );
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "ftp upload queued",
+            "transfer": id.to_string(),
+            "host": spec.host,
+            "local": info.local_path,
+            "remote": info.remote_path,
+        );
+        let _ = app.emit(EV_STARTED, &info);
+        tokio::spawn(ftp_task::run_ftp_upload(
+            app, self.tasks.clone(), id, spec, local, remote, rx, pause_flag,
+            self.gate_handle(),
+        ));
+        id
+    }
+
+    /// FTP twin of `start_download`; see `start_ftp_upload`.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn start_ftp_download(
+        &self,
+        app: AppHandle,
+        spec: crate::ftp::client::FtpSpec,
+        host_id: ConnectionId,
+        remote: String,
+        local: PathBuf,
+        group_id: Option<TransferId>,
+    ) -> TransferId {
+        let id = Uuid::new_v4();
+        let (tx, rx) = oneshot::channel();
+        let info = TransferInfo {
+            id,
+            connection_id: host_id,
+            direction: Direction::Download,
+            local_path: local.to_string_lossy().into_owned(),
+            remote_path: remote.clone(),
+            total_bytes: 0,
+            bytes_done: 0,
+            state: TransferState::Queued,
+            started_at: Self::now_ms(),
+            group_id,
+        };
+        let pause_flag = Arc::new(AtomicBool::new(false));
+        self.tasks.lock().await.insert(
+            id,
+            LiveTransfer { info: info.clone(), cancel: Some(tx), pause_flag: pause_flag.clone() },
+        );
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "ftp download queued",
+            "transfer": id.to_string(),
+            "host": spec.host,
+            "remote": info.remote_path,
+            "local": info.local_path,
+        );
+        let _ = app.emit(EV_STARTED, &info);
+        tokio::spawn(ftp_task::run_ftp_download(
+            app, self.tasks.clone(), id, spec, remote, local, rx, pause_flag,
             self.gate_handle(),
         ));
         id

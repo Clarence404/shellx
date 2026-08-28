@@ -18,6 +18,10 @@ vi.mock("../ipc/ftp", () => ({
   ftpMkdir: vi.fn(),
   ftpRename: vi.fn(),
   ftpRemove: vi.fn(),
+  ftpUpload: vi.fn(),
+  ftpDownload: vi.fn(),
+  ftpUploadDir: vi.fn(),
+  ftpDownloadDir: vi.fn(),
   ftpConnect: vi.fn(),
   ftpDisconnect: vi.fn().mockResolvedValue(undefined),
   ftpActiveIds: vi.fn().mockResolvedValue([]),
@@ -25,6 +29,10 @@ vi.mock("../ipc/ftp", () => ({
   ftpPwd: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ onDragDropEvent: () => Promise.resolve(() => {}) }),
+}));
+vi.mock("../ipc/local", () => ({ localIsDir: vi.fn().mockResolvedValue(false) }));
 vi.mock("../ipc/hosts", () => ({
   listHosts: vi.fn().mockResolvedValue([]),
   keychainAvailable: vi.fn().mockResolvedValue(false),

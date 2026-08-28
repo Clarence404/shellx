@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FolderPlus, RefreshCw } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useRailFiles } from "../state/railFiles";
 import { ConnectingPanel } from "./ConnectingPanel";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { PaneToolbarButton } from "./PaneToolbarButton";
@@ -38,9 +40,56 @@ export function FtpRemotePane() {
   const listing = useFtpStore((s) => s.listing);
   const error = useFtpStore((s) => s.error);
   const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null);
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const [osDragOver, setOsDragOver] = useState(false);
+  // The internal drag ghost + hover state live in useRailFiles — shared
+  // with LocalPane on purpose, since a drag crosses both panes.
+  const internalDragOver = useRailFiles((s) =>
+    s.currentDrag?.pane === "left" && s.currentDrag.hoverTarget === "right",
+  );
 
   const host = hosts.find((h) => h.id === activeId) ?? null;
   const live = !!activeId && connected.includes(activeId);
+
+  // OS files dropped onto this pane upload into the directory on screen.
+  // Same Tauri listener the Files view uses — HTML5 drag events are
+  // unreliable under WebView2.
+  useEffect(() => {
+    if (!live) return;
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    const win = getCurrentWindow();
+    win.onDragDropEvent((event) => {
+      const el = paneRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const inside = (px: number, py: number) => {
+        const x = px / dpr, y = py / dpr;
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      };
+      const p = event.payload;
+      if (p.type === "over") {
+        setOsDragOver(inside(p.position.x, p.position.y));
+      } else if (p.type === "leave") {
+        setOsDragOver(false);
+      } else if (p.type === "drop") {
+        setOsDragOver(false);
+        if (!inside(p.position.x, p.position.y)) return;
+        if (p.paths && p.paths.length > 0) {
+          const st = useFtpStore.getState();
+          for (const localPath of p.paths) {
+            const name = localPath.split(/[\\/]/).pop() || "unknown";
+            void st.upload(localPath, name, "unknown");
+          }
+        }
+      }
+    }).then((u) => {
+      if (cancelled) { u(); return; }
+      unlisten = u;
+    });
+    return () => { cancelled = true; unlisten?.(); };
+  }, [live]);
 
   // Landing on a connection with nothing listed yet — after a reconnect,
   // or after the view was remounted — fills the pane without the user
@@ -117,7 +166,16 @@ export function FtpRemotePane() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div
+      ref={paneRef}
+      data-pane="right"
+      style={{
+        display: "flex", flexDirection: "column", height: "100%", minHeight: 0,
+        outline: (osDragOver || internalDragOver) ? "2px dashed var(--accent)" : "none",
+        outlineOffset: -2,
+        transition: "outline-color 120ms ease",
+        userSelect: "none", WebkitUserSelect: "none",
+      }}>
       <div style={{
         height: 32, padding: "0 10px", display: "flex", alignItems: "center", gap: 6,
         background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)",
@@ -175,18 +233,67 @@ export function FtpRemotePane() {
           />
         )}
         {sortEntries(entries).map((e) => (
-          <FileRow
-            key={e.name}
-            name={e.name}
-            kind={e.kind}
-            size={e.size}
-            onOpen={() => {
-              if (e.kind === "directory") void store().navigate(joinPath(cwd, e.name));
+          <div key={e.name}
+            // Mouse-based drag, same shape as LocalPane's: mousedown →
+            // move-past-threshold → mouseup, dispatch decided by which
+            // [data-pane] is under the pointer at release.
+            onMouseDown={(ev) => {
+              if (ev.button !== 0) return;
+              ev.preventDefault();
+              const startX = ev.clientX, startY = ev.clientY;
+              let dragging = false;
+              const onMove = (me: MouseEvent) => {
+                if (!dragging) {
+                  if (Math.hypot(me.clientX - startX, me.clientY - startY) < 5) return;
+                  dragging = true;
+                  document.body.style.cursor = "grabbing";
+                }
+                const el = document.elementFromPoint(me.clientX, me.clientY);
+                const paneAttr = el?.closest("[data-pane]")?.getAttribute("data-pane");
+                useRailFiles.getState().setCurrentDrag({
+                  pane: "right", name: e.name,
+                  kind: e.kind === "directory" ? "directory" : "file",
+                  x: me.clientX, y: me.clientY,
+                  hoverTarget: paneAttr === "left" || paneAttr === "right" ? paneAttr : null,
+                });
+              };
+              const onUp = (up: MouseEvent) => {
+                document.removeEventListener("mousemove", onMove);
+                document.removeEventListener("mouseup", onUp);
+                document.body.style.cursor = "";
+                if (!dragging) return;
+                const drag = useRailFiles.getState().currentDrag;
+                useRailFiles.getState().setCurrentDrag(null);
+                if (!drag) return;
+                const el = document.elementFromPoint(up.clientX, up.clientY);
+                const pane = el?.closest("[data-pane]")?.getAttribute("data-pane");
+                if (drag.pane === "right" && pane === "left") {
+                  void useFtpStore.getState().download(
+                    drag.name, drag.kind, useRailFiles.getState().leftPath,
+                  );
+                }
+              };
+              document.addEventListener("mousemove", onMove);
+              document.addEventListener("mouseup", onUp);
             }}
-            onRename={(next) => void store().rename(joinPath(cwd, e.name), joinPath(cwd, next))}
-            onDelete={() => void store().remove(joinPath(cwd, e.name), e.kind === "directory")}
-            folderActions={folderActions}
-          />
+          >
+            <FileRow
+              name={e.name}
+              kind={e.kind}
+              size={e.size}
+              onOpen={() => {
+                if (e.kind === "directory") void store().navigate(joinPath(cwd, e.name));
+              }}
+              onRename={(next) => void store().rename(joinPath(cwd, e.name), joinPath(cwd, next))}
+              onDelete={() => void store().remove(joinPath(cwd, e.name), e.kind === "directory")}
+              onDownload={() => void store().download(
+                e.name,
+                e.kind === "directory" ? "directory" : "file",
+                useRailFiles.getState().leftPath,
+              )}
+              folderActions={folderActions}
+            />
+          </div>
         ))}
       </div>
 

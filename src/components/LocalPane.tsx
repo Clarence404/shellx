@@ -47,7 +47,18 @@ function parentPath(cwd: string): string {
   return "/" + parts.join("/");
 }
 
-export function LocalPane() {
+/** Where this pane's cross-pane gestures land. The Files view leaves it
+ *  unset and the pane talks to the SFTP session in `useRailFiles`, as it
+ *  always has; the FTP view passes one wired to its own store, so the
+ *  same drags move files over whichever protocol that view speaks. */
+export interface RemoteAdapter {
+  /** A remote target is live — gates every send affordance. */
+  ready: boolean;
+  send: (localAbs: string, name: string, kind: "file" | "directory") => void;
+  fetch: (name: string, kind: "file" | "directory", localDir: string) => void;
+}
+
+export function LocalPane({ remote }: { remote?: RemoteAdapter } = {}) {
   const leftPath = useRailFiles((s) => s.leftPath);
   const entries = useRailFiles((s) => s.leftEntries);
   const loading = useRailFiles((s) => s.leftLoading);
@@ -58,8 +69,9 @@ export function LocalPane() {
   const sessions = useSessions((s) => s.sessions);
   // Remote is "usable as upload target" only when its session is active.
   // Otherwise `Send to remote` gets hidden — no valid destination.
-  const remoteConnected = !!rightHost &&
-    !!sessions.find((s) => s.id === rightHost && s.state === "active");
+  const remoteConnected = remote
+    ? remote.ready
+    : !!rightHost && !!sessions.find((s) => s.id === rightHost && s.state === "active");
   const paneRef = useRef<HTMLDivElement | null>(null);
   const [osDragOver, setOsDragOver] = useState(false);
   // Highlight when the cross-pane internal drag is hovering over us.
@@ -165,13 +177,17 @@ export function LocalPane() {
           // kind: directories go through the recursive Rust IPC.
           const drag = useRailFiles.getState().currentDrag;
           useRailFiles.getState().setCurrentDrag(null);
-          if (drag && drag.pane === "right" && rightHost) {
-            const src = joinPath(rightPath, drag.name);
-            const dst = joinPath(leftPath, drag.name);
-            if (drag.kind === "directory") {
-              void sftpDownloadDir(rightHost, src, dst);
-            } else {
-              void sftpDownload(rightHost, src, dst);
+          if (drag && drag.pane === "right") {
+            if (remote) {
+              remote.fetch(drag.name, drag.kind, leftPath);
+            } else if (rightHost) {
+              const src = joinPath(rightPath, drag.name);
+              const dst = joinPath(leftPath, drag.name);
+              if (drag.kind === "directory") {
+                void sftpDownloadDir(rightHost, src, dst);
+              } else {
+                void sftpDownload(rightHost, src, dst);
+              }
             }
           }
         }
@@ -181,7 +197,8 @@ export function LocalPane() {
       unlisten = u;
     });
     return () => { cancelled = true; unlisten?.(); };
-  }, [leftPath, rightHost, rightPath]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leftPath, rightHost, rightPath, remote]);
 
   return (
     <div
@@ -322,13 +339,17 @@ export function LocalPane() {
                 const el = document.elementFromPoint(up.clientX, up.clientY);
                 const pane = el?.closest("[data-pane]")?.getAttribute("data-pane");
                 const st = useRailFiles.getState();
-                if (drag.pane === "left" && pane === "right" && st.rightHost) {
+                if (drag.pane === "left" && pane === "right") {
                   const src = joinPath(st.leftPath, drag.name);
-                  const dst = joinPath(st.rightPath, drag.name);
-                  if (drag.kind === "directory") {
-                    void sftpUploadDir(st.rightHost, src, dst);
-                  } else {
-                    void sftpUpload(st.rightHost, src, dst);
+                  if (remote) {
+                    if (remote.ready) remote.send(src, drag.name, drag.kind);
+                  } else if (st.rightHost) {
+                    const dst = joinPath(st.rightPath, drag.name);
+                    if (drag.kind === "directory") {
+                      void sftpUploadDir(st.rightHost, src, dst);
+                    } else {
+                      void sftpUpload(st.rightHost, src, dst);
+                    }
                   }
                 }
               };
@@ -364,8 +385,13 @@ export function LocalPane() {
               // guard here.
               onSendToRemote={remoteConnected ? () => {
                 const src = joinPath(leftPath, e.name);
+                const kind = e.kind === "directory" ? "directory" as const : "file" as const;
+                if (remote) {
+                  remote.send(src, e.name, kind);
+                  return;
+                }
                 const dst = joinPath(rightPath, e.name);
-                if (e.kind === "directory") {
+                if (kind === "directory") {
                   void sftpUploadDir(rightHost!, src, dst);
                 } else {
                   void sftpUpload(rightHost!, src, dst);

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import * as ipc from "../ipc/ftp";
+import { localIsDir } from "../ipc/local";
 import type { FtpEntry, FtpHost, SaveFtpHostArgs, UpdateFtpHostArgs } from "../types/ftp";
 
 /** Joins a directory and a child the way a server path works: always
@@ -40,6 +41,11 @@ interface State {
   disconnect: (id: string) => Promise<void>;
   setActive: (id: string | null) => void;
   navigate: (path: string) => Promise<void>;
+  /** Queue a transfer into / out of the current directory. `kind` is
+   *  what the source pane knows about the entry; OS drops pass "unknown"
+   *  and the local filesystem is asked. */
+  upload: (localAbs: string, name: string, kind: "file" | "directory" | "unknown") => Promise<void>;
+  download: (name: string, kind: "file" | "directory", localDir: string) => Promise<void>;
   mkdir: (path: string) => Promise<void>;
   rename: (from: string, to: string) => Promise<void>;
   remove: (path: string, isDir: boolean) => Promise<void>;
@@ -173,6 +179,34 @@ export const useFtpStore = create<State>((set, get) => ({
       set({ error: String(e), listedKey: `${id}:${get().cwd}` });
     } finally {
       set({ listing: false });
+    }
+  },
+
+  upload: async (localAbs, name, kind) => {
+    const id = get().activeId;
+    if (!id) return;
+    const dst = joinPath(get().cwd, name);
+    try {
+      const isDir = kind === "unknown" ? await localIsDir(localAbs) : kind === "directory";
+      if (isDir) await ipc.ftpUploadDir(id, localAbs, dst);
+      else await ipc.ftpUpload(id, localAbs, dst);
+    } catch (e) {
+      set({ error: String(e) });
+    }
+  },
+
+  download: async (name, kind, localDir) => {
+    const id = get().activeId;
+    if (!id) return;
+    const src = joinPath(get().cwd, name);
+    // The local join is deliberately naive: localDir comes from the
+    // local pane, which already normalizes to forward slashes.
+    const dst = localDir === "/" ? `/${name}` : `${localDir}/${name}`;
+    try {
+      if (kind === "directory") await ipc.ftpDownloadDir(id, src, dst);
+      else await ipc.ftpDownload(id, src, dst);
+    } catch (e) {
+      set({ error: String(e) });
     }
   },
 
