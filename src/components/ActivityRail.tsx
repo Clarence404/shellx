@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Server, Files, Waypoints, Cable, Settings, type LucideIcon } from "lucide-react";
+import { Server, Files, Waypoints, Cable, Settings, type LucideIcon, ArrowDownUp } from "lucide-react";
 import { useSessions, type RailView } from "../state/sessions";
 import { useT } from "../i18n";
 import { useUpdater } from "../state/updater";
@@ -11,6 +11,7 @@ export type { RailView };
 const PRIMARY_ITEMS: { id: RailView; label: string; Icon: LucideIcon }[] = [
   { id: "hosts", label: "Hosts", Icon: Server },
   { id: "files", label: "Files", Icon: Files },
+  { id: "ftp", label: "FTP", Icon: ArrowDownUp },
   { id: "tunnels", label: "Tunnels", Icon: Waypoints },
   { id: "serial", label: "Serial", Icon: Cable },
 ];

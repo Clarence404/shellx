@@ -15,6 +15,7 @@ import { activitiesFor, clampActivity } from "./state/activities";
 import { SessionSurfaces } from "./components/SessionSurfaces";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { SshConfigImport } from "./components/SshConfigImport";
+import { FtpView } from "./components/FtpView";
 import { CommandPalette } from "./components/CommandPalette";
 import { SettingsView } from "./components/settings/SettingsView";
 import { useSessions } from "./state/sessions";
@@ -527,6 +528,7 @@ export function App() {
             guard) lives inside it, and unmounting dropped every running
             tunnel out of the UI while the forwarder stayed up. */}
         <GlobalTunnelsView hidden={railView !== "tunnels"} />
+        {railView === "ftp" && <FtpView />}
         {railView === "settings" && <SettingsView />}
         {railView === "serial" && (
           <div style={{

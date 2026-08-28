@@ -6,7 +6,10 @@ authors = ["Clarence404"]
 license = ""
 repository = ""
 edition = "2021"
-rust-version = "1.77.2"
+# suppaftp 10 (the FTP client) needs 1.88. This is a build-from-source
+# floor only — the shipped installer carries no toolchain, and CI builds
+# on stable.
+rust-version = "1.88.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -60,6 +63,8 @@ dirs = "5"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
 chrono = { version = "0.4", features = ["serde"] }
+encoding_rs = "0.8.35"
+suppaftp = { version = "10.0.2", features = ["tokio", "tokio-rustls-ring"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

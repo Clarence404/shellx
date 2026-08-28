@@ -1,0 +1,145 @@
+import { create } from "zustand";
+import * as ipc from "../ipc/ftp";
+import type { FtpEntry, FtpHost, SaveFtpHostArgs, UpdateFtpHostArgs } from "../types/ftp";
+
+/** Joins a directory and a child the way a server path works: always
+ *  forward slashes, never a doubled one, and `..` climbs. */
+export function joinPath(cwd: string, name: string): string {
+  if (name === "..") {
+    const up = cwd.replace(/\/+$/, "").replace(/\/[^/]*$/, "");
+    return up === "" ? "/" : up;
+  }
+  return `${cwd.replace(/\/+$/, "")}/${name}`;
+}
+
+interface State {
+  hosts: FtpHost[];
+  loaded: boolean;
+  /** The connection whose directory the remote pane is showing. */
+  activeId: string | null;
+  /** Ids with a live connection on the Rust side. */
+  connected: string[];
+  /** Ids currently mid-connect, so the row can say so. */
+  connecting: string[];
+  cwd: string;
+  entries: FtpEntry[];
+  /** `id:path` of the last listing that came back, successful or not.
+   *  The pane keys its auto-refresh on this rather than on whether it
+   *  has any rows — an empty directory is a real answer, and counting
+   *  rows would ask for it again forever. */
+  listedKey: string | null;
+  listing: boolean;
+  error: string | null;
+
+  load: () => Promise<void>;
+  addHost: (args: SaveFtpHostArgs) => Promise<FtpHost>;
+  updateHost: (args: UpdateFtpHostArgs) => Promise<void>;
+  deleteHost: (id: string) => Promise<void>;
+  connect: (id: string) => Promise<void>;
+  disconnect: (id: string) => Promise<void>;
+  setActive: (id: string | null) => void;
+  navigate: (path: string) => Promise<void>;
+  refresh: () => Promise<void>;
+  clearError: () => void;
+}
+
+export const useFtpStore = create<State>((set, get) => ({
+  hosts: [],
+  loaded: false,
+  activeId: null,
+  connected: [],
+  connecting: [],
+  cwd: "/",
+  entries: [],
+  listedKey: null,
+  listing: false,
+  error: null,
+
+  load: async () => {
+    // Live connections outlive a view unmount — they are held on the
+    // Rust side — so the list of what is connected has to be asked for,
+    // not remembered.
+    const [hosts, connected] = await Promise.all([
+      ipc.ftpHostList(),
+      ipc.ftpActiveIds().catch(() => [] as string[]),
+    ]);
+    set({ hosts, connected, loaded: true });
+  },
+
+  addHost: async (args) => {
+    const saved = await ipc.ftpHostSave(args);
+    const { password_stored, ...host } = saved;
+    set((s) => ({ hosts: [...s.hosts, host] }));
+    return host;
+  },
+
+  updateHost: async (args) => {
+    const saved = await ipc.ftpHostUpdate(args);
+    const { password_stored, ...host } = saved;
+    set((s) => ({ hosts: s.hosts.map((h) => (h.id === host.id ? host : h)) }));
+  },
+
+  deleteHost: async (id) => {
+    await ipc.ftpHostDelete(id);
+    set((s) => ({
+      hosts: s.hosts.filter((h) => h.id !== id),
+      connected: s.connected.filter((x) => x !== id),
+      ...(s.activeId === id ? { activeId: null, entries: [], listedKey: null, cwd: "/" } : {}),
+    }));
+  },
+
+  connect: async (id) => {
+    if (get().connecting.includes(id)) return;
+    set((s) => ({ connecting: [...s.connecting, id], error: null }));
+    try {
+      const { cwd } = await ipc.ftpConnect(id);
+      set((s) => ({
+        connected: s.connected.includes(id) ? s.connected : [...s.connected, id],
+        activeId: id,
+        cwd,
+        listedKey: null,
+      }));
+      await get().refresh();
+    } catch (e) {
+      set({ error: String(e) });
+    } finally {
+      set((s) => ({ connecting: s.connecting.filter((x) => x !== id) }));
+    }
+  },
+
+  disconnect: async (id) => {
+    await ipc.ftpDisconnect(id).catch(() => {});
+    set((s) => ({
+      connected: s.connected.filter((x) => x !== id),
+      ...(s.activeId === id ? { entries: [], listedKey: null } : {}),
+    }));
+  },
+
+  setActive: (id) => set({ activeId: id, entries: [], listedKey: null, error: null }),
+
+  navigate: async (path) => {
+    const id = get().activeId;
+    if (!id) return;
+    set({ listing: true, error: null });
+    try {
+      const entries = await ipc.ftpListDir(id, path);
+      set({ entries, cwd: path, listedKey: `${id}:${path}` });
+    } catch (e) {
+      // Keep the directory that was on screen: dropping the user out of
+      // a working folder because one listing failed helps nobody. The
+      // key still moves, so a failure is not retried on every render.
+      // The key names the directory still on screen, not the one that
+      // failed — otherwise the pane would see "not listed yet" and ask
+      // again on every render.
+      set({ error: String(e), listedKey: `${id}:${get().cwd}` });
+    } finally {
+      set({ listing: false });
+    }
+  },
+
+  refresh: async () => {
+    await get().navigate(get().cwd);
+  },
+
+  clearError: () => set({ error: null }),
+}));

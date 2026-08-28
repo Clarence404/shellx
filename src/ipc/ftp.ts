@@ -1,0 +1,29 @@
+import { invoke } from "@tauri-apps/api/core";
+import type {
+  FtpConnected, FtpEntry, FtpHost, FtpHostSaveResult,
+  SaveFtpHostArgs, UpdateFtpHostArgs,
+} from "../types/ftp";
+
+export const ftpHostList = () => invoke<FtpHost[]>("ftp_host_list");
+
+export const ftpHostSave = (args: SaveFtpHostArgs) =>
+  invoke<FtpHostSaveResult>("ftp_host_save", { args });
+
+export const ftpHostUpdate = (args: UpdateFtpHostArgs) =>
+  invoke<FtpHostSaveResult>("ftp_host_update", { args });
+
+export const ftpHostDelete = (id: string) =>
+  invoke<void>("ftp_host_delete", { args: { id } });
+
+export const ftpConnect = (id: string, password?: string) =>
+  invoke<FtpConnected>("ftp_connect", { args: { id, password: password ?? null } });
+
+export const ftpDisconnect = (id: string) =>
+  invoke<void>("ftp_disconnect", { args: { id } });
+
+export const ftpActiveIds = () => invoke<string[]>("ftp_active_ids");
+
+export const ftpListDir = (id: string, path: string) =>
+  invoke<FtpEntry[]>("ftp_list_dir", { args: { id, path } });
+
+export const ftpPwd = (id: string) => invoke<string>("ftp_pwd", { args: { id } });

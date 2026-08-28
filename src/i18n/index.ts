@@ -14,6 +14,38 @@ const zh: Record<string, string> = {
   "Settings": "设置",
   "Serial · coming soon": "串口 · 即将推出",
 
+  // FTP view
+  "FTP": "FTP",
+  "New FTP connection": "新建 FTP 连接",
+  "Edit connection": "编辑连接",
+  "No FTP connections yet": "还没有 FTP 连接",
+  "Add an FTP connection to get started": "先新建一个 FTP 连接",
+  "Pick a connection on the left": "在左侧选择一个连接",
+  "Protocol": "协议",
+  "FTP is not encrypted: the password and every byte travel in the clear. Use it only on a network you trust.":
+    "FTP 不加密：密码和每一个字节都是明文传输。仅在可信网络里使用。",
+  "SFTP runs over SSH, the same way the Hosts view connects.":
+    "SFTP 走 SSH 加密通道，和主机页用的是同一套连接方式。",
+  "FTPS is FTP with TLS. Both the control and data connections are encrypted.":
+    "FTPS 是 FTP 加 TLS，控制连接和数据连接都会加密。",
+  "Only FTP connects in this build.": "当前版本只有 FTP 可以连接。",
+  "Name": "名称",
+  "Passive mode (PASV)": "被动模式（PASV）",
+  "Filename encoding": "文件名编码",
+  "Auto": "自动",
+  "leave blank to keep the stored one": "留空则沿用已存的密码",
+  "Saving": "保存中",
+  "Up one level": "返回上级",
+  "Listing": "读取目录中",
+  "This folder is empty": "该目录为空",
+  "File size": "大小",
+  "Modified": "修改时间",
+  "plaintext": "明文",
+  "encrypted": "加密",
+  "auto": "自动",
+  "passive mode": "被动",
+  "active mode": "主动",
+
   // Drawer / host list
   "New connection": "新建连接",
   "Import from SSH config": "从 SSH 配置导入",

@@ -4,6 +4,7 @@
 pub mod bundle;
 pub mod config;
 pub mod events;
+pub mod ftp;
 pub mod hostkeys;
 pub mod hosts;
 pub mod keys;

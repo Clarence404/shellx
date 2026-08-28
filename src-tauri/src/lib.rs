@@ -1,6 +1,7 @@
 pub mod bundle;
 pub mod config_paths;
 pub mod error;
+pub mod ftp;
 pub mod hostkeys;
 pub mod keys;
 pub mod ipc;
