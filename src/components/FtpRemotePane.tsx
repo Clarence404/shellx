@@ -9,6 +9,8 @@ import { FileRow, buildFolderMenuItems } from "./FileRow";
 import { HostContextMenu } from "./HostContextMenu";
 import { joinPath, useFtpStore } from "../state/ftp";
 import { ftpDownload, ftpDownloadDir } from "../ipc/ftp";
+import { newGesture } from "../ipc/transfers";
+import { localIsDir } from "../ipc/local";
 import { dragOutRemote } from "../dragOut";
 import { useT } from "../i18n";
 import type { FtpEntry, FtpHost } from "../types/ftp";
@@ -80,10 +82,23 @@ export function FtpRemotePane() {
         if (!inside(p.position.x, p.position.y)) return;
         if (p.paths && p.paths.length > 0) {
           const st = useFtpStore.getState();
-          for (const localPath of p.paths) {
-            const name = localPath.split(/[\\/]/).pop() || "unknown";
-            void st.upload(localPath, name, "unknown");
-          }
+          void (async () => {
+            // Loose files in one drop share one gesture group — one
+            // strip row for the batch, like each dropped folder gets.
+            const kinds = await Promise.all(p.paths.map(async (lp) => {
+              try { return await localIsDir(lp); } catch { return null; }
+            }));
+            const files = p.paths.filter((_, i) => kinds[i] === false);
+            const group = files.length >= 2
+              ? newGesture(files[0].split(/[\\/]/).pop() || "unknown")
+              : undefined;
+            for (let i = 0; i < p.paths.length; i++) {
+              if (kinds[i] === null) continue;
+              const localPath = p.paths[i];
+              const name = localPath.split(/[\\/]/).pop() || "unknown";
+              void st.upload(localPath, name, kinds[i] ? "directory" : "file", group);
+            }
+          })();
         }
       }
     }).then((u) => {

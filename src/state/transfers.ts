@@ -32,6 +32,12 @@ interface TransfersStore {
   pauseAll: (connId?: string) => Promise<void>;
   resumeAll: (connId?: string) => Promise<void>;
   cancelAll: (connId?: string) => Promise<void>;
+  /** Gesture-scoped variants — the strip's per-row buttons. Same shape:
+   *  one optimistic pass, one IPC call. */
+  pauseGroup: (groupId: string) => Promise<void>;
+  resumeGroup: (groupId: string) => Promise<void>;
+  retryGroup: (groupId: string) => Promise<void>;
+  removeGroup: (groupId: string) => void;
 }
 
 // Flush cadence for the two high-volume events. 100ms keeps the UI at
@@ -102,7 +108,13 @@ export const useTransfersStore = create<TransfersStore>((set, get) => ({
         // user clicks the button.
         if (t.state.kind === "paused" || t.state.kind === "cancelled") return t;
         const promoted = t.state.kind === "queued" ? { kind: "active" as const } : t.state;
-        return { ...t, bytes_done: e.bytes_done, total_bytes: e.total_bytes, state: promoted };
+        return {
+          ...t,
+          bytes_done: e.bytes_done,
+          total_bytes: e.total_bytes,
+          rateBps: e.rate_bps,
+          state: promoted,
+        };
       }),
     })),
 
@@ -235,6 +247,52 @@ export const useTransfersStore = create<TransfersStore>((set, get) => ({
       };
     });
     await ipc.transferCancelAll(connId);
+  },
+
+  pauseGroup: async (groupId) => {
+    set((st) => ({
+      list: st.list.map((t) =>
+        t.groupId === groupId && (t.state.kind === "queued" || t.state.kind === "active")
+          ? { ...t, state: { kind: "paused" as const } }
+          : t,
+      ),
+    }));
+    await ipc.transferPauseAll(undefined, groupId);
+  },
+
+  resumeGroup: async (groupId) => {
+    set((st) => ({
+      list: st.list.map((t) =>
+        t.groupId === groupId && t.state.kind === "paused"
+          ? { ...t, state: { kind: "active" as const } }
+          : t,
+      ),
+    }));
+    await ipc.transferResumeAll(undefined, groupId);
+  },
+
+  retryGroup: async (groupId) => {
+    // Failed members leave optimistically; the retried transfers come
+    // back through ordinary transfer:started events with fresh ids.
+    set((st) => ({
+      list: st.list.filter((t) => !(t.groupId === groupId && t.state.kind === "failed")),
+    }));
+    try {
+      await ipc.transferRetryGroup(groupId);
+    } catch {
+      await get().loadInitial();
+    }
+  },
+
+  removeGroup: (groupId) => {
+    set((st) => ({
+      list: st.list.filter((t) => {
+        if (t.groupId !== groupId) return true;
+        const k = t.state.kind;
+        return k === "queued" || k === "active" || k === "paused";
+      }),
+    }));
+    void ipc.transferRemoveGroup(groupId).catch(() => {});
   },
 
   retry: async (transferId) => {

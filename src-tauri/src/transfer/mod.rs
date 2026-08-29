@@ -199,6 +199,36 @@ impl TransferManager {
         }
     }
 
+    /// Every failed member of a group, snapshot for a group retry.
+    pub async fn failed_of_group(&self, group_id: TransferId) -> Vec<TransferInfo> {
+        self.tasks
+            .lock()
+            .await
+            .values()
+            .filter(|t| {
+                t.info.group_id == Some(group_id)
+                    && matches!(t.info.state, TransferState::Failed { .. })
+            })
+            .map(|t| t.info.clone())
+            .collect()
+    }
+
+    /// `remove_terminal` for a whole group in one lock pass — dismissing
+    /// a gesture with ten thousand failed children must not mean ten
+    /// thousand IPC calls. Live members are left alone.
+    pub async fn remove_terminal_group(&self, group_id: TransferId) -> usize {
+        let mut tasks = self.tasks.lock().await;
+        let before = tasks.len();
+        tasks.retain(|_, t| {
+            t.info.group_id != Some(group_id)
+                || !matches!(
+                    t.info.state,
+                    TransferState::Done | TransferState::Cancelled | TransferState::Failed { .. }
+                )
+        });
+        before - tasks.len()
+    }
+
     /// Consulted by `sftp_upload_dir` / `sftp_download_dir` between
     /// per-file iterations. Returns true once the caller has invoked
     /// `cancel_group` for this id — the loop should break out of its
@@ -255,12 +285,19 @@ impl TransferManager {
     /// connection's), in one pass. No per-id events: the caller flips
     /// its own list optimistically, and 20 000 state events would melt
     /// the frontend for nothing.
-    pub async fn pause_all(&self, filter: Option<ConnectionId>) -> usize {
+    pub async fn pause_all(
+        &self,
+        filter: Option<ConnectionId>,
+        group: Option<TransferId>,
+    ) -> usize {
         let mut map = self.tasks.lock().await;
         let mut n = 0;
         for t in map.values_mut() {
             if let Some(c) = filter {
                 if t.info.connection_id != c { continue; }
+            }
+            if let Some(g) = group {
+                if t.info.group_id != Some(g) { continue; }
             }
             if matches!(t.info.state, TransferState::Queued | TransferState::Active) {
                 t.pause_flag.store(true, Ordering::Release);
@@ -277,12 +314,19 @@ impl TransferManager {
 
     /// The inverse of `pause_all`. A transfer paused before it ever
     /// held a slot simply goes back to waiting for one.
-    pub async fn resume_all(&self, filter: Option<ConnectionId>) -> usize {
+    pub async fn resume_all(
+        &self,
+        filter: Option<ConnectionId>,
+        group: Option<TransferId>,
+    ) -> usize {
         let mut map = self.tasks.lock().await;
         let mut n = 0;
         for t in map.values_mut() {
             if let Some(c) = filter {
                 if t.info.connection_id != c { continue; }
+            }
+            if let Some(g) = group {
+                if t.info.group_id != Some(g) { continue; }
             }
             if matches!(t.info.state, TransferState::Paused) {
                 t.pause_flag.store(false, Ordering::Release);
@@ -296,7 +340,11 @@ impl TransferManager {
     /// Cancels everything in flight (optionally one connection's) in one
     /// pass: every group is marked so enumeration loops stop spawning,
     /// and every task gets its cancel signal.
-    pub async fn cancel_all(&self, filter: Option<ConnectionId>) -> usize {
+    pub async fn cancel_all(
+        &self,
+        filter: Option<ConnectionId>,
+        group: Option<TransferId>,
+    ) -> usize {
         let mut groups: Vec<TransferId> = Vec::new();
         let mut n = 0;
         {
@@ -304,6 +352,9 @@ impl TransferManager {
             for t in map.values_mut() {
                 if let Some(c) = filter {
                     if t.info.connection_id != c { continue; }
+                }
+                if let Some(g) = group {
+                    if t.info.group_id != Some(g) { continue; }
                 }
                 if !matches!(
                     t.info.state,
@@ -701,7 +752,93 @@ mod tests {
             state: TransferState::Queued,
             started_at: 0,
             group_id: None,
+            group_label: None,
         }
+    }
+
+    async fn insert(mgr: &TransferManager, info: TransferInfo) {
+        let id = info.id;
+        let (tx, rx) = oneshot::channel();
+        // Leak the receiver on purpose — these tests only watch states.
+        std::mem::forget(rx);
+        mgr.tasks.lock().await.insert(
+            id,
+            LiveTransfer {
+                info,
+                cancel: Some(tx),
+                pause_flag: Arc::new(AtomicBool::new(false)),
+            },
+        );
+    }
+
+    #[tokio::test]
+    async fn bulk_ops_scope_to_a_group_when_asked() {
+        let mgr = TransferManager::new();
+        let g = Uuid::new_v4();
+        let mut a = dummy_info(Uuid::new_v4());
+        a.group_id = Some(g);
+        let b = dummy_info(Uuid::new_v4());
+        insert(&mgr, a.clone()).await;
+        insert(&mgr, b.clone()).await;
+
+        // Pause only the group: the solo transfer keeps running.
+        assert_eq!(mgr.pause_all(None, Some(g)).await, 1);
+        let states: Vec<(TransferId, TransferState)> = mgr
+            .list()
+            .await
+            .into_iter()
+            .map(|t| (t.id, t.state))
+            .collect();
+        for (id, st) in states {
+            if id == a.id {
+                assert!(matches!(st, TransferState::Paused));
+            } else {
+                assert!(matches!(st, TransferState::Queued));
+            }
+        }
+
+        assert_eq!(mgr.resume_all(None, Some(g)).await, 1);
+        assert_eq!(mgr.cancel_all(None, Some(g)).await, 1);
+        // The group is flagged so enumeration loops stop spawning.
+        assert!(mgr.is_group_cancelled(g).await);
+    }
+
+    #[tokio::test]
+    async fn remove_terminal_group_drops_only_finished_members() {
+        let mgr = TransferManager::new();
+        let g = Uuid::new_v4();
+        let mut failed = dummy_info(Uuid::new_v4());
+        failed.group_id = Some(g);
+        failed.state = TransferState::Failed { error: "x".into() };
+        let mut live = dummy_info(Uuid::new_v4());
+        live.group_id = Some(g);
+        let solo = dummy_info(Uuid::new_v4());
+        insert(&mgr, failed).await;
+        insert(&mgr, live.clone()).await;
+        insert(&mgr, solo.clone()).await;
+
+        assert_eq!(mgr.remove_terminal_group(g).await, 1);
+        let left: Vec<TransferId> = mgr.list().await.into_iter().map(|t| t.id).collect();
+        assert!(left.contains(&live.id));
+        assert!(left.contains(&solo.id));
+        assert_eq!(left.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn failed_of_group_snapshots_only_that_group_s_failures() {
+        let mgr = TransferManager::new();
+        let g = Uuid::new_v4();
+        let mut f1 = dummy_info(Uuid::new_v4());
+        f1.group_id = Some(g);
+        f1.state = TransferState::Failed { error: "boom".into() };
+        let mut other = dummy_info(Uuid::new_v4());
+        other.state = TransferState::Failed { error: "boom".into() };
+        insert(&mgr, f1.clone()).await;
+        insert(&mgr, other).await;
+
+        let failed = mgr.failed_of_group(g).await;
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].id, f1.id);
     }
 
     #[tokio::test]

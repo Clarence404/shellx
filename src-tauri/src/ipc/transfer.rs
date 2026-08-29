@@ -23,6 +23,13 @@ pub struct UploadArgs {
     pub conn_id: ConnectionId,
     pub local_path: String,
     pub remote_path: String,
+    /// Set when several loose files were dropped in one gesture: the
+    /// frontend mints one id for the batch so the strip shows a single
+    /// row, exactly as a directory drop does.
+    #[serde(default)]
+    pub group_id: Option<TransferId>,
+    #[serde(default)]
+    pub group_label: Option<String>,
 }
 
 #[tauri::command]
@@ -46,8 +53,8 @@ pub async fn sftp_upload(
             args.conn_id,
             PathBuf::from(args.local_path),
             args.remote_path,
-            None,
-            None,
+            args.group_id,
+            args.group_label,
             0,
         )
         .await)
@@ -58,6 +65,10 @@ pub struct DownloadArgs {
     pub conn_id: ConnectionId,
     pub remote_path: String,
     pub local_path: String,
+    #[serde(default)]
+    pub group_id: Option<TransferId>,
+    #[serde(default)]
+    pub group_label: Option<String>,
 }
 
 #[tauri::command]
@@ -81,8 +92,8 @@ pub async fn sftp_download(
             args.conn_id,
             args.remote_path,
             PathBuf::from(args.local_path),
-            None,
-            None,
+            args.group_id,
+            args.group_label,
             0,
         )
         .await)
@@ -157,6 +168,10 @@ pub async fn transfer_remove(
 pub struct BulkArgs {
     /// Limit to one connection's transfers; absent = everything.
     pub conn_id: Option<ConnectionId>,
+    /// Limit to one gesture's transfers — the strip's per-row pause /
+    /// resume / cancel buttons pass this.
+    #[serde(default)]
+    pub group_id: Option<TransferId>,
 }
 
 /// One IPC call however many files are queued — the per-id path meant
@@ -167,7 +182,7 @@ pub async fn transfer_pause_all(
     args: BulkArgs,
     transfer_mgr: State<'_, TransferManager>,
 ) -> Result<usize> {
-    Ok(transfer_mgr.pause_all(args.conn_id).await)
+    Ok(transfer_mgr.pause_all(args.conn_id, args.group_id).await)
 }
 
 #[tauri::command]
@@ -175,7 +190,7 @@ pub async fn transfer_resume_all(
     args: BulkArgs,
     transfer_mgr: State<'_, TransferManager>,
 ) -> Result<usize> {
-    Ok(transfer_mgr.resume_all(args.conn_id).await)
+    Ok(transfer_mgr.resume_all(args.conn_id, args.group_id).await)
 }
 
 #[tauri::command]
@@ -183,7 +198,17 @@ pub async fn transfer_cancel_all(
     args: BulkArgs,
     transfer_mgr: State<'_, TransferManager>,
 ) -> Result<usize> {
-    Ok(transfer_mgr.cancel_all(args.conn_id).await)
+    Ok(transfer_mgr.cancel_all(args.conn_id, args.group_id).await)
+}
+
+/// `transfer_remove` for a whole gesture — dismissing a failed group of
+/// ten thousand files is one call, not ten thousand.
+#[tauri::command]
+pub async fn transfer_remove_group(
+    args: CancelGroupArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<usize> {
+    Ok(transfer_mgr.remove_terminal_group(args.group_id).await)
 }
 
 // ---------- v0.6 T1: recursive directory transfers ----------

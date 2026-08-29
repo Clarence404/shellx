@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { DirTransferInit } from "./transfers";
+import type { DirTransferInit, GestureGroup } from "./transfers";
 import type {
   FtpConnected, FtpEntry, FtpHost, FtpHostSaveResult,
   SaveFtpHostArgs, UpdateFtpHostArgs,
@@ -45,11 +45,17 @@ export const ftpRemove = (id: string, path: string, isDir: boolean) =>
 
 /** Transfers land in the same queue the Files view uses — same events,
  *  same strip, same pause / resume / cancel. */
-export const ftpUpload = (id: string, localPath: string, remotePath: string) =>
-  invoke<string>("ftp_upload", { args: { id, localPath, remotePath } });
+export const ftpUpload = (id: string, localPath: string, remotePath: string, group?: GestureGroup) =>
+  invoke<string>("ftp_upload", { args: {
+    id, localPath, remotePath,
+    groupId: group?.groupId ?? null, groupLabel: group?.groupLabel ?? null,
+  } });
 
-export const ftpDownload = (id: string, remotePath: string, localPath: string) =>
-  invoke<string>("ftp_download", { args: { id, localPath, remotePath } });
+export const ftpDownload = (id: string, remotePath: string, localPath: string, group?: GestureGroup) =>
+  invoke<string>("ftp_download", { args: {
+    id, localPath, remotePath,
+    groupId: group?.groupId ?? null, groupLabel: group?.groupLabel ?? null,
+  } });
 
 export const ftpUploadDir = (id: string, localDir: string, remoteDir: string) =>
   invoke<DirTransferInit>("ftp_upload_dir", { args: { id, localDir, remoteDir } });

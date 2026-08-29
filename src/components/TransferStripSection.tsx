@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { TransferBar, TransferRows, useHasVisibleTransfers } from "./TransferQueue";
+import { TransferBar, TransferRows, useHasVisibleTransfers, useCanExpandTransfers } from "./TransferQueue";
 import { useRailFiles } from "../state/railFiles";
 
 interface Props {
@@ -21,7 +21,11 @@ interface Props {
  */
 export function TransferStripSection({ connectionId, showAll }: Props) {
   const hasTransfers = useHasVisibleTransfers(connectionId, showAll);
-  const expanded = useRailFiles((s) => s.transfersExpanded);
+  // One gesture is the bar itself — nothing to expand. The stored flag
+  // is left alone so the panel comes back when a second gesture starts.
+  const canExpand = useCanExpandTransfers(connectionId, showAll);
+  const expandedFlag = useRailFiles((s) => s.transfersExpanded);
+  const expanded = expandedFlag && canExpand;
   const toggle = useRailFiles((s) => s.toggleTransfersExpanded);
   const height = useRailFiles((s) => s.transferStripHeight);
   const setDraft = useRailFiles((s) => s.setTransferStripHeightDraft);

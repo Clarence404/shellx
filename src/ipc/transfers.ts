@@ -2,11 +2,31 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { TransferId, TransferInfo, TransferState } from "../types/sftp";
 
-export const sftpUpload = (conn_id: string, local_path: string, remote_path: string) =>
-  invoke<TransferId>("sftp_upload", { args: { conn_id, local_path, remote_path } });
+/** Several loose files dropped in one gesture share one of these, so the
+ *  strip shows the batch as a single row — exactly like a directory drop.
+ *  Minted on the frontend (`newGesture`) because only the drop handler
+ *  knows which files arrived together. */
+export interface GestureGroup {
+  groupId: string;
+  groupLabel: string;
+}
 
-export const sftpDownload = (conn_id: string, remote_path: string, local_path: string) =>
-  invoke<TransferId>("sftp_download", { args: { conn_id, remote_path, local_path } });
+export const newGesture = (label: string): GestureGroup => ({
+  groupId: crypto.randomUUID(),
+  groupLabel: label,
+});
+
+export const sftpUpload = (conn_id: string, local_path: string, remote_path: string, group?: GestureGroup) =>
+  invoke<TransferId>("sftp_upload", { args: {
+    conn_id, local_path, remote_path,
+    group_id: group?.groupId ?? null, group_label: group?.groupLabel ?? null,
+  } });
+
+export const sftpDownload = (conn_id: string, remote_path: string, local_path: string, group?: GestureGroup) =>
+  invoke<TransferId>("sftp_download", { args: {
+    conn_id, remote_path, local_path,
+    group_id: group?.groupId ?? null, group_label: group?.groupLabel ?? null,
+  } });
 
 /** Backend response shape for `sftp_upload_dir` / `sftp_download_dir`.
  *  The frontend uses `groupId` to correlate the per-file `transfer:started`
@@ -51,14 +71,23 @@ export const transferRetry = (transferId: string) =>
 /** One IPC call for the whole queue (optionally one connection's) —
  *  the per-id path meant one call per file, and twenty thousand files
  *  meant twenty thousand calls. */
-export const transferPauseAll = (connId?: string) =>
-  invoke<number>("transfer_pause_all", { args: { conn_id: connId ?? null } });
+export const transferPauseAll = (connId?: string, groupId?: string) =>
+  invoke<number>("transfer_pause_all", { args: { conn_id: connId ?? null, group_id: groupId ?? null } });
 
-export const transferResumeAll = (connId?: string) =>
-  invoke<number>("transfer_resume_all", { args: { conn_id: connId ?? null } });
+export const transferResumeAll = (connId?: string, groupId?: string) =>
+  invoke<number>("transfer_resume_all", { args: { conn_id: connId ?? null, group_id: groupId ?? null } });
 
-export const transferCancelAll = (connId?: string) =>
-  invoke<number>("transfer_cancel_all", { args: { conn_id: connId ?? null } });
+export const transferCancelAll = (connId?: string, groupId?: string) =>
+  invoke<number>("transfer_cancel_all", { args: { conn_id: connId ?? null, group_id: groupId ?? null } });
+
+/** Requeues every failed member of a gesture — one IPC call, however
+ *  many files failed. */
+export const transferRetryGroup = (groupId: string) =>
+  invoke<number>("transfer_retry_group", { args: { groupId } });
+
+/** Forgets every finished / failed / cancelled member of a gesture. */
+export const transferRemoveGroup = (groupId: string) =>
+  invoke<number>("transfer_remove_group", { args: { group_id: groupId } });
 
 export const transferPause = (transfer_id: string) =>
   invoke<void>("transfer_pause", { args: { transfer_id } });

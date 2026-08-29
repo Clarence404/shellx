@@ -26,6 +26,7 @@ const zh: Record<string, string> = {
   "more items": "项",
   "files": "个文件",
   "items failed": "项失败",
+  "files failed": "个文件失败",
   "to remote": "→ 远程",
   "to local": "→ 本地",
   "Pause all": "全部暂停",

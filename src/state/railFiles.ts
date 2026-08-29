@@ -4,7 +4,7 @@ import type { SftpEntry } from "../types/sftp";
 import type { ConnectionId } from "../types/connection";
 import { localListDir, localRealpath } from "../ipc/local";
 import { sftpListDir, sftpRealpath } from "../ipc/sftp";
-import { sftpUpload, sftpDownload } from "../ipc/transfers";
+import { sftpUpload, sftpDownload, newGesture } from "../ipc/transfers";
 import { useSessions } from "./sessions";
 
 interface State {
@@ -249,17 +249,20 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
     const { leftPath, rightPath, rightHost, leftSelected, rightSelected } = get();
     if (!rightHost) return;
     const join = (base: string, name: string) => base === "/" ? `/${name}` : `${base}/${name}`;
+    // A multi-select is one gesture: one group, one strip row.
     if (direction === "up") {
+      const group = leftSelected.length >= 2 ? newGesture(leftSelected[0]) : undefined;
       for (const name of leftSelected) {
         const localFullPath = join(leftPath, name);
         const remoteFullPath = join(rightPath, name);
-        void sftpUpload(rightHost, localFullPath, remoteFullPath);
+        void sftpUpload(rightHost, localFullPath, remoteFullPath, group);
       }
     } else {
+      const group = rightSelected.length >= 2 ? newGesture(rightSelected[0]) : undefined;
       for (const name of rightSelected) {
         const remoteFullPath = join(rightPath, name);
         const localFullPath = join(leftPath, name);
-        void sftpDownload(rightHost, remoteFullPath, localFullPath);
+        void sftpDownload(rightHost, remoteFullPath, localFullPath, group);
       }
     }
   },

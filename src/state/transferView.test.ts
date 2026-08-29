@@ -13,20 +13,32 @@ function tr(over: Partial<TransferInfo>): TransferInfo {
 }
 
 describe("buildStripModel", () => {
-  it("a directory is one waiting item, not one row per file", () => {
+  it("a directory is one gesture row, however many files it brought", () => {
     const m = buildStripModel([
-      tr({ id: "a", groupId: "g", state: { kind: "active" }, bytes_done: 40 }),
-      tr({ id: "b", groupId: "g", remote_path: "/up/dir/b.bin" }),
-      tr({ id: "c", groupId: "g", remote_path: "/up/dir/c.bin" }),
+      tr({ id: "a", groupId: "g", groupLabel: "dir", state: { kind: "active" }, bytes_done: 40 }),
+      tr({ id: "b", groupId: "g", groupLabel: "dir", remote_path: "/up/dir/b.bin" }),
+      tr({ id: "c", groupId: "g", groupLabel: "dir", remote_path: "/up/dir/c.bin" }),
     ], { showAll: true });
-    expect(m.transferring.map((t) => t.id)).toEqual(["a"]);
-    expect(m.waiting).toHaveLength(1);
-    expect(m.waiting[0].remainingFiles).toBe(2);
-    expect(m.waiting[0].label).toBe("dir");
+    expect(m.gestures).toHaveLength(1);
+    expect(m.gestures[0].label).toBe("dir");
+    expect(m.gestures[0].totalFiles).toBe(3);
+    expect(m.gestures[0].status).toBe("active");
     expect(m.itemCount).toBe(1);
   });
 
-  it("finished files keep counting toward the totals", () => {
+  it("one gesture cannot expand; two can", () => {
+    const one = buildStripModel([
+      tr({ id: "a", state: { kind: "active" }, bytes_done: 1 }),
+    ], { showAll: true });
+    expect(one.canExpand).toBe(false);
+    const two = buildStripModel([
+      tr({ id: "a", state: { kind: "active" }, bytes_done: 1 }),
+      tr({ id: "b", remote_path: "/up/dir/b.bin" }),
+    ], { showAll: true });
+    expect(two.canExpand).toBe(true);
+  });
+
+  it("finished files keep counting toward a gesture's totals", () => {
     // Otherwise the denominator shrinks as files complete and the bar
     // runs backwards.
     const m = buildStripModel([
@@ -38,6 +50,20 @@ describe("buildStripModel", () => {
     expect(m.bytesDone).toBe(150);
     expect(m.totalBytes).toBe(200);
     expect(Math.round(m.pct)).toBe(75);
+    expect(m.gestures[0].doneFiles).toBe(1);
+  });
+
+  it("a fully finished gesture leaves the strip and its totals", () => {
+    // Lingering done children of a completed drag must not inflate the
+    // next drag's counters.
+    const m = buildStripModel([
+      tr({ id: "old1", groupId: "gone", state: { kind: "done" }, bytes_done: 100 }),
+      tr({ id: "old2", groupId: "gone", state: { kind: "done" }, bytes_done: 100 }),
+      tr({ id: "new", state: { kind: "active" }, bytes_done: 10 }),
+    ], { showAll: true });
+    expect(m.gestures).toHaveLength(1);
+    expect(m.totalFiles).toBe(1);
+    expect(m.totalBytes).toBe(100);
   });
 
   it("mixed directions report no single destination", () => {
@@ -48,24 +74,34 @@ describe("buildStripModel", () => {
     expect(m.direction).toBeNull();
   });
 
-  it("a resumed transfer waiting for its slot stays in transferring", () => {
-    // Pause then resume briefly reports queued with bytes already moved;
-    // bouncing the row down to Waiting would look like lost progress.
+  it("a gesture with only queued members reads as queued", () => {
     const m = buildStripModel([
-      tr({ id: "r", state: { kind: "queued" }, bytes_done: 30 }),
+      tr({ id: "q1", groupId: "g" }),
+      tr({ id: "q2", groupId: "g", remote_path: "/up/dir/b.bin" }),
     ], { showAll: true });
-    expect(m.transferring.map((t) => t.id)).toEqual(["r"]);
-    expect(m.waiting).toHaveLength(0);
+    expect(m.gestures[0].status).toBe("queued");
   });
 
-  it("failures neither move nor wait, and make the strip persist", () => {
+  it("a fully failed gesture turns into one red row with the dominant error", () => {
     const m = buildStripModel([
-      tr({ id: "x", state: { kind: "failed", error: "550" } }),
+      tr({ id: "x", groupId: "g", state: { kind: "failed", error: "550" } }),
+      tr({ id: "y", groupId: "g", state: { kind: "failed", error: "550" } }),
+      tr({ id: "z", groupId: "g", state: { kind: "failed", error: "denied" } }),
     ], { showAll: true });
-    expect(m.failed).toHaveLength(1);
-    expect(m.transferring).toHaveLength(0);
-    expect(m.waiting).toHaveLength(0);
+    expect(m.gestures).toHaveLength(1);
+    expect(m.gestures[0].status).toBe("failed");
+    expect(m.gestures[0].failedCount).toBe(3);
+    expect(m.gestures[0].mainError).toBe("550");
     expect(stripHasContent(m)).toBe(true);
+  });
+
+  it("failures inside a still-moving gesture ride along, row stays active", () => {
+    const m = buildStripModel([
+      tr({ id: "x", groupId: "g", state: { kind: "failed", error: "550" } }),
+      tr({ id: "r", groupId: "g", state: { kind: "active" }, bytes_done: 5 }),
+    ], { showAll: true });
+    expect(m.gestures[0].status).toBe("active");
+    expect(m.gestures[0].failedCount).toBe(1);
   });
 
   it("done-only lists show nothing", () => {
@@ -80,7 +116,7 @@ describe("buildStripModel", () => {
       tr({ id: "mine", state: { kind: "active" }, bytes_done: 1 }),
       tr({ id: "theirs", connection_id: "c2", state: { kind: "active" }, bytes_done: 1 }),
     ], { connectionId: "c1" });
-    expect(m.transferring.map((t) => t.id)).toEqual(["mine"]);
+    expect(m.gestures.map((g) => g.key)).toEqual(["mine"]);
   });
 
   it("zero totals never divide by zero", () => {
@@ -106,5 +142,14 @@ describe("buildStripModel", () => {
       tr({ id: "old", groupId: "g", remote_path: "/up/dir/f.bin", state: { kind: "active" }, bytes_done: 1 }),
     ], { showAll: true });
     expect(m.primaryLabel).toBe("dir");
+  });
+
+  it("gesture speed is the sum of its members' last reported rates", () => {
+    const m = buildStripModel([
+      tr({ id: "a", groupId: "g", state: { kind: "active" }, bytes_done: 1, rateBps: 1000 }),
+      tr({ id: "b", groupId: "g", state: { kind: "active" }, bytes_done: 1, rateBps: 500 }),
+      tr({ id: "c", groupId: "g", state: { kind: "done" }, bytes_done: 100, rateBps: 9999 }),
+    ], { showAll: true });
+    expect(m.gestures[0].rateBps).toBe(1500);
   });
 });

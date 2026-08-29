@@ -190,7 +190,7 @@ describe("ftp store", () => {
 
     (ipc.ftpUpload as ReturnType<typeof vi.fn>).mockResolvedValue("t1");
     await useFtpStore.getState().upload("C:/data/a.csv", "a.csv", "file");
-    expect(ipc.ftpUpload).toHaveBeenCalledWith("h1", "C:/data/a.csv", "/upload/a.csv");
+    expect(ipc.ftpUpload).toHaveBeenCalledWith("h1", "C:/data/a.csv", "/upload/a.csv", undefined);
   });
 
   it("downloads join the remote cwd and the local pane's directory", async () => {

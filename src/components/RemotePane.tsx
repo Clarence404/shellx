@@ -7,7 +7,7 @@ import { useHostsStore } from "../state/hosts";
 import {
   sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDirRecursive,
 } from "../ipc/sftp";
-import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
+import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir, newGesture } from "../ipc/transfers";
 import { localIsDir } from "../ipc/local";
 import { HostDropdown } from "./HostDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
@@ -171,15 +171,25 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
           // fails silently on a directory, so Explorer folders never
           // uploaded.
           (async () => {
-            for (const localPath of p.paths) {
+            // Loose files in one drop share one gesture group — one
+            // strip row for the batch, like each dropped folder gets.
+            const kinds = await Promise.all(p.paths.map(async (lp) => {
+              try { return await localIsDir(lp); } catch { return null; }
+            }));
+            const files = p.paths.filter((_, i) => kinds[i] === false);
+            const group = files.length >= 2
+              ? newGesture(files[0].split(/[\\/]/).pop() || "unknown")
+              : undefined;
+            for (let i = 0; i < p.paths.length; i++) {
+              if (kinds[i] === null) continue;
+              const localPath = p.paths[i];
               const filename = localPath.split(/[\\/]/).pop() || "unknown";
               const remotePath = joinPath(rightPath, filename);
               try {
-                const isDir = await localIsDir(localPath);
-                if (isDir) {
+                if (kinds[i]) {
                   await sftpUploadDir(rightHost, localPath, remotePath);
                 } else {
-                  await sftpUpload(rightHost, localPath, remotePath);
+                  await sftpUpload(rightHost, localPath, remotePath, group);
                 }
               } catch {
                 /* one path's failure shouldn't halt the batch */
@@ -236,10 +246,13 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
       const picked = await openDialog({ multiple: true, directory: false });
       if (!picked) return;
       const paths = Array.isArray(picked) ? picked : [picked];
+      const group = paths.length >= 2
+        ? newGesture(paths[0].split(/[\\/]/).pop() || "unknown")
+        : undefined;
       for (const p of paths) {
         const filename = p.split(/[\\/]/).pop() || "unknown";
         const remotePath = joinPath(rightPath, filename);
-        void sftpUpload(rightHost, p, remotePath);
+        void sftpUpload(rightHost, p, remotePath, group);
       }
     },
     onRefresh: () => void loadRight(),

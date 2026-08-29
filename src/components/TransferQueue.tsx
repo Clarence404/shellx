@@ -1,9 +1,8 @@
 import { useMemo } from "react";
-import { X, Pause, Play, RotateCw, Folder, File as FileIcon, ChevronUp } from "lucide-react";
+import { X, Pause, Play, RotateCw, Folder, File as FileIcon, ChevronUp, AlertTriangle } from "lucide-react";
 import { useTransfersStore } from "../state/transfers";
-import { buildStripModel, stripHasContent, type StripModel } from "../state/transferView";
+import { buildStripModel, stripHasContent, type StripModel, type GestureItem } from "../state/transferView";
 import { useT } from "../i18n";
-import type { TransferInfo } from "../types/sftp";
 
 // Route pause / resume / cancel through the store (not the raw IPC
 // wrappers) so the optimistic UI flip fires before Rust confirms.
@@ -24,6 +23,14 @@ export function useHasVisibleTransfers(connectionId?: string, showAll?: boolean)
   );
 }
 
+/** True when there are at least two gestures — the only case where the
+ *  bar can expand into rows. One gesture IS the bar. */
+export function useCanExpandTransfers(connectionId?: string, showAll?: boolean): boolean {
+  return useTransfersStore((s) =>
+    buildStripModel(s.list, { connectionId, showAll }).canExpand,
+  );
+}
+
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   const units = ["KB", "MB", "GB", "TB"];
@@ -31,6 +38,14 @@ function formatSize(bytes: number): string {
   let i = 0;
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
   return `${v.toFixed(1)} ${units[i]}`;
+}
+
+/** Compact, language-neutral remaining time: "40s", "5m 20s", "1h 12m". */
+function formatEta(sec: number): string {
+  if (!Number.isFinite(sec) || sec <= 0) return "";
+  if (sec < 60) return `${Math.round(sec)}s`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ${Math.round(sec % 60)}s`;
+  return `${Math.floor(sec / 3600)}h ${Math.round((sec % 3600) / 60)}m`;
 }
 
 function useStripModel({ connectionId, showAll }: Scope): StripModel {
@@ -45,9 +60,10 @@ function useStripModel({ connectionId, showAll }: Scope): StripModel {
 }
 
 /**
- * The one-line bar: name of what is moving, the numbers, pause-all /
- * cancel-all, and a chevron that is an indicator, not a button — the
- * whole bar is the click target for expand / collapse.
+ * The one-line bar. With a single gesture it IS that gesture — name,
+ * numbers, pause / cancel — and there is nothing to expand. With
+ * several, it shows the oldest name plus "and N more" over the combined
+ * totals, and the whole bar becomes the expand / collapse click target.
  */
 export function TransferBar({ connectionId, showAll, expanded, onToggle }: Scope & {
   expanded: boolean;
@@ -71,13 +87,13 @@ export function TransferBar({ connectionId, showAll, expanded, onToggle }: Scope
     <div
       role="button"
       aria-label="transfers"
-      aria-expanded={expanded}
-      onClick={onToggle}
+      aria-expanded={m.canExpand ? expanded : undefined}
+      onClick={m.canExpand ? onToggle : undefined}
       style={{
         height: 28, display: "flex", alignItems: "center", gap: 8,
         padding: "0 10px", position: "relative", overflow: "hidden",
-        cursor: "pointer", flexShrink: 0, background: "var(--panel-1)",
-        userSelect: "none",
+        cursor: m.canExpand ? "pointer" : "default", flexShrink: 0,
+        background: "var(--panel-1)", userSelect: "none",
       }}>
       <div aria-hidden="true" style={{
         position: "absolute", left: 0, top: 0, bottom: 0,
@@ -119,156 +135,128 @@ export function TransferBar({ connectionId, showAll, expanded, onToggle }: Scope
       <IconButton label={t("Cancel all")} onClick={() => void store().cancelAll(connectionId)}>
         <X size={12} />
       </IconButton>
-      <span aria-hidden="true" style={{
-        position: "relative", color: "var(--text-3)", flexShrink: 0,
-        display: "inline-flex", transition: "transform 150ms",
-        transform: expanded ? "rotate(180deg)" : "none",
-      }}>
-        <ChevronUp size={12} />
-      </span>
+      {m.canExpand && (
+        <span aria-hidden="true" style={{
+          position: "relative", color: "var(--text-3)", flexShrink: 0,
+          display: "inline-flex", transition: "transform 150ms",
+          transform: expanded ? "rotate(180deg)" : "none",
+        }}>
+          <ChevronUp size={12} />
+        </span>
+      )}
     </div>
   );
 }
 
 /**
- * The expanded panel: three flat sections. Failed first (it needs a
- * decision), then the files actually moving (at most the concurrency
- * cap), then what waits — one line per dragged item, so the list stays
- * a screenful however many files a directory brought.
+ * The expanded panel: one flat row per gesture, in arrival order. A row
+ * carries only the gesture's own totals — never which file inside it is
+ * moving, never a per-file failure list. A fully-failed gesture turns
+ * red in place with the dominant error and a Retry-all.
  */
 export function TransferRows({ connectionId, showAll }: Scope) {
-  const t = useT();
   const m = useStripModel({ connectionId, showAll });
 
   return (
     <div role="list" style={{
-      height: "100%", overflowY: "auto", padding: "0 6px 6px",
+      height: "100%", overflowY: "auto", padding: "4px 6px 6px",
       background: "var(--panel-1)", borderTop: "1px solid var(--border)",
     }}>
-      {m.failed.length > 0 && (
-        <>
-          <SectionLabel text={`${t("Failed")} · ${m.failed.length}`} tone="error" />
-          {m.failed.map((x) => (
-            <Row key={x.id} pct={pctOf(x)} tone="error">
-              <RowName t={x} />
-              <span style={{ fontSize: 10, color: "var(--error)", flexShrink: 0 }}>
-                {x.state.kind === "failed" ? x.state.error : ""}
-              </span>
-              <RowButton label={t("Retry")} onClick={() => void store().retry(x.id)}>
-                <RotateCw size={11} />
-              </RowButton>
-              <RowButton label={t("Dismiss")} onClick={() => void store().remove(x.id)}>
-                <X size={11} />
-              </RowButton>
-            </Row>
-          ))}
-        </>
-      )}
-
-      {m.transferring.length > 0 && (
-        <>
-          <SectionLabel text={t("Transferring")} />
-          {m.transferring.map((x) => (
-            <Row key={x.id} pct={pctOf(x)} tone={x.state.kind === "paused" ? "paused" : "normal"}>
-              <RowName t={x} showDest={m.direction === null} />
-              <span style={{ fontSize: 10, color: "var(--text-2)", flexShrink: 0 }}>
-                {x.total_bytes > 0
-                  ? `${formatSize(x.bytes_done)} / ${formatSize(x.total_bytes)} · ${Math.round(pctOf(x))}%`
-                  : formatSize(x.bytes_done)}
-                {x.state.kind === "paused" ? ` · ${t("paused")}` : ""}
-              </span>
-              {x.state.kind === "paused" ? (
-                <RowButton label={t("Resume")} onClick={() => void store().resume(x.id)}>
-                  <Play size={11} />
-                </RowButton>
-              ) : (
-                <RowButton label={t("Pause")} onClick={() => void store().pause(x.id)}>
-                  <Pause size={11} />
-                </RowButton>
-              )}
-              <RowButton label={t("Cancel")} onClick={() => void store().cancel(x.id)}>
-                <X size={11} />
-              </RowButton>
-            </Row>
-          ))}
-        </>
-      )}
-
-      {m.waiting.length > 0 && (
-        <>
-          <SectionLabel text={t("Waiting")} />
-          {m.waiting.map((w) => (
-            <Row key={w.key} pct={0} tone="item">
-              <span style={{ flexShrink: 0, color: "var(--text-2)", display: "inline-flex" }}>
-                {w.isDir ? <Folder size={11} /> : <FileIcon size={11} />}
-              </span>
-              <span style={{
-                flex: 1, minWidth: 0, fontWeight: 500,
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>{w.label}</span>
-              <span style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0 }}>
-                {w.direction === "upload" ? t("to remote") : t("to local")}
-              </span>
-              <span style={{ fontSize: 10, color: "var(--text-2)", flexShrink: 0 }}>
-                {w.isDir ? `${w.remainingFiles} ${t("files left")}` : ""}
-                {w.remainingBytes > 0 ? ` · ${formatSize(w.remainingBytes)}` : ""}
-              </span>
-              <RowButton
-                label={t("Cancel")}
-                onClick={() => {
-                  if (w.groupId) void store().cancelGroup(w.groupId);
-                  else for (const id of w.ids) void store().cancel(id);
-                }}>
-                <X size={11} />
-              </RowButton>
-            </Row>
-          ))}
-        </>
-      )}
+      {m.gestures.map((g) => <GestureRow key={g.key} g={g} />)}
     </div>
   );
 }
 
-function pctOf(t: TransferInfo): number {
-  return t.total_bytes > 0 ? Math.min(100, (t.bytes_done / t.total_bytes) * 100) : 0;
-}
+function GestureRow({ g }: { g: GestureItem }) {
+  const t = useT();
+  const failedOnly = g.status === "failed";
 
-/** Name cell: dim relative-directory prefix, then the file name. */
-function RowName({ t, showDest }: { t: TransferInfo; showDest?: boolean }) {
-  const tr = useT();
-  const parts = t.remote_path.split(/[\\/]/).filter(Boolean);
-  const name = parts.pop() ?? t.remote_path;
-  const prefix = parts.length > 1 ? `${parts[parts.length - 1]}/` : "";
+  const stat = failedOnly
+    ? [
+        g.isGroup ? `${g.failedCount} ${t("files failed")}` : null,
+        g.mainError,
+      ].filter(Boolean).join(" · ")
+    : [
+        g.totalFiles > 1 ? `${g.doneFiles}/${g.totalFiles} ${t("files")}` : null,
+        g.totalBytes > 0
+          ? `${formatSize(g.bytesDone)} / ${formatSize(g.totalBytes)} · ${Math.round(g.pct)}%`
+          : formatSize(g.bytesDone),
+        g.status === "active" && g.rateBps > 0 ? `${formatSize(g.rateBps)}/s` : null,
+        g.status === "active" && g.rateBps > 0 && g.totalBytes > g.bytesDone
+          ? formatEta((g.totalBytes - g.bytesDone) / g.rateBps)
+          : null,
+        g.status === "paused" ? t("paused") : null,
+        g.status === "queued" ? t("Waiting") : null,
+      ].filter(Boolean).join(" · ");
+
+  // Per-row operations route by shape: a group hits the one-call bulk
+  // commands, a lone file the per-id ones.
+  const pause = () => void (g.groupId ? store().pauseGroup(g.groupId) : store().pause(g.soloId!));
+  const resume = () => void (g.groupId ? store().resumeGroup(g.groupId) : store().resume(g.soloId!));
+  const cancel = () => void (g.groupId ? store().cancelGroup(g.groupId) : store().cancel(g.soloId!));
+  const retry = () => void (g.groupId ? store().retryGroup(g.groupId) : store().retry(g.soloId!));
+  const dismiss = () => g.groupId ? store().removeGroup(g.groupId) : store().remove(g.soloId!);
+
   return (
-    <>
+    <Row pct={failedOnly ? 100 : g.pct} tone={failedOnly ? "error" : g.status === "paused" ? "paused" : "normal"}>
       <span style={{
-        flex: 1, minWidth: 0,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        flexShrink: 0, display: "inline-flex",
+        color: failedOnly ? "var(--error)" : "var(--text-2)",
       }}>
-        {prefix && <span style={{ color: "var(--text-3)" }}>{prefix}</span>}
-        {name}
+        {failedOnly ? <AlertTriangle size={11} /> : g.isGroup ? <Folder size={11} /> : <FileIcon size={11} />}
       </span>
-      {showDest && (
-        <span style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0 }}>
-          {t.direction === "upload" ? tr("to remote") : tr("to local")}
-        </span>
+      <span style={{
+        flex: 1, minWidth: 0, fontWeight: 500,
+        color: failedOnly ? "var(--error)" : "var(--text-1)",
+        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>{g.label}</span>
+      <span style={{ fontSize: 10, color: "var(--text-3)", flexShrink: 0 }}>
+        {g.direction === "upload" ? t("to remote") : t("to local")}
+      </span>
+      <span style={{
+        fontSize: 10, flexShrink: 0,
+        color: failedOnly ? "var(--error)" : "var(--text-2)",
+        maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+      }}>
+        {stat}
+        {/* A gesture still moving with some children already failed:
+            the count rides along in red, the decision waits for the end. */}
+        {!failedOnly && g.failedCount > 0 && (
+          <span style={{ color: "var(--error)" }}>{` · ${g.failedCount} ${t("items failed")}`}</span>
+        )}
+      </span>
+      {failedOnly ? (
+        <>
+          <RowButton label={t("Retry")} onClick={retry}>
+            <RotateCw size={11} />
+          </RowButton>
+          <RowButton label={t("Dismiss")} onClick={dismiss}>
+            <X size={11} />
+          </RowButton>
+        </>
+      ) : (
+        <>
+          {g.status === "paused" ? (
+            <RowButton label={t("Resume")} onClick={resume}>
+              <Play size={11} />
+            </RowButton>
+          ) : (
+            <RowButton label={t("Pause")} onClick={pause}>
+              <Pause size={11} />
+            </RowButton>
+          )}
+          <RowButton label={t("Cancel")} onClick={cancel}>
+            <X size={11} />
+          </RowButton>
+        </>
       )}
-    </>
-  );
-}
-
-function SectionLabel({ text, tone }: { text: string; tone?: "error" }) {
-  return (
-    <div style={{
-      fontSize: 10, letterSpacing: 0.4, padding: "5px 3px 3px",
-      color: tone === "error" ? "var(--error)" : "var(--text-3)",
-    }}>{text}</div>
+    </Row>
   );
 }
 
 function Row({ pct, tone, children }: {
   pct: number;
-  tone: "normal" | "paused" | "error" | "item";
+  tone: "normal" | "paused" | "error";
   children: React.ReactNode;
 }) {
   const fill = tone === "error"
@@ -280,8 +268,8 @@ function Row({ pct, tone, children }: {
     <div role="listitem" style={{
       position: "relative", overflow: "hidden", borderRadius: 4,
       display: "flex", alignItems: "center", gap: 7, padding: "0 8px",
-      height: 23, fontSize: 11.5, marginBottom: 2,
-      background: tone === "item" ? "var(--panel-2)" : "transparent",
+      height: 24, fontSize: 11.5, marginBottom: 2,
+      background: "var(--panel-2)",
     }}>
       {pct > 0 && (
         <div aria-hidden="true" style={{

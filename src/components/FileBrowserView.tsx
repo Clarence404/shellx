@@ -8,7 +8,7 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useFilesStore } from "../state/files";
 import { ActivitySwitcherSlot } from "./paneChrome";
 import { sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDir, sftpRealpath } from "../ipc/sftp";
-import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
+import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir, newGesture } from "../ipc/transfers";
 import { localIsDir } from "../ipc/local";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow } from "./FileRow";
@@ -111,14 +111,23 @@ export function FileBrowserView({ connectionId }: Props) {
         // silently because `LocalFile::open(dir)` errors and `void`
         // discarded the rejection.
         (async () => {
-          for (const localPath of p.paths) {
+          // Probe kinds first: the loose files in the drop share one
+          // gesture group so the strip shows the batch as a single row,
+          // exactly as each dropped folder does.
+          const kinds = await Promise.all(p.paths.map(async (lp) => {
+            try { return await localIsDir(lp); } catch { return null; }
+          }));
+          const files = p.paths.filter((_, i) => kinds[i] === false);
+          const group = files.length >= 2 ? newGesture(basename(files[0])) : undefined;
+          for (let i = 0; i < p.paths.length; i++) {
+            if (kinds[i] === null) continue;
+            const localPath = p.paths[i];
             const remotePath = joinPath(cwd, basename(localPath));
             try {
-              const isDir = await localIsDir(localPath);
-              if (isDir) {
+              if (kinds[i]) {
                 await sftpUploadDir(connectionId, localPath, remotePath);
               } else {
-                await sftpUpload(connectionId, localPath, remotePath);
+                await sftpUpload(connectionId, localPath, remotePath, group);
               }
             } catch {
               /* one path's failure shouldn't halt the batch */
@@ -145,9 +154,10 @@ export function FileBrowserView({ connectionId }: Props) {
     const selected = await openDialog({ multiple: true, directory: false });
     if (!selected) return;
     const paths = Array.isArray(selected) ? selected : [selected];
+    const group = paths.length >= 2 ? newGesture(basename(paths[0])) : undefined;
     for (const p of paths) {
       const remote = joinPath(state.cwd, basename(p));
-      void sftpUpload(connectionId, p, remote);
+      void sftpUpload(connectionId, p, remote, group);
     }
   }
 
