@@ -87,7 +87,10 @@ export function TransferStripSection({ connectionId, showAll }: Props) {
         onToggle={toggle}
       />
       {expanded && (
-        <div style={{ height, minHeight: 0, flexShrink: 0 }}>
+        // maxHeight backs the px clamp up: the stored height was legal
+        // for the window it was dragged in, not necessarily for this
+        // one — shrink the window and 300px can suddenly be half of it.
+        <div style={{ height, maxHeight: "40vh", minHeight: 0, flexShrink: 0 }}>
           <TransferRows connectionId={connectionId} showAll={showAll} />
         </div>
       )}

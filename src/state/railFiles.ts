@@ -92,8 +92,11 @@ const TRANSFER_STRIP_MIN_PX = 80;
 const TRANSFER_STRIP_DEFAULT_PX = 220;
 function clampTransferStripPx(px: number): number {
   // 40% of the window, down from 70%: the strip is a status area, and
-  // the file panes are the point of the view.
-  const max = Math.max(TRANSFER_STRIP_MIN_PX + 40, Math.round(window.innerHeight * 0.4));
+  // the file panes are the point of the view. Guarded because this now
+  // also runs at module load (re-clamping the persisted height), where
+  // a windowless test environment has no innerHeight.
+  const viewport = typeof window === "undefined" ? 800 : window.innerHeight;
+  const max = Math.max(TRANSFER_STRIP_MIN_PX + 40, Math.round(viewport * 0.4));
   return Math.max(TRANSFER_STRIP_MIN_PX, Math.min(max, Math.round(px)));
 }
 
@@ -136,8 +139,10 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
   rightEntries: [], rightLoading: false, rightError: null, rightSelected: [],
 
   splitterPercent: typeof persisted.splitterPercent === "number" ? persisted.splitterPercent : 50,
+  // Re-clamped on load: a height persisted under an older, laxer cap
+  // (70% once) must not come back over today's limit.
   transferStripHeight: typeof persisted.transferStripHeight === "number"
-    ? persisted.transferStripHeight
+    ? clampTransferStripPx(persisted.transferStripHeight)
     : TRANSFER_STRIP_DEFAULT_PX,
   transfersExpanded: false,
   currentDrag: null,
