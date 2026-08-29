@@ -52,6 +52,11 @@ function baseName(t: TransferInfo): string {
 /** The folder a group was spawned for: the first path segment of the
  *  child's position under the destination root. */
 function groupLabel(t: TransferInfo): string {
+  // Recorded at spawn on every child; deriving from a child's path
+  // drifted — a file inside dir/caches/ made the bar say "caches"
+  // instead of the folder the user actually dragged. The path fallback
+  // only covers rows written before the label existed.
+  if (t.groupLabel) return t.groupLabel;
   const parts = (t.direction === "upload" ? t.remote_path : t.local_path)
     .split(/[\\/]/)
     .filter(Boolean);

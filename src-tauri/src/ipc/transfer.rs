@@ -47,6 +47,7 @@ pub async fn sftp_upload(
             PathBuf::from(args.local_path),
             args.remote_path,
             None,
+            None,
             0,
         )
         .await)
@@ -80,6 +81,7 @@ pub async fn sftp_download(
             args.conn_id,
             args.remote_path,
             PathBuf::from(args.local_path),
+            None,
             None,
             0,
         )
@@ -218,6 +220,9 @@ pub async fn sftp_upload_dir(
     );
     let local_root = PathBuf::from(&args.local_dir);
     let group_id = Uuid::new_v4();
+    // The name the strip shows for this whole gesture: the folder that
+    // was dragged, not whatever subdirectory a child happens to be in.
+    let group_label = basename_of(&args.remote_dir);
 
     // Local walk: collect subdirs (for mkdir) + files (for transfer). Both
     // returned as forward-slash relative paths so `join_remote` composes
@@ -263,6 +268,7 @@ pub async fn sftp_upload_dir(
                 local_abs,
                 remote_abs,
                 Some(group_id),
+                Some(group_label.clone()),
                 size,
             )
             .await;
@@ -301,6 +307,7 @@ pub async fn sftp_download_dir(
     );
     let group_id = Uuid::new_v4();
     let local_root = PathBuf::from(&args.local_dir);
+    let group_label = basename_of(&args.remote_dir);
 
     // Local root + every remote subdir mirrored underneath it. Same
     // parent-first ordering as upload; `walk_dir` already sorts by depth.
@@ -344,6 +351,7 @@ pub async fn sftp_download_dir(
                 remote_abs,
                 local_abs,
                 Some(group_id),
+                Some(group_label.clone()),
                 e.size,
             )
             .await;
@@ -360,6 +368,15 @@ pub async fn sftp_download_dir(
 }
 
 // ---------- helpers ----------
+
+/// Last path segment, whatever the separators.
+pub(crate) fn basename_of(path: &str) -> String {
+    path.split(['/', '\\'])
+        .rev()
+        .find(|seg| !seg.is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
 
 /// Recursive local walk. Returns:
 /// - subdirectories: forward-slash relative paths, sorted parents-first

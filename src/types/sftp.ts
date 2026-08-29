@@ -34,4 +34,7 @@ export interface TransferInfo {
    * the Transfers view can render them under one expandable parent row.
    * Single-file transfers leave this undefined. */
   groupId?: TransferId;
+  /** The folder the user dragged, recorded at spawn — the strip's label
+   *  for the whole gesture. Absent on single-file transfers. */
+  groupLabel?: string;
 }

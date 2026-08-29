@@ -76,6 +76,11 @@ pub struct TransferInfo {
     /// which the frontend already consumes as-is).
     #[serde(rename = "groupId")]
     pub group_id: Option<TransferId>,
+    /// The folder the user actually dragged, recorded at spawn. Derived
+    /// names drift: a child at dir/caches/x.log would otherwise be
+    /// labelled "caches" the moment it starts.
+    #[serde(rename = "groupLabel")]
+    pub group_label: Option<String>,
 }
 
 // `pub(crate)`, not private: `task::run_upload`/`run_download` are `pub` (so
@@ -438,6 +443,7 @@ impl TransferManager {
         local: PathBuf,
         remote: String,
         group_id: Option<TransferId>,
+        group_label: Option<String>,
         expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
@@ -456,6 +462,7 @@ impl TransferManager {
             state: TransferState::Queued,
             started_at: Self::now_ms(),
             group_id,
+            group_label,
         };
         let pause_flag = Arc::new(AtomicBool::new(false));
         self.tasks.lock().await.insert(
@@ -500,6 +507,7 @@ impl TransferManager {
         remote: String,
         local: PathBuf,
         group_id: Option<TransferId>,
+        group_label: Option<String>,
         expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
@@ -518,6 +526,7 @@ impl TransferManager {
             state: TransferState::Queued,
             started_at: Self::now_ms(),
             group_id,
+            group_label,
         };
         let pause_flag = Arc::new(AtomicBool::new(false));
         self.tasks.lock().await.insert(
@@ -565,6 +574,7 @@ impl TransferManager {
         local: PathBuf,
         remote: String,
         group_id: Option<TransferId>,
+        group_label: Option<String>,
         expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
@@ -583,6 +593,7 @@ impl TransferManager {
             state: TransferState::Queued,
             started_at: Self::now_ms(),
             group_id,
+            group_label,
         };
         let pause_flag = Arc::new(AtomicBool::new(false));
         self.tasks.lock().await.insert(
@@ -614,6 +625,7 @@ impl TransferManager {
         remote: String,
         local: PathBuf,
         group_id: Option<TransferId>,
+        group_label: Option<String>,
         expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
@@ -632,6 +644,7 @@ impl TransferManager {
             state: TransferState::Queued,
             started_at: Self::now_ms(),
             group_id,
+            group_label,
         };
         let pause_flag = Arc::new(AtomicBool::new(false));
         self.tasks.lock().await.insert(

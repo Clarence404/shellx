@@ -504,6 +504,7 @@ pub async fn ftp_upload(
                 PathBuf::from(args.local_path),
                 args.remote_path,
                 None,
+                None,
                 0,
             )
             .await);
@@ -516,6 +517,7 @@ pub async fn ftp_upload(
             args.id,
             PathBuf::from(args.local_path),
             args.remote_path,
+            None,
             None,
             0,
         )
@@ -543,6 +545,7 @@ pub async fn ftp_download(
                 args.remote_path,
                 PathBuf::from(args.local_path),
                 None,
+                None,
                 0,
             )
             .await);
@@ -555,6 +558,7 @@ pub async fn ftp_download(
             args.id,
             args.remote_path,
             PathBuf::from(args.local_path),
+            None,
             None,
             0,
         )
@@ -618,6 +622,7 @@ pub async fn ftp_upload_dir(
     apply_concurrency(&transfer_mgr, &settings);
     let group_id = Uuid::new_v4();
     let local_root = PathBuf::from(&args.local_dir);
+    let group_label = crate::ipc::transfer::basename_of(&args.remote_dir);
     let (dirs, files) = walk_local(&local_root).await?;
 
     let sftp_session = ftp.session_of(args.id).await;
@@ -666,13 +671,13 @@ pub async fn ftp_upload_dir(
             (Some(session), _) => transfer_mgr
                 .start_upload(
                     app.clone(), (*sessions).clone(), session,
-                    local_abs, remote_abs, Some(group_id), size,
+                    local_abs, remote_abs, Some(group_id), Some(group_label.clone()), size,
                 )
                 .await,
             (None, Some(spec)) => transfer_mgr
                 .start_ftp_upload(
                     app.clone(), spec.clone(), args.id,
-                    local_abs, remote_abs, Some(group_id), size,
+                    local_abs, remote_abs, Some(group_id), Some(group_label.clone()), size,
                 )
                 .await,
             (None, None) => unreachable!("spec built for every non-sftp row"),
@@ -699,6 +704,7 @@ pub async fn ftp_download_dir(
     apply_concurrency(&transfer_mgr, &settings);
     let group_id = Uuid::new_v4();
     let local_root = PathBuf::from(&args.local_dir);
+    let group_label = crate::ipc::transfer::basename_of(&args.remote_dir);
     tokio::fs::create_dir_all(&local_root).await.map_err(Error::Io)?;
 
     let sftp_session = ftp.session_of(args.id).await;
@@ -748,13 +754,13 @@ pub async fn ftp_download_dir(
             (Some(session), _) => transfer_mgr
                 .start_download(
                     app.clone(), (*sessions).clone(), session,
-                    remote_abs, local_abs, Some(group_id), size,
+                    remote_abs, local_abs, Some(group_id), Some(group_label.clone()), size,
                 )
                 .await,
             (None, Some(spec)) => transfer_mgr
                 .start_ftp_download(
                     app.clone(), spec.clone(), args.id,
-                    remote_abs, local_abs, Some(group_id), size,
+                    remote_abs, local_abs, Some(group_id), Some(group_label.clone()), size,
                 )
                 .await,
             (None, None) => unreachable!("spec built for every non-sftp row"),
@@ -805,22 +811,22 @@ pub async fn transfer_retry(
     if sessions.list().await.iter().any(|s| s.id == info.connection_id) {
         return Ok(if upload {
             transfer_mgr
-                .start_upload(app, (*sessions).clone(), info.connection_id, local, info.remote_path, info.group_id, info.total_bytes)
+                .start_upload(app, (*sessions).clone(), info.connection_id, local, info.remote_path, info.group_id, info.group_label.clone(), info.total_bytes)
                 .await
         } else {
             transfer_mgr
-                .start_download(app, (*sessions).clone(), info.connection_id, info.remote_path, local, info.group_id, info.total_bytes)
+                .start_download(app, (*sessions).clone(), info.connection_id, info.remote_path, local, info.group_id, info.group_label.clone(), info.total_bytes)
                 .await
         });
     }
     let (_, spec) = spec_for(&store, &keychain, info.connection_id).await?;
     Ok(if upload {
         transfer_mgr
-            .start_ftp_upload(app, spec, info.connection_id, local, info.remote_path, info.group_id, info.total_bytes)
+            .start_ftp_upload(app, spec, info.connection_id, local, info.remote_path, info.group_id, info.group_label.clone(), info.total_bytes)
             .await
     } else {
         transfer_mgr
-            .start_ftp_download(app, spec, info.connection_id, info.remote_path, local, info.group_id, info.total_bytes)
+            .start_ftp_download(app, spec, info.connection_id, info.remote_path, local, info.group_id, info.group_label.clone(), info.total_bytes)
             .await
     })
 }

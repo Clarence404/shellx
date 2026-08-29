@@ -87,4 +87,24 @@ describe("buildStripModel", () => {
     const m = buildStripModel([tr({ id: "q", total_bytes: 0 })], { showAll: true });
     expect(m.pct).toBe(0);
   });
+
+  it("the label is the dragged folder, wherever a child happens to sit", () => {
+    // A child inside dir/caches/ must not relabel the whole gesture as
+    // "caches" the moment it starts.
+    const m = buildStripModel([
+      tr({
+        id: "deep", groupId: "g", groupLabel: "UbuntuServer24",
+        remote_path: "/up/UbuntuServer24/caches/vmware-0.log",
+        state: { kind: "active" }, bytes_done: 1,
+      }),
+    ], { showAll: true });
+    expect(m.primaryLabel).toBe("UbuntuServer24");
+  });
+
+  it("rows without a recorded label still get the path-derived fallback", () => {
+    const m = buildStripModel([
+      tr({ id: "old", groupId: "g", remote_path: "/up/dir/f.bin", state: { kind: "active" }, bytes_done: 1 }),
+    ], { showAll: true });
+    expect(m.primaryLabel).toBe("dir");
+  });
 });
