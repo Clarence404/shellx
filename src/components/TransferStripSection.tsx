@@ -61,16 +61,24 @@ export function TransferStripSection({ connectionId, showAll }: Props) {
       borderTop: "1px solid var(--border)",
     }}>
       {expanded && (
-        <div
-          role="separator"
-          aria-orientation="horizontal"
-          title="Drag to resize"
-          onMouseDown={onSplitterMouseDown}
-          style={{
-            height: 6, flexShrink: 0, cursor: "row-resize",
-            background: "var(--border)",
-          }}
-        />
+        // The visible handle is 6px; the grab zone is three times that,
+        // reaching over the rows above and the bar below. A 6px target
+        // was routinely missed by a pixel or two, and a press landing on
+        // the file row above started that row's drag gesture instead of
+        // a resize.
+        <div style={{ position: "relative", height: 6, flexShrink: 0, zIndex: 3 }}>
+          <div style={{ height: 6, background: "var(--border)" }} />
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            title="Drag to resize"
+            onMouseDown={onSplitterMouseDown}
+            style={{
+              position: "absolute", left: 0, right: 0, top: -5, bottom: -5,
+              cursor: "row-resize",
+            }}
+          />
+        </div>
       )}
       <TransferBar
         connectionId={connectionId}

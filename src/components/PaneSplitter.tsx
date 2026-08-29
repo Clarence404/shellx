@@ -57,15 +57,22 @@ export function PaneSplitter({ onChange, onCommit }: Props) {
   }, [onChange, onCommit]);
 
   return (
+    // Visible at 6px, grabbable at 16: a press that misses by a couple
+    // of pixels used to land on the adjacent file row and start that
+    // row's drag gesture instead of a resize.
     <div ref={containerFinder}
-      onMouseDown={onMouseDown}
-      onDoubleClick={() => onCommit(50)}
-      role="separator" aria-orientation="vertical"
-      title="Drag to resize, double-click to reset"
-      style={{
-        width: 6, cursor: "col-resize", flexShrink: 0,
-        background: "var(--border)", position: "relative",
-      }}
-    />
+      style={{ width: 6, flexShrink: 0, background: "var(--border)", position: "relative", zIndex: 3 }}
+    >
+      <div
+        onMouseDown={onMouseDown}
+        onDoubleClick={() => onCommit(50)}
+        role="separator" aria-orientation="vertical"
+        title="Drag to resize, double-click to reset"
+        style={{
+          position: "absolute", top: 0, bottom: 0, left: -5, right: -5,
+          cursor: "col-resize",
+        }}
+      />
+    </div>
   );
 }
