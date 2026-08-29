@@ -48,6 +48,18 @@ export const transferRemove = (transfer_id: string) =>
 export const transferRetry = (transferId: string) =>
   invoke<string>("transfer_retry", { args: { transferId } });
 
+/** One IPC call for the whole queue (optionally one connection's) —
+ *  the per-id path meant one call per file, and twenty thousand files
+ *  meant twenty thousand calls. */
+export const transferPauseAll = (connId?: string) =>
+  invoke<number>("transfer_pause_all", { args: { conn_id: connId ?? null } });
+
+export const transferResumeAll = (connId?: string) =>
+  invoke<number>("transfer_resume_all", { args: { conn_id: connId ?? null } });
+
+export const transferCancelAll = (connId?: string) =>
+  invoke<number>("transfer_cancel_all", { args: { conn_id: connId ?? null } });
+
 export const transferPause = (transfer_id: string) =>
   invoke<void>("transfer_pause", { args: { transfer_id } });
 

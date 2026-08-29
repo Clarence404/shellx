@@ -246,6 +246,83 @@ impl TransferManager {
     /// never existed) is a no-op, matching the brief's stub behavior.
     /// If the transfer is currently paused we ALSO flip the pause flag
     /// off so the byte-pumping loop unparks and observes the cancel.
+    /// Pauses every queued or active transfer (optionally one
+    /// connection's), in one pass. No per-id events: the caller flips
+    /// its own list optimistically, and 20 000 state events would melt
+    /// the frontend for nothing.
+    pub async fn pause_all(&self, filter: Option<ConnectionId>) -> usize {
+        let mut map = self.tasks.lock().await;
+        let mut n = 0;
+        for t in map.values_mut() {
+            if let Some(c) = filter {
+                if t.info.connection_id != c { continue; }
+            }
+            if matches!(t.info.state, TransferState::Queued | TransferState::Active) {
+                t.pause_flag.store(true, Ordering::Release);
+                t.info.state = TransferState::Paused;
+                n += 1;
+            }
+        }
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "paused all transfers",
+            "count": n,
+        );
+        n
+    }
+
+    /// The inverse of `pause_all`. A transfer paused before it ever
+    /// held a slot simply goes back to waiting for one.
+    pub async fn resume_all(&self, filter: Option<ConnectionId>) -> usize {
+        let mut map = self.tasks.lock().await;
+        let mut n = 0;
+        for t in map.values_mut() {
+            if let Some(c) = filter {
+                if t.info.connection_id != c { continue; }
+            }
+            if matches!(t.info.state, TransferState::Paused) {
+                t.pause_flag.store(false, Ordering::Release);
+                t.info.state = TransferState::Active;
+                n += 1;
+            }
+        }
+        n
+    }
+
+    /// Cancels everything in flight (optionally one connection's) in one
+    /// pass: every group is marked so enumeration loops stop spawning,
+    /// and every task gets its cancel signal.
+    pub async fn cancel_all(&self, filter: Option<ConnectionId>) -> usize {
+        let mut groups: Vec<TransferId> = Vec::new();
+        let mut n = 0;
+        {
+            let mut map = self.tasks.lock().await;
+            for t in map.values_mut() {
+                if let Some(c) = filter {
+                    if t.info.connection_id != c { continue; }
+                }
+                if !matches!(
+                    t.info.state,
+                    TransferState::Queued | TransferState::Active | TransferState::Paused
+                ) { continue; }
+                if let Some(g) = t.info.group_id {
+                    if !groups.contains(&g) { groups.push(g); }
+                }
+                t.pause_flag.store(false, Ordering::Release);
+                if let Some(sender) = t.cancel.take() {
+                    let _ = sender.send(());
+                    n += 1;
+                }
+            }
+        }
+        let mut cancelled = self.cancelled_groups.lock().await;
+        for g in groups { cancelled.insert(g); }
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "cancelled all transfers",
+            "count": n,
+        );
+        n
+    }
+
     pub async fn cancel(&self, id: TransferId) -> Result<()> {
         let (sender, pause) = {
             let mut map = self.tasks.lock().await;
@@ -361,6 +438,7 @@ impl TransferManager {
         local: PathBuf,
         remote: String,
         group_id: Option<TransferId>,
+        expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
@@ -370,7 +448,10 @@ impl TransferManager {
             direction: Direction::Upload,
             local_path: local.to_string_lossy().into_owned(),
             remote_path: remote.clone(),
-            total_bytes: 0,
+            // The walk that spawned this knows the size already; a task
+            // corrects it when it starts. 0 stays 0 only for a caller
+            // that genuinely does not know.
+            total_bytes: expected_bytes,
             bytes_done: 0,
             state: TransferState::Queued,
             started_at: Self::now_ms(),
@@ -419,6 +500,7 @@ impl TransferManager {
         remote: String,
         local: PathBuf,
         group_id: Option<TransferId>,
+        expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
@@ -428,7 +510,10 @@ impl TransferManager {
             direction: Direction::Download,
             local_path: local.to_string_lossy().into_owned(),
             remote_path: remote.clone(),
-            total_bytes: 0,
+            // The walk that spawned this knows the size already; a task
+            // corrects it when it starts. 0 stays 0 only for a caller
+            // that genuinely does not know.
+            total_bytes: expected_bytes,
             bytes_done: 0,
             state: TransferState::Queued,
             started_at: Self::now_ms(),
@@ -480,6 +565,7 @@ impl TransferManager {
         local: PathBuf,
         remote: String,
         group_id: Option<TransferId>,
+        expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
@@ -489,7 +575,10 @@ impl TransferManager {
             direction: Direction::Upload,
             local_path: local.to_string_lossy().into_owned(),
             remote_path: remote.clone(),
-            total_bytes: 0,
+            // The walk that spawned this knows the size already; a task
+            // corrects it when it starts. 0 stays 0 only for a caller
+            // that genuinely does not know.
+            total_bytes: expected_bytes,
             bytes_done: 0,
             state: TransferState::Queued,
             started_at: Self::now_ms(),
@@ -525,6 +614,7 @@ impl TransferManager {
         remote: String,
         local: PathBuf,
         group_id: Option<TransferId>,
+        expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
@@ -534,7 +624,10 @@ impl TransferManager {
             direction: Direction::Download,
             local_path: local.to_string_lossy().into_owned(),
             remote_path: remote.clone(),
-            total_bytes: 0,
+            // The walk that spawned this knows the size already; a task
+            // corrects it when it starts. 0 stays 0 only for a caller
+            // that genuinely does not know.
+            total_bytes: expected_bytes,
             bytes_done: 0,
             state: TransferState::Queued,
             started_at: Self::now_ms(),

@@ -103,32 +103,20 @@ export function TransferBar({ connectionId, showAll, expanded, onToggle }: Scope
         {detail}
       </span>
       <span style={{ position: "relative", flex: 1 }} />
+      {/* Bulk buttons are single IPC calls: pausing per id meant one
+          call per file, and a 20 000-file queue outran the clicks —
+          slots kept starting new files while the calls landed. */}
       {m.anyActive && (
-        <IconButton label={t("Pause all")} onClick={() => {
-          for (const x of m.transferring) if (x.state.kind === "active") void store().pause(x.id);
-        }}>
+        <IconButton label={t("Pause all")} onClick={() => void store().pauseAll(connectionId)}>
           <Pause size={12} />
         </IconButton>
       )}
       {!m.anyActive && m.anyPaused && (
-        <IconButton label={t("Resume all")} onClick={() => {
-          for (const x of m.transferring) if (x.state.kind === "paused") void store().resume(x.id);
-        }}>
+        <IconButton label={t("Resume all")} onClick={() => void store().resumeAll(connectionId)}>
           <Play size={12} />
         </IconButton>
       )}
-      <IconButton label={t("Cancel all")} onClick={() => {
-        const groups = new Set<string>();
-        for (const x of m.transferring) {
-          if (x.groupId) groups.add(x.groupId);
-        }
-        for (const w of m.waiting) {
-          if (w.groupId) groups.add(w.groupId);
-          else for (const id of w.ids) void store().cancel(id);
-        }
-        for (const g of groups) void store().cancelGroup(g);
-        for (const x of m.transferring) if (!x.groupId) void store().cancel(x.id);
-      }}>
+      <IconButton label={t("Cancel all")} onClick={() => void store().cancelAll(connectionId)}>
         <X size={12} />
       </IconButton>
       <span aria-hidden="true" style={{

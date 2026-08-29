@@ -47,6 +47,7 @@ pub async fn sftp_upload(
             PathBuf::from(args.local_path),
             args.remote_path,
             None,
+            0,
         )
         .await)
 }
@@ -80,6 +81,7 @@ pub async fn sftp_download(
             args.remote_path,
             PathBuf::from(args.local_path),
             None,
+            0,
         )
         .await)
 }
@@ -147,6 +149,39 @@ pub async fn transfer_remove(
 ) -> Result<()> {
     transfer_mgr.remove_terminal(args.transfer_id).await;
     Ok(())
+}
+
+#[derive(Deserialize)]
+pub struct BulkArgs {
+    /// Limit to one connection's transfers; absent = everything.
+    pub conn_id: Option<ConnectionId>,
+}
+
+/// One IPC call however many files are queued — the per-id path meant
+/// twenty thousand calls for twenty thousand files, and by the time
+/// they had all landed the queue had already moved on.
+#[tauri::command]
+pub async fn transfer_pause_all(
+    args: BulkArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<usize> {
+    Ok(transfer_mgr.pause_all(args.conn_id).await)
+}
+
+#[tauri::command]
+pub async fn transfer_resume_all(
+    args: BulkArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<usize> {
+    Ok(transfer_mgr.resume_all(args.conn_id).await)
+}
+
+#[tauri::command]
+pub async fn transfer_cancel_all(
+    args: BulkArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<usize> {
+    Ok(transfer_mgr.cancel_all(args.conn_id).await)
 }
 
 // ---------- v0.6 T1: recursive directory transfers ----------
@@ -228,6 +263,7 @@ pub async fn sftp_upload_dir(
                 local_abs,
                 remote_abs,
                 Some(group_id),
+                size,
             )
             .await;
         ids.push(id);
@@ -308,6 +344,7 @@ pub async fn sftp_download_dir(
                 remote_abs,
                 local_abs,
                 Some(group_id),
+                e.size,
             )
             .await;
         ids.push(id);

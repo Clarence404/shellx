@@ -11,7 +11,7 @@
 
 use crate::error::Result;
 use crate::ftp::client::FtpSpec;
-use crate::transfer::task::{acquire_slot, finish, mark_active, pump, TaskMap};
+use crate::transfer::task::{acquire_slot, finish, mark_active, pump, wait_while_paused, TaskMap};
 use crate::transfer::TransferId;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -33,7 +33,19 @@ pub(crate) async fn run_ftp_upload(
     gate: Arc<tokio::sync::Semaphore>,
 ) {
     let result: Result<()> = async {
-        let _permit = acquire_slot(gate, &mut cancel_rx).await?;
+        // A transfer paused while still queued must not take a slot —
+        // it would starve the ones the user did not pause. Wait first;
+        // and if the pause arrived while standing in line, hand the
+        // permit back and rejoin the queue on resume.
+        let _permit = loop {
+            wait_while_paused(&pause_flag, &mut cancel_rx).await?;
+            let permit = acquire_slot(gate.clone(), &mut cancel_rx).await?;
+            if pause_flag.load(std::sync::atomic::Ordering::Acquire) {
+                drop(permit);
+                continue;
+            }
+            break permit;
+        };
         let total_bytes = tokio::fs::metadata(&local)
             .await
             .map_err(crate::error::Error::Io)?
@@ -81,7 +93,19 @@ pub(crate) async fn run_ftp_download(
     gate: Arc<tokio::sync::Semaphore>,
 ) {
     let result: Result<()> = async {
-        let _permit = acquire_slot(gate, &mut cancel_rx).await?;
+        // A transfer paused while still queued must not take a slot —
+        // it would starve the ones the user did not pause. Wait first;
+        // and if the pause arrived while standing in line, hand the
+        // permit back and rejoin the queue on resume.
+        let _permit = loop {
+            wait_while_paused(&pause_flag, &mut cancel_rx).await?;
+            let permit = acquire_slot(gate.clone(), &mut cancel_rx).await?;
+            if pause_flag.load(std::sync::atomic::Ordering::Acquire) {
+                drop(permit);
+                continue;
+            }
+            break permit;
+        };
         let mut client = spec.connect().await?;
         // SIZE is an extension some old boxes lack; a transfer with an
         // unknown total still transfers, the bar just cannot fill.

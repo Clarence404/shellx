@@ -504,6 +504,7 @@ pub async fn ftp_upload(
                 PathBuf::from(args.local_path),
                 args.remote_path,
                 None,
+                0,
             )
             .await);
     }
@@ -516,6 +517,7 @@ pub async fn ftp_upload(
             PathBuf::from(args.local_path),
             args.remote_path,
             None,
+            0,
         )
         .await)
 }
@@ -541,6 +543,7 @@ pub async fn ftp_download(
                 args.remote_path,
                 PathBuf::from(args.local_path),
                 None,
+                0,
             )
             .await);
     }
@@ -553,6 +556,7 @@ pub async fn ftp_download(
             args.remote_path,
             PathBuf::from(args.local_path),
             None,
+            0,
         )
         .await)
 }
@@ -662,13 +666,13 @@ pub async fn ftp_upload_dir(
             (Some(session), _) => transfer_mgr
                 .start_upload(
                     app.clone(), (*sessions).clone(), session,
-                    local_abs, remote_abs, Some(group_id),
+                    local_abs, remote_abs, Some(group_id), size,
                 )
                 .await,
             (None, Some(spec)) => transfer_mgr
                 .start_ftp_upload(
                     app.clone(), spec.clone(), args.id,
-                    local_abs, remote_abs, Some(group_id),
+                    local_abs, remote_abs, Some(group_id), size,
                 )
                 .await,
             (None, None) => unreachable!("spec built for every non-sftp row"),
@@ -744,13 +748,13 @@ pub async fn ftp_download_dir(
             (Some(session), _) => transfer_mgr
                 .start_download(
                     app.clone(), (*sessions).clone(), session,
-                    remote_abs, local_abs, Some(group_id),
+                    remote_abs, local_abs, Some(group_id), size,
                 )
                 .await,
             (None, Some(spec)) => transfer_mgr
                 .start_ftp_download(
                     app.clone(), spec.clone(), args.id,
-                    remote_abs, local_abs, Some(group_id),
+                    remote_abs, local_abs, Some(group_id), size,
                 )
                 .await,
             (None, None) => unreachable!("spec built for every non-sftp row"),
@@ -779,7 +783,7 @@ pub async fn transfer_retry(
     app: AppHandle,
     store: State<'_, FtpHostStore>,
     keychain: State<'_, KeychainStore>,
-    ftp: State<'_, FtpManager>,
+    _ftp: State<'_, FtpManager>,
     sessions: State<'_, SessionManager>,
     transfer_mgr: State<'_, TransferManager>,
     settings: State<'_, SettingsStore>,
@@ -801,22 +805,22 @@ pub async fn transfer_retry(
     if sessions.list().await.iter().any(|s| s.id == info.connection_id) {
         return Ok(if upload {
             transfer_mgr
-                .start_upload(app, (*sessions).clone(), info.connection_id, local, info.remote_path, info.group_id)
+                .start_upload(app, (*sessions).clone(), info.connection_id, local, info.remote_path, info.group_id, info.total_bytes)
                 .await
         } else {
             transfer_mgr
-                .start_download(app, (*sessions).clone(), info.connection_id, info.remote_path, local, info.group_id)
+                .start_download(app, (*sessions).clone(), info.connection_id, info.remote_path, local, info.group_id, info.total_bytes)
                 .await
         });
     }
     let (_, spec) = spec_for(&store, &keychain, info.connection_id).await?;
     Ok(if upload {
         transfer_mgr
-            .start_ftp_upload(app, spec, info.connection_id, local, info.remote_path, info.group_id)
+            .start_ftp_upload(app, spec, info.connection_id, local, info.remote_path, info.group_id, info.total_bytes)
             .await
     } else {
         transfer_mgr
-            .start_ftp_download(app, spec, info.connection_id, info.remote_path, local, info.group_id)
+            .start_ftp_download(app, spec, info.connection_id, info.remote_path, local, info.group_id, info.total_bytes)
             .await
     })
 }
