@@ -477,6 +477,12 @@ pub struct FtpTransferArgs {
     pub id: Uuid,
     pub local_path: String,
     pub remote_path: String,
+    /// Set when several loose files were dropped in one gesture — the
+    /// frontend mints one id for the batch so the strip shows one row.
+    #[serde(default)]
+    pub group_id: Option<TransferId>,
+    #[serde(default)]
+    pub group_label: Option<String>,
 }
 
 /// One file, either direction decided by the command. SFTP rows go to
@@ -503,7 +509,9 @@ pub async fn ftp_upload(
                 session,
                 PathBuf::from(args.local_path),
                 args.remote_path,
-                None,
+                args.group_id,
+                args.group_label,
+                0,
             )
             .await);
     }
@@ -515,7 +523,9 @@ pub async fn ftp_upload(
             args.id,
             PathBuf::from(args.local_path),
             args.remote_path,
-            None,
+            args.group_id,
+            args.group_label,
+            0,
         )
         .await)
 }
@@ -540,7 +550,9 @@ pub async fn ftp_download(
                 session,
                 args.remote_path,
                 PathBuf::from(args.local_path),
-                None,
+                args.group_id,
+                args.group_label,
+                0,
             )
             .await);
     }
@@ -552,7 +564,9 @@ pub async fn ftp_download(
             args.id,
             args.remote_path,
             PathBuf::from(args.local_path),
-            None,
+            args.group_id,
+            args.group_label,
+            0,
         )
         .await)
 }
@@ -614,6 +628,7 @@ pub async fn ftp_upload_dir(
     apply_concurrency(&transfer_mgr, &settings);
     let group_id = Uuid::new_v4();
     let local_root = PathBuf::from(&args.local_dir);
+    let group_label = crate::ipc::transfer::basename_of(&args.remote_dir);
     let (dirs, files) = walk_local(&local_root).await?;
 
     let sftp_session = ftp.session_of(args.id).await;
@@ -662,13 +677,13 @@ pub async fn ftp_upload_dir(
             (Some(session), _) => transfer_mgr
                 .start_upload(
                     app.clone(), (*sessions).clone(), session,
-                    local_abs, remote_abs, Some(group_id),
+                    local_abs, remote_abs, Some(group_id), Some(group_label.clone()), size,
                 )
                 .await,
             (None, Some(spec)) => transfer_mgr
                 .start_ftp_upload(
                     app.clone(), spec.clone(), args.id,
-                    local_abs, remote_abs, Some(group_id),
+                    local_abs, remote_abs, Some(group_id), Some(group_label.clone()), size,
                 )
                 .await,
             (None, None) => unreachable!("spec built for every non-sftp row"),
@@ -695,6 +710,7 @@ pub async fn ftp_download_dir(
     apply_concurrency(&transfer_mgr, &settings);
     let group_id = Uuid::new_v4();
     let local_root = PathBuf::from(&args.local_dir);
+    let group_label = crate::ipc::transfer::basename_of(&args.remote_dir);
     tokio::fs::create_dir_all(&local_root).await.map_err(Error::Io)?;
 
     let sftp_session = ftp.session_of(args.id).await;
@@ -744,13 +760,13 @@ pub async fn ftp_download_dir(
             (Some(session), _) => transfer_mgr
                 .start_download(
                     app.clone(), (*sessions).clone(), session,
-                    remote_abs, local_abs, Some(group_id),
+                    remote_abs, local_abs, Some(group_id), Some(group_label.clone()), size,
                 )
                 .await,
             (None, Some(spec)) => transfer_mgr
                 .start_ftp_download(
                     app.clone(), spec.clone(), args.id,
-                    remote_abs, local_abs, Some(group_id),
+                    remote_abs, local_abs, Some(group_id), Some(group_label.clone()), size,
                 )
                 .await,
             (None, None) => unreachable!("spec built for every non-sftp row"),
@@ -760,6 +776,132 @@ pub async fn ftp_download_dir(
     }
 
     Ok(DirTransferInit { group_id, file_count: ids.len(), transfer_ids: ids, total_bytes })
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetryArgs {
+    pub transfer_id: Uuid,
+}
+
+/// Queues a failed transfer again, with the same endpoints. Which
+/// protocol carries it is re-derived from the connection id — a live
+/// SSH session means SFTP, an FTP-view row means a fresh FTP task —
+/// so this one command serves every surface that shows the queue.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn transfer_retry(
+    args: RetryArgs,
+    app: AppHandle,
+    store: State<'_, FtpHostStore>,
+    keychain: State<'_, KeychainStore>,
+    _ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+    transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, SettingsStore>,
+) -> Result<TransferId> {
+    let info = transfer_mgr
+        .info(args.transfer_id)
+        .await
+        .ok_or_else(|| Error::Protocol("that transfer is gone".into()))?;
+    apply_concurrency(&transfer_mgr, &settings);
+    // The old row leaves as the new one arrives — two rows for one file
+    // would double-count the totals.
+    transfer_mgr.remove_terminal(args.transfer_id).await;
+
+    let upload = matches!(info.direction, crate::transfer::Direction::Upload);
+    let local = PathBuf::from(&info.local_path);
+
+    // An SFTP session id resolves through the session manager; anything
+    // else must be an FTP-view row.
+    if sessions.list().await.iter().any(|s| s.id == info.connection_id) {
+        return Ok(if upload {
+            transfer_mgr
+                .start_upload(app, (*sessions).clone(), info.connection_id, local, info.remote_path, info.group_id, info.group_label.clone(), info.total_bytes)
+                .await
+        } else {
+            transfer_mgr
+                .start_download(app, (*sessions).clone(), info.connection_id, info.remote_path, local, info.group_id, info.group_label.clone(), info.total_bytes)
+                .await
+        });
+    }
+    let (_, spec) = spec_for(&store, &keychain, info.connection_id).await?;
+    Ok(if upload {
+        transfer_mgr
+            .start_ftp_upload(app, spec, info.connection_id, local, info.remote_path, info.group_id, info.group_label.clone(), info.total_bytes)
+            .await
+    } else {
+        transfer_mgr
+            .start_ftp_download(app, spec, info.connection_id, info.remote_path, local, info.group_id, info.group_label.clone(), info.total_bytes)
+            .await
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RetryGroupArgs {
+    pub group_id: Uuid,
+}
+
+/// Requeues every failed member of a gesture in one IPC call — the
+/// strip's per-row "Retry all" button. The protocol is derived once for
+/// the whole group (all members share a connection id), then each
+/// failed file respawns with its recorded endpoints, group and size.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn transfer_retry_group(
+    args: RetryGroupArgs,
+    app: AppHandle,
+    store: State<'_, FtpHostStore>,
+    keychain: State<'_, KeychainStore>,
+    _ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+    transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, SettingsStore>,
+) -> Result<usize> {
+    let failed = transfer_mgr.failed_of_group(args.group_id).await;
+    if failed.is_empty() {
+        return Ok(0);
+    }
+    apply_concurrency(&transfer_mgr, &settings);
+
+    let conn = failed[0].connection_id;
+    let is_sftp = sessions.list().await.iter().any(|s| s.id == conn);
+    let spec = if is_sftp {
+        None
+    } else {
+        Some(spec_for(&store, &keychain, conn).await?.1)
+    };
+
+    let n = failed.len();
+    for info in failed {
+        transfer_mgr.remove_terminal(info.id).await;
+        let upload = matches!(info.direction, crate::transfer::Direction::Upload);
+        let local = PathBuf::from(&info.local_path);
+        match (&spec, upload) {
+            (None, true) => {
+                transfer_mgr
+                    .start_upload(app.clone(), (*sessions).clone(), conn, local, info.remote_path, info.group_id, info.group_label, info.total_bytes)
+                    .await;
+            }
+            (None, false) => {
+                transfer_mgr
+                    .start_download(app.clone(), (*sessions).clone(), conn, info.remote_path, local, info.group_id, info.group_label, info.total_bytes)
+                    .await;
+            }
+            (Some(spec), true) => {
+                transfer_mgr
+                    .start_ftp_upload(app.clone(), spec.clone(), conn, local, info.remote_path, info.group_id, info.group_label, info.total_bytes)
+                    .await;
+            }
+            (Some(spec), false) => {
+                transfer_mgr
+                    .start_ftp_download(app.clone(), spec.clone(), conn, info.remote_path, local, info.group_id, info.group_label, info.total_bytes)
+                    .await;
+            }
+        }
+    }
+    Ok(n)
 }
 
 #[derive(Deserialize)]

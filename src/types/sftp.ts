@@ -34,4 +34,11 @@ export interface TransferInfo {
    * the Transfers view can render them under one expandable parent row.
    * Single-file transfers leave this undefined. */
   groupId?: TransferId;
+  /** The folder the user dragged, recorded at spawn — the strip's label
+   *  for the whole gesture. Absent on single-file transfers. */
+  groupLabel?: string;
+  /** Frontend-only: last rate from `transfer:progress`, stashed by
+   *  `applyProgress` so the strip can show per-gesture speed and ETA.
+   *  Never sent by Rust in `transfer_list`. */
+  rateBps?: number;
 }

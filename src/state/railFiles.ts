@@ -4,7 +4,7 @@ import type { SftpEntry } from "../types/sftp";
 import type { ConnectionId } from "../types/connection";
 import { localListDir, localRealpath } from "../ipc/local";
 import { sftpListDir, sftpRealpath } from "../ipc/sftp";
-import { sftpUpload, sftpDownload } from "../ipc/transfers";
+import { sftpUpload, sftpDownload, newGesture } from "../ipc/transfers";
 import { useSessions } from "./sessions";
 
 interface State {
@@ -37,7 +37,10 @@ interface State {
    *  persisted — session-scoped. TransferQueue reads / writes it via
    *  `setTransferGroupExpanded`; RailFilesView subscribes to derive
    *  the effective strip height + divider visibility. */
-  transferGroupExpanded: Record<string, boolean>;
+  /** The strip's expanded/collapsed state — one flag shared by every
+   *  surface that renders the strip, so opening it in one view means it
+   *  is open in the others too. Session-scoped, not persisted. */
+  transfersExpanded: boolean;
 
   /** v0.5.7: transient state describing the file currently being
    *  drag-dropped between panes. Set on mousedown-then-move-past-
@@ -79,7 +82,7 @@ interface Actions {
   setSplitter(pct: number): void;
   setTransferStripHeightDraft(px: number): void;
   setTransferStripHeight(px: number): void;
-  setTransferGroupExpanded(groupId: string, expanded: boolean): void;
+  toggleTransfersExpanded(): void;
 }
 
 // Bounds for the bottom transfer strip's height. `80` keeps the group
@@ -88,7 +91,12 @@ interface Actions {
 const TRANSFER_STRIP_MIN_PX = 80;
 const TRANSFER_STRIP_DEFAULT_PX = 220;
 function clampTransferStripPx(px: number): number {
-  const max = Math.max(TRANSFER_STRIP_MIN_PX + 40, Math.round(window.innerHeight * 0.7));
+  // 40% of the window, down from 70%: the strip is a status area, and
+  // the file panes are the point of the view. Guarded because this now
+  // also runs at module load (re-clamping the persisted height), where
+  // a windowless test environment has no innerHeight.
+  const viewport = typeof window === "undefined" ? 800 : window.innerHeight;
+  const max = Math.max(TRANSFER_STRIP_MIN_PX + 40, Math.round(viewport * 0.4));
   return Math.max(TRANSFER_STRIP_MIN_PX, Math.min(max, Math.round(px)));
 }
 
@@ -131,10 +139,12 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
   rightEntries: [], rightLoading: false, rightError: null, rightSelected: [],
 
   splitterPercent: typeof persisted.splitterPercent === "number" ? persisted.splitterPercent : 50,
+  // Re-clamped on load: a height persisted under an older, laxer cap
+  // (70% once) must not come back over today's limit.
   transferStripHeight: typeof persisted.transferStripHeight === "number"
-    ? persisted.transferStripHeight
+    ? clampTransferStripPx(persisted.transferStripHeight)
     : TRANSFER_STRIP_DEFAULT_PX,
-  transferGroupExpanded: {},
+  transfersExpanded: false,
   currentDrag: null,
 
   async setLeftPath(p) {
@@ -239,17 +249,20 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
     const { leftPath, rightPath, rightHost, leftSelected, rightSelected } = get();
     if (!rightHost) return;
     const join = (base: string, name: string) => base === "/" ? `/${name}` : `${base}/${name}`;
+    // A multi-select is one gesture: one group, one strip row.
     if (direction === "up") {
+      const group = leftSelected.length >= 2 ? newGesture(leftSelected[0]) : undefined;
       for (const name of leftSelected) {
         const localFullPath = join(leftPath, name);
         const remoteFullPath = join(rightPath, name);
-        void sftpUpload(rightHost, localFullPath, remoteFullPath);
+        void sftpUpload(rightHost, localFullPath, remoteFullPath, group);
       }
     } else {
+      const group = rightSelected.length >= 2 ? newGesture(rightSelected[0]) : undefined;
       for (const name of rightSelected) {
         const remoteFullPath = join(rightPath, name);
         const localFullPath = join(leftPath, name);
-        void sftpDownload(rightHost, remoteFullPath, localFullPath);
+        void sftpDownload(rightHost, remoteFullPath, localFullPath, group);
       }
     }
   },
@@ -280,9 +293,7 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
     set({ transferStripHeight: clampTransferStripPx(px) });
     persist(get());
   },
-  setTransferGroupExpanded(groupId, expanded) {
-    set((st) => ({
-      transferGroupExpanded: { ...st.transferGroupExpanded, [groupId]: expanded },
-    }));
+  toggleTransfersExpanded() {
+    set((st) => ({ transfersExpanded: !st.transfersExpanded }));
   },
 }));

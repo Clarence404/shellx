@@ -26,7 +26,27 @@ interface TransfersStore {
   pause: (transferId: string) => Promise<void>;
   resume: (transferId: string) => Promise<void>;
   remove: (transferId: string) => void;
+  retry: (transferId: string) => Promise<void>;
+  /** Bulk operations: one optimistic list pass + one IPC call, never
+   *  one per file. `connId` scopes to a connection; absent = all. */
+  pauseAll: (connId?: string) => Promise<void>;
+  resumeAll: (connId?: string) => Promise<void>;
+  cancelAll: (connId?: string) => Promise<void>;
+  /** Gesture-scoped variants — the strip's per-row buttons. Same shape:
+   *  one optimistic pass, one IPC call. */
+  pauseGroup: (groupId: string) => Promise<void>;
+  resumeGroup: (groupId: string) => Promise<void>;
+  retryGroup: (groupId: string) => Promise<void>;
+  removeGroup: (groupId: string) => void;
 }
+
+// Flush cadence for the two high-volume events. 100ms keeps the UI at
+// ten updates a second however many files are moving.
+const STARTED_FLUSH_MS = 100;
+let startedBuffer: TransferInfo[] = [];
+let startedTimer: ReturnType<typeof setTimeout> | null = null;
+let doneBuffer: TransferDoneEvent[] = [];
+let doneTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useTransfersStore = create<TransfersStore>((set, get) => ({
   list: [],
@@ -39,21 +59,41 @@ export const useTransfersStore = create<TransfersStore>((set, get) => ({
     set({ list, loading: false });
   },
 
+  // The two high-volume events are buffered and flushed on a short
+  // timer: enumerating a 20 000-file directory fires one started event
+  // per file, and cancelling it fires one done event per file. One
+  // store update per event is a full re-render per event over an
+  // ever-growing list — the UI froze exactly when the user most needed
+  // the cancel button to work.
   // Inserts a `Queued`-state stub for an id the store hasn't seen yet, fired
   // by `transfer:started` (see ipc/transfers.ts). Guards against duplicate
   // inserts since `App.tsx`'s listener registration can theoretically race
   // `loadInitial()`'s own fetch for a transfer that started just before
   // mount.
-  applyStarted: (info) =>
-    set((st) => {
-      if (st.list.some((t) => t.id === info.id)) return st;
-      // Late `transfer:started` for an already-cancelled group: Rust's
-      // sftp_upload_dir loop had already spawned this child before it
-      // reached the `is_group_cancelled` check. Drop the event so the
-      // group's file count stops climbing after the user clicks ✕.
-      if (info.groupId && st.cancelledGroupIds.has(info.groupId)) return st;
-      return { list: [...st.list, info] };
-    }),
+  applyStarted: (info) => {
+    startedBuffer.push(info);
+    if (startedTimer === null) {
+      startedTimer = setTimeout(() => {
+        const batch = startedBuffer;
+        startedBuffer = [];
+        startedTimer = null;
+        set((st) => {
+          const seen = new Set(st.list.map((t) => t.id));
+          const fresh = batch.filter((i) => {
+            if (seen.has(i.id)) return false;
+            // Late `transfer:started` for an already-cancelled group:
+            // Rust's enumeration loop had already spawned this child
+            // before it reached the is_group_cancelled check. Drop it so
+            // the file count stops climbing after the cancel click.
+            if (i.groupId && st.cancelledGroupIds.has(i.groupId)) return false;
+            seen.add(i.id);
+            return true;
+          });
+          return fresh.length ? { list: [...st.list, ...fresh] } : st;
+        });
+      }, STARTED_FLUSH_MS);
+    }
+  },
 
   applyProgress: (e) =>
     set((st) => ({
@@ -68,14 +108,32 @@ export const useTransfersStore = create<TransfersStore>((set, get) => ({
         // user clicks the button.
         if (t.state.kind === "paused" || t.state.kind === "cancelled") return t;
         const promoted = t.state.kind === "queued" ? { kind: "active" as const } : t.state;
-        return { ...t, bytes_done: e.bytes_done, total_bytes: e.total_bytes, state: promoted };
+        return {
+          ...t,
+          bytes_done: e.bytes_done,
+          total_bytes: e.total_bytes,
+          rateBps: e.rate_bps,
+          state: promoted,
+        };
       }),
     })),
 
   applyDone: (e) => {
-    set((st) => ({
-      list: st.list.map((t) => (t.id === e.transfer_id ? { ...t, state: e.state } : t)),
-    }));
+    doneBuffer.push(e);
+    if (doneTimer === null) {
+      doneTimer = setTimeout(() => {
+        const batch = doneBuffer;
+        doneBuffer = [];
+        doneTimer = null;
+        const byId = new Map(batch.map((ev) => [ev.transfer_id, ev.state]));
+        set((st) => ({
+          list: st.list.map((t) => {
+            const next = byId.get(t.id);
+            return next ? { ...t, state: next } : t;
+          }),
+        }));
+      }, STARTED_FLUSH_MS);
+    }
     // v0.6 T1: only auto-remove standalone transfers. Group children
     // linger so the bottom-bar aggregate keeps showing correct file
     // counts as siblings finish; T3 introduces a Transfers view + a
@@ -139,6 +197,114 @@ export const useTransfersStore = create<TransfersStore>((set, get) => ({
     return ipc.transferResume(transferId);
   },
 
-  remove: (transferId) =>
-    set((st) => ({ list: st.list.filter((t) => t.id !== transferId) })),
+  remove: (transferId) => {
+    set((st) => ({ list: st.list.filter((t) => t.id !== transferId) }));
+    // Also forget it on the Rust side, or the next list load would
+    // resurrect the row that was just dismissed. Best-effort: a transfer
+    // Rust already dropped is fine.
+    void ipc.transferRemove(transferId).catch(() => {});
+  },
+
+  pauseAll: async (connId) => {
+    set((st) => ({
+      list: st.list.map((t) =>
+        (connId === undefined || t.connection_id === connId)
+        && (t.state.kind === "queued" || t.state.kind === "active")
+          ? { ...t, state: { kind: "paused" as const } }
+          : t,
+      ),
+    }));
+    await ipc.transferPauseAll(connId);
+  },
+
+  resumeAll: async (connId) => {
+    set((st) => ({
+      list: st.list.map((t) =>
+        (connId === undefined || t.connection_id === connId) && t.state.kind === "paused"
+          ? { ...t, state: { kind: "active" as const } }
+          : t,
+      ),
+    }));
+    await ipc.transferResumeAll(connId);
+  },
+
+  cancelAll: async (connId) => {
+    set((st) => {
+      const groups = new Set(st.cancelledGroupIds);
+      for (const t of st.list) {
+        if ((connId === undefined || t.connection_id === connId) && t.groupId) {
+          groups.add(t.groupId);
+        }
+      }
+      return {
+        list: st.list.map((t) =>
+          (connId === undefined || t.connection_id === connId)
+          && (t.state.kind === "queued" || t.state.kind === "active" || t.state.kind === "paused")
+            ? { ...t, state: { kind: "cancelled" as const } }
+            : t,
+        ),
+        cancelledGroupIds: groups,
+      };
+    });
+    await ipc.transferCancelAll(connId);
+  },
+
+  pauseGroup: async (groupId) => {
+    set((st) => ({
+      list: st.list.map((t) =>
+        t.groupId === groupId && (t.state.kind === "queued" || t.state.kind === "active")
+          ? { ...t, state: { kind: "paused" as const } }
+          : t,
+      ),
+    }));
+    await ipc.transferPauseAll(undefined, groupId);
+  },
+
+  resumeGroup: async (groupId) => {
+    set((st) => ({
+      list: st.list.map((t) =>
+        t.groupId === groupId && t.state.kind === "paused"
+          ? { ...t, state: { kind: "active" as const } }
+          : t,
+      ),
+    }));
+    await ipc.transferResumeAll(undefined, groupId);
+  },
+
+  retryGroup: async (groupId) => {
+    // Failed members leave optimistically; the retried transfers come
+    // back through ordinary transfer:started events with fresh ids.
+    set((st) => ({
+      list: st.list.filter((t) => !(t.groupId === groupId && t.state.kind === "failed")),
+    }));
+    try {
+      await ipc.transferRetryGroup(groupId);
+    } catch {
+      await get().loadInitial();
+    }
+  },
+
+  removeGroup: (groupId) => {
+    set((st) => ({
+      list: st.list.filter((t) => {
+        if (t.groupId !== groupId) return true;
+        const k = t.state.kind;
+        return k === "queued" || k === "active" || k === "paused";
+      }),
+    }));
+    void ipc.transferRemoveGroup(groupId).catch(() => {});
+  },
+
+  retry: async (transferId) => {
+    // Drop the failed row optimistically; the retried transfer arrives
+    // through the ordinary transfer:started event with a fresh id.
+    set((st) => ({ list: st.list.filter((t) => t.id !== transferId) }));
+    try {
+      await ipc.transferRetry(transferId);
+    } catch {
+      // The retry could not even be queued (row gone, host deleted) —
+      // reload the truth rather than guessing at local state.
+      await get().loadInitial();
+    }
+  },
 }));

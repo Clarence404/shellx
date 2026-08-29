@@ -23,6 +23,13 @@ pub struct UploadArgs {
     pub conn_id: ConnectionId,
     pub local_path: String,
     pub remote_path: String,
+    /// Set when several loose files were dropped in one gesture: the
+    /// frontend mints one id for the batch so the strip shows a single
+    /// row, exactly as a directory drop does.
+    #[serde(default)]
+    pub group_id: Option<TransferId>,
+    #[serde(default)]
+    pub group_label: Option<String>,
 }
 
 #[tauri::command]
@@ -46,7 +53,9 @@ pub async fn sftp_upload(
             args.conn_id,
             PathBuf::from(args.local_path),
             args.remote_path,
-            None,
+            args.group_id,
+            args.group_label,
+            0,
         )
         .await)
 }
@@ -56,6 +65,10 @@ pub struct DownloadArgs {
     pub conn_id: ConnectionId,
     pub remote_path: String,
     pub local_path: String,
+    #[serde(default)]
+    pub group_id: Option<TransferId>,
+    #[serde(default)]
+    pub group_label: Option<String>,
 }
 
 #[tauri::command]
@@ -79,7 +92,9 @@ pub async fn sftp_download(
             args.conn_id,
             args.remote_path,
             PathBuf::from(args.local_path),
-            None,
+            args.group_id,
+            args.group_label,
+            0,
         )
         .await)
 }
@@ -133,6 +148,69 @@ pub async fn transfer_resume(
     transfer_mgr.resume(app, args.transfer_id).await
 }
 
+#[derive(Deserialize)]
+pub struct RemoveArgs {
+    pub transfer_id: TransferId,
+}
+
+/// Forgets a finished / failed / cancelled transfer, so a dismissed row
+/// does not come back the next time a view loads the list.
+#[tauri::command]
+pub async fn transfer_remove(
+    args: RemoveArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<()> {
+    transfer_mgr.remove_terminal(args.transfer_id).await;
+    Ok(())
+}
+
+#[derive(Deserialize)]
+pub struct BulkArgs {
+    /// Limit to one connection's transfers; absent = everything.
+    pub conn_id: Option<ConnectionId>,
+    /// Limit to one gesture's transfers — the strip's per-row pause /
+    /// resume / cancel buttons pass this.
+    #[serde(default)]
+    pub group_id: Option<TransferId>,
+}
+
+/// One IPC call however many files are queued — the per-id path meant
+/// twenty thousand calls for twenty thousand files, and by the time
+/// they had all landed the queue had already moved on.
+#[tauri::command]
+pub async fn transfer_pause_all(
+    args: BulkArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<usize> {
+    Ok(transfer_mgr.pause_all(args.conn_id, args.group_id).await)
+}
+
+#[tauri::command]
+pub async fn transfer_resume_all(
+    args: BulkArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<usize> {
+    Ok(transfer_mgr.resume_all(args.conn_id, args.group_id).await)
+}
+
+#[tauri::command]
+pub async fn transfer_cancel_all(
+    args: BulkArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<usize> {
+    Ok(transfer_mgr.cancel_all(args.conn_id, args.group_id).await)
+}
+
+/// `transfer_remove` for a whole gesture — dismissing a failed group of
+/// ten thousand files is one call, not ten thousand.
+#[tauri::command]
+pub async fn transfer_remove_group(
+    args: CancelGroupArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<usize> {
+    Ok(transfer_mgr.remove_terminal_group(args.group_id).await)
+}
+
 // ---------- v0.6 T1: recursive directory transfers ----------
 
 #[derive(Deserialize)]
@@ -167,6 +245,9 @@ pub async fn sftp_upload_dir(
     );
     let local_root = PathBuf::from(&args.local_dir);
     let group_id = Uuid::new_v4();
+    // The name the strip shows for this whole gesture: the folder that
+    // was dragged, not whatever subdirectory a child happens to be in.
+    let group_label = basename_of(&args.remote_dir);
 
     // Local walk: collect subdirs (for mkdir) + files (for transfer). Both
     // returned as forward-slash relative paths so `join_remote` composes
@@ -212,6 +293,8 @@ pub async fn sftp_upload_dir(
                 local_abs,
                 remote_abs,
                 Some(group_id),
+                Some(group_label.clone()),
+                size,
             )
             .await;
         ids.push(id);
@@ -249,6 +332,7 @@ pub async fn sftp_download_dir(
     );
     let group_id = Uuid::new_v4();
     let local_root = PathBuf::from(&args.local_dir);
+    let group_label = basename_of(&args.remote_dir);
 
     // Local root + every remote subdir mirrored underneath it. Same
     // parent-first ordering as upload; `walk_dir` already sorts by depth.
@@ -292,6 +376,8 @@ pub async fn sftp_download_dir(
                 remote_abs,
                 local_abs,
                 Some(group_id),
+                Some(group_label.clone()),
+                e.size,
             )
             .await;
         ids.push(id);
@@ -307,6 +393,15 @@ pub async fn sftp_download_dir(
 }
 
 // ---------- helpers ----------
+
+/// Last path segment, whatever the separators.
+pub(crate) fn basename_of(path: &str) -> String {
+    path.split(['/', '\\'])
+        .rev()
+        .find(|seg| !seg.is_empty())
+        .unwrap_or(path)
+        .to_string()
+}
 
 /// Recursive local walk. Returns:
 /// - subdirectories: forward-slash relative paths, sorted parents-first

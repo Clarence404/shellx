@@ -11,8 +11,8 @@ export type { RailView };
 const PRIMARY_ITEMS: { id: RailView; label: string; Icon: LucideIcon }[] = [
   { id: "hosts", label: "Hosts", Icon: Server },
   { id: "files", label: "Files", Icon: Files },
-  { id: "ftp", label: "FTP", Icon: ArrowDownUp },
   { id: "tunnels", label: "Tunnels", Icon: Waypoints },
+  { id: "ftp", label: "FTP", Icon: ArrowDownUp },
   { id: "serial", label: "Serial", Icon: Cable },
 ];
 const FOOTER_ITEMS: { id: RailView; label: string; Icon: LucideIcon }[] = [

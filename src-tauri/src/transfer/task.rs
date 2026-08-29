@@ -168,7 +168,7 @@ pub(crate) async fn finish(app: &AppHandle, tasks: &TaskMap, id: TransferId, res
 /// on either the flag clearing OR a cancellation signal. Returns `Err`
 /// if the caller was cancelled during the pause; the caller should
 /// propagate that as the terminal state.
-async fn wait_while_paused(
+pub(crate) async fn wait_while_paused(
     pause_flag: &AtomicBool,
     cancel_rx: &mut oneshot::Receiver<()>,
 ) -> Result<()> {
@@ -258,7 +258,19 @@ pub(crate) async fn run_upload(
     gate: Arc<tokio::sync::Semaphore>,
 ) {
     let result: Result<()> = async {
-        let _permit = acquire_slot(gate, &mut cancel_rx).await?;
+        // A transfer paused while still queued must not take a slot —
+        // it would starve the ones the user did not pause. Wait first;
+        // and if the pause arrived while standing in line, hand the
+        // permit back and rejoin the queue on resume.
+        let _permit = loop {
+            wait_while_paused(&pause_flag, &mut cancel_rx).await?;
+            let permit = acquire_slot(gate.clone(), &mut cancel_rx).await?;
+            if pause_flag.load(std::sync::atomic::Ordering::Acquire) {
+                drop(permit);
+                continue;
+            }
+            break permit;
+        };
         let meta = tokio::fs::metadata(&local).await.map_err(Error::Io)?;
         let total_bytes = meta.len();
         mark_active(&tasks, transfer_id, total_bytes).await;
@@ -293,7 +305,19 @@ pub(crate) async fn run_download(
     gate: Arc<tokio::sync::Semaphore>,
 ) {
     let result: Result<()> = async {
-        let _permit = acquire_slot(gate, &mut cancel_rx).await?;
+        // A transfer paused while still queued must not take a slot —
+        // it would starve the ones the user did not pause. Wait first;
+        // and if the pause arrived while standing in line, hand the
+        // permit back and rejoin the queue on resume.
+        let _permit = loop {
+            wait_while_paused(&pause_flag, &mut cancel_rx).await?;
+            let permit = acquire_slot(gate.clone(), &mut cancel_rx).await?;
+            if pause_flag.load(std::sync::atomic::Ordering::Acquire) {
+                drop(permit);
+                continue;
+            }
+            break permit;
+        };
         let total_bytes = session_mgr
             .sftp_stat(conn_id, &remote)
             .await

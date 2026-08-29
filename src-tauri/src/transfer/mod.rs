@@ -76,6 +76,11 @@ pub struct TransferInfo {
     /// which the frontend already consumes as-is).
     #[serde(rename = "groupId")]
     pub group_id: Option<TransferId>,
+    /// The folder the user actually dragged, recorded at spawn. Derived
+    /// names drift: a child at dir/caches/x.log would otherwise be
+    /// labelled "caches" the moment it starts.
+    #[serde(rename = "groupLabel")]
+    pub group_label: Option<String>,
 }
 
 // `pub(crate)`, not private: `task::run_upload`/`run_download` are `pub` (so
@@ -109,14 +114,18 @@ pub struct TransferManager {
     /// of state a user could plausibly accumulate.
     cancelled_groups: Arc<Mutex<HashSet<TransferId>>>,
     /// How many byte-pumps may run at once (Settings → Advanced → SFTP
-    /// concurrency). Each task holds one permit for its whole life;
-    /// everything past the cap sits in Queued until a slot frees.
+    /// concurrency) — one gate per direction, each with the full cap.
+    /// One gate for both was a real flaw: the semaphore is FIFO, so a
+    /// 2 KB download queued behind a 190 GB directory upload waited for
+    /// all of it. The link is full duplex; uploads and downloads do not
+    /// contend, so they no longer queue on each other.
     ///
     /// Swapped wholesale when the setting changes: in-flight transfers
     /// keep the permit they took from the old semaphore and finish
     /// against it, newly queued ones queue on the new one. A std Mutex
     /// (not tokio's) because the critical section is a clone of an Arc.
-    gate: std::sync::Mutex<Arc<tokio::sync::Semaphore>>,
+    up_gate: std::sync::Mutex<Arc<tokio::sync::Semaphore>>,
+    down_gate: std::sync::Mutex<Arc<tokio::sync::Semaphore>>,
     gate_cap: std::sync::atomic::AtomicU32,
 }
 
@@ -126,7 +135,8 @@ impl TransferManager {
         Self {
             tasks: Arc::new(Mutex::new(HashMap::new())),
             cancelled_groups: Arc::new(Mutex::new(HashSet::new())),
-            gate: std::sync::Mutex::new(Arc::new(tokio::sync::Semaphore::new(cap as usize))),
+            up_gate: std::sync::Mutex::new(Arc::new(tokio::sync::Semaphore::new(cap as usize))),
+            down_gate: std::sync::Mutex::new(Arc::new(tokio::sync::Semaphore::new(cap as usize))),
             gate_cap: std::sync::atomic::AtomicU32::new(cap),
         }
     }
@@ -140,10 +150,12 @@ impl TransferManager {
         if self.gate_cap.swap(cap, std::sync::atomic::Ordering::Relaxed) == cap {
             return;
         }
-        let fresh = Arc::new(tokio::sync::Semaphore::new(cap as usize));
-        match self.gate.lock() {
-            Ok(mut g) => *g = fresh,
-            Err(p) => *p.into_inner() = fresh,
+        for gate in [&self.up_gate, &self.down_gate] {
+            let fresh = Arc::new(tokio::sync::Semaphore::new(cap as usize));
+            match gate.lock() {
+                Ok(mut g) => *g = fresh,
+                Err(p) => *p.into_inner() = fresh,
+            }
         }
         crate::log_info!(
             crate::logs::categories::TRANSFER, "concurrency limit changed",
@@ -151,12 +163,70 @@ impl TransferManager {
         );
     }
 
-    /// The semaphore new tasks should queue on.
-    fn gate_handle(&self) -> Arc<tokio::sync::Semaphore> {
-        match self.gate.lock() {
+    /// The semaphore new tasks of this direction should queue on.
+    fn gate_handle(&self, direction: Direction) -> Arc<tokio::sync::Semaphore> {
+        let gate = match direction {
+            Direction::Upload => &self.up_gate,
+            Direction::Download => &self.down_gate,
+        };
+        match gate.lock() {
             Ok(g) => g.clone(),
             Err(p) => p.into_inner().clone(),
         }
+    }
+
+    /// A snapshot of one transfer's info, for retry.
+    pub async fn info(&self, id: TransferId) -> Option<TransferInfo> {
+        self.tasks.lock().await.get(&id).map(|t| t.info.clone())
+    }
+
+    /// Drops a transfer that is no longer running from the map, so a
+    /// dismissed failure does not come back on the next `transfer_list`.
+    /// Refuses to touch a live one — that is what cancel is for.
+    pub async fn remove_terminal(&self, id: TransferId) -> bool {
+        let mut tasks = self.tasks.lock().await;
+        let removable = tasks.get(&id).map(|t| {
+            matches!(
+                t.info.state,
+                TransferState::Done | TransferState::Cancelled | TransferState::Failed { .. }
+            )
+        });
+        if removable == Some(true) {
+            tasks.remove(&id);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Every failed member of a group, snapshot for a group retry.
+    pub async fn failed_of_group(&self, group_id: TransferId) -> Vec<TransferInfo> {
+        self.tasks
+            .lock()
+            .await
+            .values()
+            .filter(|t| {
+                t.info.group_id == Some(group_id)
+                    && matches!(t.info.state, TransferState::Failed { .. })
+            })
+            .map(|t| t.info.clone())
+            .collect()
+    }
+
+    /// `remove_terminal` for a whole group in one lock pass — dismissing
+    /// a gesture with ten thousand failed children must not mean ten
+    /// thousand IPC calls. Live members are left alone.
+    pub async fn remove_terminal_group(&self, group_id: TransferId) -> usize {
+        let mut tasks = self.tasks.lock().await;
+        let before = tasks.len();
+        tasks.retain(|_, t| {
+            t.info.group_id != Some(group_id)
+                || !matches!(
+                    t.info.state,
+                    TransferState::Done | TransferState::Cancelled | TransferState::Failed { .. }
+                )
+        });
+        before - tasks.len()
     }
 
     /// Consulted by `sftp_upload_dir` / `sftp_download_dir` between
@@ -211,6 +281,104 @@ impl TransferManager {
     /// never existed) is a no-op, matching the brief's stub behavior.
     /// If the transfer is currently paused we ALSO flip the pause flag
     /// off so the byte-pumping loop unparks and observes the cancel.
+    /// Pauses every queued or active transfer (optionally one
+    /// connection's), in one pass. No per-id events: the caller flips
+    /// its own list optimistically, and 20 000 state events would melt
+    /// the frontend for nothing.
+    pub async fn pause_all(
+        &self,
+        filter: Option<ConnectionId>,
+        group: Option<TransferId>,
+    ) -> usize {
+        let mut map = self.tasks.lock().await;
+        let mut n = 0;
+        for t in map.values_mut() {
+            if let Some(c) = filter {
+                if t.info.connection_id != c { continue; }
+            }
+            if let Some(g) = group {
+                if t.info.group_id != Some(g) { continue; }
+            }
+            if matches!(t.info.state, TransferState::Queued | TransferState::Active) {
+                t.pause_flag.store(true, Ordering::Release);
+                t.info.state = TransferState::Paused;
+                n += 1;
+            }
+        }
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "paused all transfers",
+            "count": n,
+        );
+        n
+    }
+
+    /// The inverse of `pause_all`. A transfer paused before it ever
+    /// held a slot simply goes back to waiting for one.
+    pub async fn resume_all(
+        &self,
+        filter: Option<ConnectionId>,
+        group: Option<TransferId>,
+    ) -> usize {
+        let mut map = self.tasks.lock().await;
+        let mut n = 0;
+        for t in map.values_mut() {
+            if let Some(c) = filter {
+                if t.info.connection_id != c { continue; }
+            }
+            if let Some(g) = group {
+                if t.info.group_id != Some(g) { continue; }
+            }
+            if matches!(t.info.state, TransferState::Paused) {
+                t.pause_flag.store(false, Ordering::Release);
+                t.info.state = TransferState::Active;
+                n += 1;
+            }
+        }
+        n
+    }
+
+    /// Cancels everything in flight (optionally one connection's) in one
+    /// pass: every group is marked so enumeration loops stop spawning,
+    /// and every task gets its cancel signal.
+    pub async fn cancel_all(
+        &self,
+        filter: Option<ConnectionId>,
+        group: Option<TransferId>,
+    ) -> usize {
+        let mut groups: Vec<TransferId> = Vec::new();
+        let mut n = 0;
+        {
+            let mut map = self.tasks.lock().await;
+            for t in map.values_mut() {
+                if let Some(c) = filter {
+                    if t.info.connection_id != c { continue; }
+                }
+                if let Some(g) = group {
+                    if t.info.group_id != Some(g) { continue; }
+                }
+                if !matches!(
+                    t.info.state,
+                    TransferState::Queued | TransferState::Active | TransferState::Paused
+                ) { continue; }
+                if let Some(g) = t.info.group_id {
+                    if !groups.contains(&g) { groups.push(g); }
+                }
+                t.pause_flag.store(false, Ordering::Release);
+                if let Some(sender) = t.cancel.take() {
+                    let _ = sender.send(());
+                    n += 1;
+                }
+            }
+        }
+        let mut cancelled = self.cancelled_groups.lock().await;
+        for g in groups { cancelled.insert(g); }
+        crate::log_info!(
+            crate::logs::categories::TRANSFER, "cancelled all transfers",
+            "count": n,
+        );
+        n
+    }
+
     pub async fn cancel(&self, id: TransferId) -> Result<()> {
         let (sender, pause) = {
             let mut map = self.tasks.lock().await;
@@ -326,6 +494,8 @@ impl TransferManager {
         local: PathBuf,
         remote: String,
         group_id: Option<TransferId>,
+        group_label: Option<String>,
+        expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
@@ -335,11 +505,15 @@ impl TransferManager {
             direction: Direction::Upload,
             local_path: local.to_string_lossy().into_owned(),
             remote_path: remote.clone(),
-            total_bytes: 0,
+            // The walk that spawned this knows the size already; a task
+            // corrects it when it starts. 0 stays 0 only for a caller
+            // that genuinely does not know.
+            total_bytes: expected_bytes,
             bytes_done: 0,
             state: TransferState::Queued,
             started_at: Self::now_ms(),
             group_id,
+            group_label,
         };
         let pause_flag = Arc::new(AtomicBool::new(false));
         self.tasks.lock().await.insert(
@@ -369,7 +543,7 @@ impl TransferManager {
             pause_flag,
             session_mgr,
             conn_id,
-            self.gate_handle(),
+            self.gate_handle(Direction::Upload),
         ));
         id
     }
@@ -384,6 +558,8 @@ impl TransferManager {
         remote: String,
         local: PathBuf,
         group_id: Option<TransferId>,
+        group_label: Option<String>,
+        expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
@@ -393,11 +569,15 @@ impl TransferManager {
             direction: Direction::Download,
             local_path: local.to_string_lossy().into_owned(),
             remote_path: remote.clone(),
-            total_bytes: 0,
+            // The walk that spawned this knows the size already; a task
+            // corrects it when it starts. 0 stays 0 only for a caller
+            // that genuinely does not know.
+            total_bytes: expected_bytes,
             bytes_done: 0,
             state: TransferState::Queued,
             started_at: Self::now_ms(),
             group_id,
+            group_label,
         };
         let pause_flag = Arc::new(AtomicBool::new(false));
         self.tasks.lock().await.insert(
@@ -427,7 +607,7 @@ impl TransferManager {
             pause_flag,
             session_mgr,
             conn_id,
-            self.gate_handle(),
+            self.gate_handle(Direction::Download),
         ));
         id
     }
@@ -445,6 +625,8 @@ impl TransferManager {
         local: PathBuf,
         remote: String,
         group_id: Option<TransferId>,
+        group_label: Option<String>,
+        expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
@@ -454,11 +636,15 @@ impl TransferManager {
             direction: Direction::Upload,
             local_path: local.to_string_lossy().into_owned(),
             remote_path: remote.clone(),
-            total_bytes: 0,
+            // The walk that spawned this knows the size already; a task
+            // corrects it when it starts. 0 stays 0 only for a caller
+            // that genuinely does not know.
+            total_bytes: expected_bytes,
             bytes_done: 0,
             state: TransferState::Queued,
             started_at: Self::now_ms(),
             group_id,
+            group_label,
         };
         let pause_flag = Arc::new(AtomicBool::new(false));
         self.tasks.lock().await.insert(
@@ -475,7 +661,7 @@ impl TransferManager {
         let _ = app.emit(EV_STARTED, &info);
         tokio::spawn(ftp_task::run_ftp_upload(
             app, self.tasks.clone(), id, spec, local, remote, rx, pause_flag,
-            self.gate_handle(),
+            self.gate_handle(Direction::Upload),
         ));
         id
     }
@@ -490,6 +676,8 @@ impl TransferManager {
         remote: String,
         local: PathBuf,
         group_id: Option<TransferId>,
+        group_label: Option<String>,
+        expected_bytes: u64,
     ) -> TransferId {
         let id = Uuid::new_v4();
         let (tx, rx) = oneshot::channel();
@@ -499,11 +687,15 @@ impl TransferManager {
             direction: Direction::Download,
             local_path: local.to_string_lossy().into_owned(),
             remote_path: remote.clone(),
-            total_bytes: 0,
+            // The walk that spawned this knows the size already; a task
+            // corrects it when it starts. 0 stays 0 only for a caller
+            // that genuinely does not know.
+            total_bytes: expected_bytes,
             bytes_done: 0,
             state: TransferState::Queued,
             started_at: Self::now_ms(),
             group_id,
+            group_label,
         };
         let pause_flag = Arc::new(AtomicBool::new(false));
         self.tasks.lock().await.insert(
@@ -520,7 +712,7 @@ impl TransferManager {
         let _ = app.emit(EV_STARTED, &info);
         tokio::spawn(ftp_task::run_ftp_download(
             app, self.tasks.clone(), id, spec, remote, local, rx, pause_flag,
-            self.gate_handle(),
+            self.gate_handle(Direction::Download),
         ));
         id
     }
@@ -560,7 +752,93 @@ mod tests {
             state: TransferState::Queued,
             started_at: 0,
             group_id: None,
+            group_label: None,
         }
+    }
+
+    async fn insert(mgr: &TransferManager, info: TransferInfo) {
+        let id = info.id;
+        let (tx, rx) = oneshot::channel();
+        // Leak the receiver on purpose — these tests only watch states.
+        std::mem::forget(rx);
+        mgr.tasks.lock().await.insert(
+            id,
+            LiveTransfer {
+                info,
+                cancel: Some(tx),
+                pause_flag: Arc::new(AtomicBool::new(false)),
+            },
+        );
+    }
+
+    #[tokio::test]
+    async fn bulk_ops_scope_to_a_group_when_asked() {
+        let mgr = TransferManager::new();
+        let g = Uuid::new_v4();
+        let mut a = dummy_info(Uuid::new_v4());
+        a.group_id = Some(g);
+        let b = dummy_info(Uuid::new_v4());
+        insert(&mgr, a.clone()).await;
+        insert(&mgr, b.clone()).await;
+
+        // Pause only the group: the solo transfer keeps running.
+        assert_eq!(mgr.pause_all(None, Some(g)).await, 1);
+        let states: Vec<(TransferId, TransferState)> = mgr
+            .list()
+            .await
+            .into_iter()
+            .map(|t| (t.id, t.state))
+            .collect();
+        for (id, st) in states {
+            if id == a.id {
+                assert!(matches!(st, TransferState::Paused));
+            } else {
+                assert!(matches!(st, TransferState::Queued));
+            }
+        }
+
+        assert_eq!(mgr.resume_all(None, Some(g)).await, 1);
+        assert_eq!(mgr.cancel_all(None, Some(g)).await, 1);
+        // The group is flagged so enumeration loops stop spawning.
+        assert!(mgr.is_group_cancelled(g).await);
+    }
+
+    #[tokio::test]
+    async fn remove_terminal_group_drops_only_finished_members() {
+        let mgr = TransferManager::new();
+        let g = Uuid::new_v4();
+        let mut failed = dummy_info(Uuid::new_v4());
+        failed.group_id = Some(g);
+        failed.state = TransferState::Failed { error: "x".into() };
+        let mut live = dummy_info(Uuid::new_v4());
+        live.group_id = Some(g);
+        let solo = dummy_info(Uuid::new_v4());
+        insert(&mgr, failed).await;
+        insert(&mgr, live.clone()).await;
+        insert(&mgr, solo.clone()).await;
+
+        assert_eq!(mgr.remove_terminal_group(g).await, 1);
+        let left: Vec<TransferId> = mgr.list().await.into_iter().map(|t| t.id).collect();
+        assert!(left.contains(&live.id));
+        assert!(left.contains(&solo.id));
+        assert_eq!(left.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn failed_of_group_snapshots_only_that_group_s_failures() {
+        let mgr = TransferManager::new();
+        let g = Uuid::new_v4();
+        let mut f1 = dummy_info(Uuid::new_v4());
+        f1.group_id = Some(g);
+        f1.state = TransferState::Failed { error: "boom".into() };
+        let mut other = dummy_info(Uuid::new_v4());
+        other.state = TransferState::Failed { error: "boom".into() };
+        insert(&mgr, f1.clone()).await;
+        insert(&mgr, other).await;
+
+        let failed = mgr.failed_of_group(g).await;
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].id, f1.id);
     }
 
     #[tokio::test]
