@@ -133,6 +133,22 @@ pub async fn transfer_resume(
     transfer_mgr.resume(app, args.transfer_id).await
 }
 
+#[derive(Deserialize)]
+pub struct RemoveArgs {
+    pub transfer_id: TransferId,
+}
+
+/// Forgets a finished / failed / cancelled transfer, so a dismissed row
+/// does not come back the next time a view loads the list.
+#[tauri::command]
+pub async fn transfer_remove(
+    args: RemoveArgs,
+    transfer_mgr: State<'_, TransferManager>,
+) -> Result<()> {
+    transfer_mgr.remove_terminal(args.transfer_id).await;
+    Ok(())
+}
+
 // ---------- v0.6 T1: recursive directory transfers ----------
 
 #[derive(Deserialize)]

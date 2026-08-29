@@ -38,6 +38,16 @@ export const transferCancel = (transfer_id: string) =>
 export const transferCancelGroup = (group_id: string) =>
   invoke<void>("transfer_cancel_group", { args: { group_id } });
 
+/** Forgets a finished / failed / cancelled transfer on the Rust side,
+ *  so a dismissed row does not come back on the next list load. */
+export const transferRemove = (transfer_id: string) =>
+  invoke<void>("transfer_remove", { args: { transfer_id } });
+
+/** Queues a failed transfer again with the same endpoints; Rust
+ *  re-derives which protocol carries it. Returns the new id. */
+export const transferRetry = (transferId: string) =>
+  invoke<string>("transfer_retry", { args: { transferId } });
+
 export const transferPause = (transfer_id: string) =>
   invoke<void>("transfer_pause", { args: { transfer_id } });
 

@@ -764,6 +764,65 @@ pub async fn ftp_download_dir(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RetryArgs {
+    pub transfer_id: Uuid,
+}
+
+/// Queues a failed transfer again, with the same endpoints. Which
+/// protocol carries it is re-derived from the connection id — a live
+/// SSH session means SFTP, an FTP-view row means a fresh FTP task —
+/// so this one command serves every surface that shows the queue.
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn transfer_retry(
+    args: RetryArgs,
+    app: AppHandle,
+    store: State<'_, FtpHostStore>,
+    keychain: State<'_, KeychainStore>,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+    transfer_mgr: State<'_, TransferManager>,
+    settings: State<'_, SettingsStore>,
+) -> Result<TransferId> {
+    let info = transfer_mgr
+        .info(args.transfer_id)
+        .await
+        .ok_or_else(|| Error::Protocol("that transfer is gone".into()))?;
+    apply_concurrency(&transfer_mgr, &settings);
+    // The old row leaves as the new one arrives — two rows for one file
+    // would double-count the totals.
+    transfer_mgr.remove_terminal(args.transfer_id).await;
+
+    let upload = matches!(info.direction, crate::transfer::Direction::Upload);
+    let local = PathBuf::from(&info.local_path);
+
+    // An SFTP session id resolves through the session manager; anything
+    // else must be an FTP-view row.
+    if sessions.list().await.iter().any(|s| s.id == info.connection_id) {
+        return Ok(if upload {
+            transfer_mgr
+                .start_upload(app, (*sessions).clone(), info.connection_id, local, info.remote_path, info.group_id)
+                .await
+        } else {
+            transfer_mgr
+                .start_download(app, (*sessions).clone(), info.connection_id, info.remote_path, local, info.group_id)
+                .await
+        });
+    }
+    let (_, spec) = spec_for(&store, &keychain, info.connection_id).await?;
+    Ok(if upload {
+        transfer_mgr
+            .start_ftp_upload(app, spec, info.connection_id, local, info.remote_path, info.group_id)
+            .await
+    } else {
+        transfer_mgr
+            .start_ftp_download(app, spec, info.connection_id, info.remote_path, local, info.group_id)
+            .await
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImportArgs {
     /// Ids from the saved-hosts list.
     pub host_ids: Vec<Uuid>,

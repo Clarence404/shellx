@@ -12,7 +12,6 @@ import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc
 import { localIsDir } from "../ipc/local";
 import { PathBreadcrumb } from "./PathBreadcrumb";
 import { FileRow } from "./FileRow";
-import { TransferQueue } from "./TransferQueue";
 import { TransferStripSection } from "./TransferStripSection";
 
 interface Props {

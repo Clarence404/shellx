@@ -37,7 +37,10 @@ interface State {
    *  persisted — session-scoped. TransferQueue reads / writes it via
    *  `setTransferGroupExpanded`; RailFilesView subscribes to derive
    *  the effective strip height + divider visibility. */
-  transferGroupExpanded: Record<string, boolean>;
+  /** The strip's expanded/collapsed state — one flag shared by every
+   *  surface that renders the strip, so opening it in one view means it
+   *  is open in the others too. Session-scoped, not persisted. */
+  transfersExpanded: boolean;
 
   /** v0.5.7: transient state describing the file currently being
    *  drag-dropped between panes. Set on mousedown-then-move-past-
@@ -79,7 +82,7 @@ interface Actions {
   setSplitter(pct: number): void;
   setTransferStripHeightDraft(px: number): void;
   setTransferStripHeight(px: number): void;
-  setTransferGroupExpanded(groupId: string, expanded: boolean): void;
+  toggleTransfersExpanded(): void;
 }
 
 // Bounds for the bottom transfer strip's height. `80` keeps the group
@@ -88,7 +91,9 @@ interface Actions {
 const TRANSFER_STRIP_MIN_PX = 80;
 const TRANSFER_STRIP_DEFAULT_PX = 220;
 function clampTransferStripPx(px: number): number {
-  const max = Math.max(TRANSFER_STRIP_MIN_PX + 40, Math.round(window.innerHeight * 0.7));
+  // 40% of the window, down from 70%: the strip is a status area, and
+  // the file panes are the point of the view.
+  const max = Math.max(TRANSFER_STRIP_MIN_PX + 40, Math.round(window.innerHeight * 0.4));
   return Math.max(TRANSFER_STRIP_MIN_PX, Math.min(max, Math.round(px)));
 }
 
@@ -134,7 +139,7 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
   transferStripHeight: typeof persisted.transferStripHeight === "number"
     ? persisted.transferStripHeight
     : TRANSFER_STRIP_DEFAULT_PX,
-  transferGroupExpanded: {},
+  transfersExpanded: false,
   currentDrag: null,
 
   async setLeftPath(p) {
@@ -280,9 +285,7 @@ export const useRailFiles = create<State & Actions>((set, get) => ({
     set({ transferStripHeight: clampTransferStripPx(px) });
     persist(get());
   },
-  setTransferGroupExpanded(groupId, expanded) {
-    set((st) => ({
-      transferGroupExpanded: { ...st.transferGroupExpanded, [groupId]: expanded },
-    }));
+  toggleTransfersExpanded() {
+    set((st) => ({ transfersExpanded: !st.transfersExpanded }));
   },
 }));

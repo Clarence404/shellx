@@ -109,14 +109,18 @@ pub struct TransferManager {
     /// of state a user could plausibly accumulate.
     cancelled_groups: Arc<Mutex<HashSet<TransferId>>>,
     /// How many byte-pumps may run at once (Settings → Advanced → SFTP
-    /// concurrency). Each task holds one permit for its whole life;
-    /// everything past the cap sits in Queued until a slot frees.
+    /// concurrency) — one gate per direction, each with the full cap.
+    /// One gate for both was a real flaw: the semaphore is FIFO, so a
+    /// 2 KB download queued behind a 190 GB directory upload waited for
+    /// all of it. The link is full duplex; uploads and downloads do not
+    /// contend, so they no longer queue on each other.
     ///
     /// Swapped wholesale when the setting changes: in-flight transfers
     /// keep the permit they took from the old semaphore and finish
     /// against it, newly queued ones queue on the new one. A std Mutex
     /// (not tokio's) because the critical section is a clone of an Arc.
-    gate: std::sync::Mutex<Arc<tokio::sync::Semaphore>>,
+    up_gate: std::sync::Mutex<Arc<tokio::sync::Semaphore>>,
+    down_gate: std::sync::Mutex<Arc<tokio::sync::Semaphore>>,
     gate_cap: std::sync::atomic::AtomicU32,
 }
 
@@ -126,7 +130,8 @@ impl TransferManager {
         Self {
             tasks: Arc::new(Mutex::new(HashMap::new())),
             cancelled_groups: Arc::new(Mutex::new(HashSet::new())),
-            gate: std::sync::Mutex::new(Arc::new(tokio::sync::Semaphore::new(cap as usize))),
+            up_gate: std::sync::Mutex::new(Arc::new(tokio::sync::Semaphore::new(cap as usize))),
+            down_gate: std::sync::Mutex::new(Arc::new(tokio::sync::Semaphore::new(cap as usize))),
             gate_cap: std::sync::atomic::AtomicU32::new(cap),
         }
     }
@@ -140,10 +145,12 @@ impl TransferManager {
         if self.gate_cap.swap(cap, std::sync::atomic::Ordering::Relaxed) == cap {
             return;
         }
-        let fresh = Arc::new(tokio::sync::Semaphore::new(cap as usize));
-        match self.gate.lock() {
-            Ok(mut g) => *g = fresh,
-            Err(p) => *p.into_inner() = fresh,
+        for gate in [&self.up_gate, &self.down_gate] {
+            let fresh = Arc::new(tokio::sync::Semaphore::new(cap as usize));
+            match gate.lock() {
+                Ok(mut g) => *g = fresh,
+                Err(p) => *p.into_inner() = fresh,
+            }
         }
         crate::log_info!(
             crate::logs::categories::TRANSFER, "concurrency limit changed",
@@ -151,11 +158,39 @@ impl TransferManager {
         );
     }
 
-    /// The semaphore new tasks should queue on.
-    fn gate_handle(&self) -> Arc<tokio::sync::Semaphore> {
-        match self.gate.lock() {
+    /// The semaphore new tasks of this direction should queue on.
+    fn gate_handle(&self, direction: Direction) -> Arc<tokio::sync::Semaphore> {
+        let gate = match direction {
+            Direction::Upload => &self.up_gate,
+            Direction::Download => &self.down_gate,
+        };
+        match gate.lock() {
             Ok(g) => g.clone(),
             Err(p) => p.into_inner().clone(),
+        }
+    }
+
+    /// A snapshot of one transfer's info, for retry.
+    pub async fn info(&self, id: TransferId) -> Option<TransferInfo> {
+        self.tasks.lock().await.get(&id).map(|t| t.info.clone())
+    }
+
+    /// Drops a transfer that is no longer running from the map, so a
+    /// dismissed failure does not come back on the next `transfer_list`.
+    /// Refuses to touch a live one — that is what cancel is for.
+    pub async fn remove_terminal(&self, id: TransferId) -> bool {
+        let mut tasks = self.tasks.lock().await;
+        let removable = tasks.get(&id).map(|t| {
+            matches!(
+                t.info.state,
+                TransferState::Done | TransferState::Cancelled | TransferState::Failed { .. }
+            )
+        });
+        if removable == Some(true) {
+            tasks.remove(&id);
+            true
+        } else {
+            false
         }
     }
 
@@ -369,7 +404,7 @@ impl TransferManager {
             pause_flag,
             session_mgr,
             conn_id,
-            self.gate_handle(),
+            self.gate_handle(Direction::Upload),
         ));
         id
     }
@@ -427,7 +462,7 @@ impl TransferManager {
             pause_flag,
             session_mgr,
             conn_id,
-            self.gate_handle(),
+            self.gate_handle(Direction::Download),
         ));
         id
     }
@@ -475,7 +510,7 @@ impl TransferManager {
         let _ = app.emit(EV_STARTED, &info);
         tokio::spawn(ftp_task::run_ftp_upload(
             app, self.tasks.clone(), id, spec, local, remote, rx, pause_flag,
-            self.gate_handle(),
+            self.gate_handle(Direction::Upload),
         ));
         id
     }
@@ -520,7 +555,7 @@ impl TransferManager {
         let _ = app.emit(EV_STARTED, &info);
         tokio::spawn(ftp_task::run_ftp_download(
             app, self.tasks.clone(), id, spec, remote, local, rx, pause_flag,
-            self.gate_handle(),
+            self.gate_handle(Direction::Download),
         ));
         id
     }

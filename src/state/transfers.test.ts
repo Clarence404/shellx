@@ -4,6 +4,11 @@ import { useTransfersStore } from "./transfers";
 vi.mock("../ipc/transfers", () => ({
   transferList: vi.fn(),
   transferCancel: vi.fn(),
+  transferCancelGroup: vi.fn(),
+  transferPause: vi.fn(),
+  transferResume: vi.fn(),
+  transferRemove: vi.fn().mockResolvedValue(undefined),
+  transferRetry: vi.fn().mockResolvedValue("new-id"),
 }));
 import * as ipc from "../ipc/transfers";
 

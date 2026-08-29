@@ -26,6 +26,7 @@ interface TransfersStore {
   pause: (transferId: string) => Promise<void>;
   resume: (transferId: string) => Promise<void>;
   remove: (transferId: string) => void;
+  retry: (transferId: string) => Promise<void>;
 }
 
 export const useTransfersStore = create<TransfersStore>((set, get) => ({
@@ -139,6 +140,24 @@ export const useTransfersStore = create<TransfersStore>((set, get) => ({
     return ipc.transferResume(transferId);
   },
 
-  remove: (transferId) =>
-    set((st) => ({ list: st.list.filter((t) => t.id !== transferId) })),
+  remove: (transferId) => {
+    set((st) => ({ list: st.list.filter((t) => t.id !== transferId) }));
+    // Also forget it on the Rust side, or the next list load would
+    // resurrect the row that was just dismissed. Best-effort: a transfer
+    // Rust already dropped is fine.
+    void ipc.transferRemove(transferId).catch(() => {});
+  },
+
+  retry: async (transferId) => {
+    // Drop the failed row optimistically; the retried transfer arrives
+    // through the ordinary transfer:started event with a fresh id.
+    set((st) => ({ list: st.list.filter((t) => t.id !== transferId) }));
+    try {
+      await ipc.transferRetry(transferId);
+    } catch {
+      // The retry could not even be queued (row gone, host deleted) —
+      // reload the truth rather than guessing at local state.
+      await get().loadInitial();
+    }
+  },
 }));
