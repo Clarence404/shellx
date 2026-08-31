@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FolderPlus, RefreshCw } from "lucide-react";
+import { FolderPlus, RefreshCw, Server, ChevronDown } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useRailFiles } from "../state/railFiles";
 import { ConnectingPanel } from "./ConnectingPanel";
@@ -23,6 +23,118 @@ function sortEntries(entries: FtpEntry[]): FtpEntry[] {
     const db = b.kind === "directory" ? 0 : 1;
     return da !== db ? da - db : a.name.localeCompare(b.name);
   });
+}
+
+/**
+ * The pane-header connection picker, modeled on the Files view's
+ * `HostDropdown`: every saved FTP connection is reachable in one click —
+ * a connected one switches the pane over, a disconnected one starts the
+ * connect. Present in the disconnected state too, so the pane never
+ * shows a bare toolbar with nothing to act on.
+ */
+function FtpConnectionDropdown({ current }: { current: FtpHost | null }) {
+  const t = useT();
+  const hosts = useFtpStore((s) => s.hosts);
+  const connected = useFtpStore((s) => s.connected);
+  const connecting = useFtpStore((s) => s.connecting);
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!btnRef.current?.contains(target) && !listRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  function pick(h: FtpHost) {
+    const st = useFtpStore.getState();
+    if (st.connected.includes(h.id)) {
+      st.setActive(h.id);
+      void st.refresh();
+    } else {
+      void st.connect(h.id);
+    }
+    setOpen(false);
+  }
+
+  return (
+    <div style={{ position: "relative", display: "inline-block" }}>
+      <button
+        ref={btnRef}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "5px 10px",
+          fontSize: "var(--font-small)", color: "var(--text-1)", background: "var(--panel-1)",
+          border: "1px solid var(--border)", borderRadius: 5,
+          fontFamily: "\"JetBrains Mono\", var(--font-mono)",
+        }}>
+        <Server size={13} color="var(--text-2)" style={{ flexShrink: 0 }} />
+        <span
+          title={current?.label ?? undefined}
+          style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {current?.label ?? t("Pick a connection")}
+        </span>
+        <ChevronDown size={11} color="var(--text-3)" />
+      </button>
+      {open && (
+        <ul ref={listRef} role="listbox" style={{
+          position: "absolute", top: "100%", left: 0, marginTop: 4,
+          width: "var(--drawer-w)", boxSizing: "border-box",
+          background: "var(--panel-2)", margin: 0,
+          border: "0.5px solid var(--border)", borderRadius: 6,
+          padding: 4, zIndex: 100, listStyle: "none",
+        }}>
+          {hosts.length === 0 && (
+            <li style={{ padding: "6px 10px", fontSize: 11, color: "var(--text-3)" }}>
+              {t("No FTP connections yet")}
+            </li>
+          )}
+          {hosts.map((h) => {
+            const live = connected.includes(h.id);
+            const busy = connecting.includes(h.id);
+            return (
+              <li key={h.id} role="option"
+                aria-selected={h.id === current?.id || undefined}
+                onClick={() => pick(h)}
+                style={{
+                  padding: "var(--pad-row-y) var(--pad-row-x)",
+                  fontSize: "var(--font-small)", color: "var(--text-1)",
+                  cursor: "pointer", borderRadius: 4,
+                  display: "flex", alignItems: "center", gap: 6,
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "var(--border)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                  background: live && !busy ? "var(--success)" : "var(--accent)",
+                  opacity: live || busy ? 1 : 0.3,
+                  animation: busy ? "hostrow-pulse 900ms ease-in-out infinite" : undefined,
+                }} />
+                <span title={h.label} style={{
+                  flex: 1, minWidth: 0, overflow: "hidden",
+                  textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>{h.label}</span>
+                <span style={{ fontSize: 9, color: "var(--text-3)", flexShrink: 0 }}>
+                  {live ? h.protocol.toUpperCase() : t("connect")}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -149,35 +261,47 @@ export function FtpRemotePane() {
 
   if (!host || !live) {
     return (
-      <div style={{
-        height: "100%", display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", gap: 10,
-        color: "var(--text-3)", fontSize: 12, padding: 20, textAlign: "center",
-      }}>
-        {/* A failed connect leaves nothing live, so without this the
-            reason would never reach the screen. */}
-        {error && (
-          <div style={{
-            color: "var(--error)", maxWidth: 420, lineHeight: 1.6, whiteSpace: "pre-wrap",
-          }}>{error}</div>
-        )}
-        <div>
-          {hosts.length === 0
-            ? t("Add an FTP connection to get started")
-            : host ? t("Not connected") : t("Pick a connection on the left")}
+      <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+        {/* The toolbar stays in the disconnected state too — with the
+            connection picker in it, the pane is never a dead surface:
+            pick a connection right here instead of hunting the sidebar
+            (which may be collapsed). */}
+        <div style={{
+          height: 32, padding: "0 10px", display: "flex", alignItems: "center", gap: 6,
+          background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)",
+        }}>
+          <FtpConnectionDropdown current={host} />
         </div>
-        {host && (
-          <button
-            type="button"
-            onClick={() => void store().connect(host.id)}
-            style={{
-              padding: "5px 12px", borderRadius: 5, fontSize: 12,
-              border: "1px solid var(--accent)", background: "var(--accent-fade)",
-              color: "var(--text-1)",
-            }}>
-            {t("Connect")}
-          </button>
-        )}
+        <div style={{
+          flex: 1, display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center", gap: 10,
+          color: "var(--text-3)", fontSize: 12, padding: 20, textAlign: "center",
+        }}>
+          {/* A failed connect leaves nothing live, so without this the
+              reason would never reach the screen. */}
+          {error && (
+            <div style={{
+              color: "var(--error)", maxWidth: 420, lineHeight: 1.6, whiteSpace: "pre-wrap",
+            }}>{error}</div>
+          )}
+          <div>
+            {hosts.length === 0
+              ? t("Add an FTP connection to get started")
+              : host ? t("Not connected") : t("Pick a connection")}
+          </div>
+          {host && (
+            <button
+              type="button"
+              onClick={() => void store().connect(host.id)}
+              style={{
+                padding: "5px 12px", borderRadius: 5, fontSize: 12,
+                border: "1px solid var(--accent)", background: "var(--accent-fade)",
+                color: "var(--text-1)",
+              }}>
+              {t("Connect")}
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -197,10 +321,9 @@ export function FtpRemotePane() {
         height: 32, padding: "0 10px", display: "flex", alignItems: "center", gap: 6,
         background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)",
       }}>
-        <span style={{
-          fontSize: "var(--font-ui-size)", color: "var(--text-1)",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>{host.label}</span>
+        {/* The picker doubles as the pane's title — same as the Files
+            view's remote pane, where the host dropdown IS the header. */}
+        <FtpConnectionDropdown current={host} />
         <ConnectionTags host={host} />
         <div style={{ flex: 1 }} />
         <PaneToolbarButton title={t("New folder")} onClick={() => void newFolder()}>

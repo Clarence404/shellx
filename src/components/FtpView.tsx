@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Plug, Unplug, Loader2, Download, PanelLeftClose } from "lucide-react";
+import { Plus, Plug, Unplug, Download, PanelLeftClose } from "lucide-react";
 import { Folder, File as FileIcon } from "lucide-react";
 import { LocalPane, type RemoteAdapter } from "./LocalPane";
 import { TransferStripSection } from "./TransferStripSection";
@@ -125,13 +125,16 @@ export function FtpView() {
                   fontSize: "var(--font-ui-size)",
                 }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {busy
-                    ? <Loader2 size={10} className="shellx-spin" style={{ flexShrink: 0 }} />
-                    : <span style={{
-                        width: 5, height: 5, borderRadius: "50%", flexShrink: 0,
-                        background: live ? "var(--success)" : "var(--text-3)",
-                        opacity: live ? 1 : 0.4,
-                      }} />}
+                  {/* Same status dot the Hosts sidebar uses (HostRow):
+                      green = connected, accent pulse = connecting, dim
+                      accent = idle — one vocabulary across the views. */}
+                  <span style={{
+                    width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                    background: live && !busy ? "var(--success)" : "var(--accent)",
+                    opacity: live || busy ? 1 : 0.3,
+                    animation: busy ? "hostrow-pulse 900ms ease-in-out infinite" : undefined,
+                    boxShadow: busy ? "0 0 0 0 var(--accent-shadow)" : undefined,
+                  }} />
                   <span style={{
                     flex: 1, minWidth: 0, overflow: "hidden",
                     textOverflow: "ellipsis", whiteSpace: "nowrap",
