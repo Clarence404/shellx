@@ -89,29 +89,38 @@ let prefetchGen = 0;
  *  waits behind at most the one LIST already in flight. */
 async function prefetchChildren(id: string, base: string, entries: FtpEntry[]) {
   const gen = ++prefetchGen;
-  const dirs = entries
+  const queue = entries
     .filter((e) => e.kind === "directory" && e.name !== "..")
     .slice(0, PREFETCH_MAX);
-  for (const d of dirs) {
-    if (gen !== prefetchGen) return;
-    const st = useFtpStore.getState();
-    if (st.activeId !== id) return;
-    const path = joinPath(base, d.name);
-    const key = `${id}:${path}`;
-    if (st.listingCache[key]) continue;
-    try {
-      // The _bg variant runs on its own connection — warming can never
-      // make a real click wait.
-      const rows = await ipc.ftpListDirBg(id, path);
-      useFtpStore.setState((s) => ({
-        listingCache: { ...s.listingCache, [key]: rows },
-      }));
-    } catch {
-      // One failure ends the warm quietly — this whole loop is a hint,
-      // not a promise, and errors belong to real navigation only.
-      return;
+  // Two workers — matching the backend's warm-connection pool — so a
+  // directory's children warm in half the wall-clock. What decides
+  // whether the user's FIRST click hits the cache is exactly this race
+  // between their reading pause and the warm loop.
+  const worker = async () => {
+    for (;;) {
+      if (gen !== prefetchGen) return;
+      const st = useFtpStore.getState();
+      if (st.activeId !== id) return;
+      const d = queue.shift();
+      if (!d) return;
+      const path = joinPath(base, d.name);
+      const key = `${id}:${path}`;
+      if (st.listingCache[key]) continue;
+      try {
+        // The _bg variant runs on its own connection — warming can
+        // never make a real click wait.
+        const rows = await ipc.ftpListDirBg(id, path);
+        useFtpStore.setState((s) => ({
+          listingCache: { ...s.listingCache, [key]: rows },
+        }));
+      } catch {
+        // A failure ends this worker quietly — the warm is a hint, not
+        // a promise, and errors belong to real navigation only.
+        return;
+      }
     }
-  }
+  };
+  await Promise.all([worker(), worker()]);
 }
 
 /** Forgets every cached listing that belongs to one connection. */

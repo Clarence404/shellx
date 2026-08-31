@@ -241,6 +241,29 @@ pub async fn ftp_connect(
     // beats assuming "/" on a box that chroots into an upload folder.
     let cwd = client.pwd().await.unwrap_or_else(|_| "/".to_string());
     ftp.insert(host.id, client).await;
+
+    // Open the first warm connection NOW, in parallel with the initial
+    // listing: opening it lazily on the first warm request cost its own
+    // 2s of TCP + login, and the user's first click regularly beat it.
+    // Best-effort — a server that refuses a second connection just
+    // leaves warming off.
+    let spec = FtpSpec {
+        host: host.host.clone(),
+        port: host.port,
+        username: host.username.clone(),
+        password,
+        charset: Charset::parse(&host.charset),
+        passive: host.passive,
+        tls: Tls::parse(&host.protocol, &host.tls_mode),
+    };
+    let ftp2 = (*ftp).clone();
+    let id = host.id;
+    tauri::async_runtime::spawn(async move {
+        if let Ok(fresh) = deadline("connect", spec.connect()).await {
+            ftp2.insert_warm(id, fresh).await;
+        }
+    });
+
     Ok(FtpConnected { id: host.id, cwd })
 }
 
@@ -372,13 +395,17 @@ pub async fn ftp_list_dir_bg(
     // Only warm servers the user is actually browsing — a stale warm
     // request must not resurrect a connection the user closed.
     ftp.get(args.id).await?;
-    let client = match ftp.get_warm(args.id).await {
-        Some(c) => c,
-        None => {
+    // Prefer a pool member that is idle right now; grow the pool (to
+    // the manager's cap of two) when everyone is busy; only then wait.
+    let pool = ftp.warm_pool(args.id).await;
+    let client = match pool.iter().find(|c| c.clone().try_lock().is_ok()) {
+        Some(c) => c.clone(),
+        None if pool.len() < 2 => {
             let (_, spec) = spec_for(&store, &keychain, args.id).await?;
             let fresh = deadline("connect", spec.connect()).await?;
             ftp.insert_warm(args.id, fresh).await
         }
+        None => pool[0].clone(),
     };
     let mut client = client.lock().await;
     deadline("list directory", client.list_dir(&args.path)).await
