@@ -233,6 +233,23 @@ describe("ftp store", () => {
     expect(useFtpStore.getState().entries).toEqual([fileA, fileB]);
   });
 
+  it("after a listing lands, its subdirectories are warmed into the cache", async () => {
+    // What makes the FIRST click into a folder instant: while the user
+    // reads a directory, its children are quietly listed behind it.
+    const dirDone = { name: "done", kind: "directory", size: 0, modified: null, permissions: 0 };
+    const fileX = { name: "x.csv", kind: "file", size: 1, modified: null, permissions: 0 };
+    useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/" });
+
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([dirDone])   // the navigation itself
+      .mockResolvedValueOnce([fileX]);    // the background warm of /upload/done
+    await useFtpStore.getState().navigate("/upload");
+    await vi.waitFor(() => {
+      expect(useFtpStore.getState().listingCache["h1:/upload/done"]).toEqual([fileX]);
+    });
+    expect(ipc.ftpListDir).toHaveBeenLastCalledWith("h1", "/upload/done");
+  });
+
   it("disconnecting drops that connection's cache", async () => {
     (ipc.ftpDisconnect as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     useFtpStore.setState({

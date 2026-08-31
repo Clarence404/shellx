@@ -66,6 +66,47 @@ interface State {
   clearError: () => void;
 }
 
+/** How many subdirectories of the directory on screen get warmed into
+ *  the cache. Capped so a directory of hundreds of folders does not
+ *  turn into hundreds of background LISTs. */
+const PREFETCH_MAX = 16;
+
+/** Bumped whenever the user navigates, so a stale warm loop stops
+ *  competing for the control channel the moment a real click needs it. */
+let prefetchGen = 0;
+
+/** Quietly LISTs the subdirectories of what is on screen, one at a
+ *  time, straight into the cache. This is what makes the FIRST click
+ *  into a folder instant, not just the second: on a far-away server a
+ *  listing costs 3-4 round trips, and the seconds the user spends
+ *  looking at a directory are exactly enough to fetch its children.
+ *  Runs on the same control channel as real navigation — a user click
+ *  waits behind at most the one LIST already in flight. */
+async function prefetchChildren(id: string, base: string, entries: FtpEntry[]) {
+  const gen = ++prefetchGen;
+  const dirs = entries
+    .filter((e) => e.kind === "directory" && e.name !== "..")
+    .slice(0, PREFETCH_MAX);
+  for (const d of dirs) {
+    if (gen !== prefetchGen) return;
+    const st = useFtpStore.getState();
+    if (st.activeId !== id) return;
+    const path = joinPath(base, d.name);
+    const key = `${id}:${path}`;
+    if (st.listingCache[key]) continue;
+    try {
+      const rows = await ipc.ftpListDir(id, path);
+      useFtpStore.setState((s) => ({
+        listingCache: { ...s.listingCache, [key]: rows },
+      }));
+    } catch {
+      // One failure ends the warm quietly — this whole loop is a hint,
+      // not a promise, and errors belong to real navigation only.
+      return;
+    }
+  }
+}
+
 /** Forgets every cached listing that belongs to one connection. */
 function dropCacheFor(
   cache: Record<string, FtpEntry[]>,
@@ -196,6 +237,9 @@ export const useFtpStore = create<State>((set, get) => ({
     const id = get().activeId;
     if (!id) return;
     const key = `${id}:${path}`;
+    // A real click owns the control channel: any warm loop still
+    // running for the previous directory stands down now.
+    prefetchGen++;
     const cached = get().listingCache[key];
     if (cached) {
       // Seen this directory before: show it NOW, then revalidate. The
@@ -216,6 +260,9 @@ export const useFtpStore = create<State>((set, get) => ({
           ? { entries, cwd: path, listedKey: key, listingCache }
           : { listingCache };
       });
+      // Fire-and-forget: warm this directory's children while the user
+      // reads it, so their next click lands on the cache.
+      void prefetchChildren(id, path, entries);
     } catch (e) {
       // Keep the directory that was on screen: dropping the user out of
       // a working folder because one listing failed helps nobody. The
