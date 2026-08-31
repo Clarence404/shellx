@@ -152,6 +152,39 @@ impl FtpClient {
         };
         set_up.map_err(|e| Error::Protocol(format!("login: {e}")))?;
 
+        // EPSV over PASV whenever the server knows it: PASV announces an
+        // IP address, and behind NAT / in a VM the announced address is
+        // routinely wrong — the client then dials a dead address and
+        // every listing crawls or times out. EPSV announces only a port;
+        // the data connection goes to the address the control connection
+        // already reached. (WinSCP is fast on such servers because it
+        // second-guesses the PASV address; EPSV removes the guesswork.)
+        // One probe per connection, remembered by the mode.
+        if passive {
+            let epsv = match &mut conn {
+                Conn::Plain(s) => s
+                    .custom_command("EPSV", &[Status::ExtendedPassiveMode])
+                    .await
+                    .is_ok(),
+                Conn::Tls(s) => s
+                    .custom_command("EPSV", &[Status::ExtendedPassiveMode])
+                    .await
+                    .is_ok(),
+            };
+            if epsv {
+                match &mut conn {
+                    Conn::Plain(s) => s.set_mode(Mode::ExtendedPassive),
+                    Conn::Tls(s) => s.set_mode(Mode::ExtendedPassive),
+                }
+            } else {
+                crate::log_info!(
+                    crate::logs::categories::SFTP,
+                    "server has no EPSV; passive data connections use the PASV-advertised address",
+                    "host": host,
+                );
+            }
+        }
+
         Ok(Self { conn, charset, format: None, mlsd: None })
     }
 
@@ -217,13 +250,22 @@ impl FtpClient {
     async fn raw_lines(&mut self, command: &str) -> Result<Vec<String>> {
         let expected = [Status::AboutToSend, Status::AlreadyOpen];
         let mut buf = Vec::new();
+        // Phase timings land in the log: when a listing is slow, this
+        // line says whether the cost was opening the data connection
+        // (address / firewall trouble), reading it (server side), or
+        // closing it (server holding the socket open).
+        let t0 = std::time::Instant::now();
+        let mut t_open = std::time::Duration::ZERO;
+        let mut t_read = std::time::Duration::ZERO;
         let read = match &mut self.conn {
             Conn::Plain(s) => {
                 let (_, mut data) = s
                     .custom_data_command(command, &expected)
                     .await
                     .map_err(|e| Error::Protocol(format!("{command}: {e}")))?;
+                t_open = t0.elapsed();
                 let read = data.read_to_end(&mut buf).await;
+                t_read = t0.elapsed() - t_open;
                 s.close_data_connection(data)
                     .await
                     .map_err(|e| Error::Protocol(format!("{command} (close): {e}")))?;
@@ -234,13 +276,24 @@ impl FtpClient {
                     .custom_data_command(command, &expected)
                     .await
                     .map_err(|e| Error::Protocol(format!("{command}: {e}")))?;
+                t_open = t0.elapsed();
                 let read = data.read_to_end(&mut buf).await;
+                t_read = t0.elapsed() - t_open;
                 s.close_data_connection(data)
                     .await
                     .map_err(|e| Error::Protocol(format!("{command} (close): {e}")))?;
                 read
             }
         };
+        crate::log_info!(
+            crate::logs::categories::SFTP,
+            "ftp data command finished",
+            "command": command.split_whitespace().next().unwrap_or(command),
+            "open_ms": t_open.as_millis() as u64,
+            "read_ms": t_read.as_millis() as u64,
+            "close_ms": (t0.elapsed() - t_open - t_read).as_millis() as u64,
+            "bytes": buf.len(),
+        );
         read.map_err(|e| Error::Protocol(format!("{command} (read): {e}")))?;
 
         Ok(charset::split_lines(&buf)
