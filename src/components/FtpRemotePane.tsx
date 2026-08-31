@@ -326,12 +326,16 @@ export function FtpRemotePane() {
         <FtpConnectionDropdown current={host} />
         <ConnectionTags host={host} />
         <div style={{ flex: 1 }} />
-        <PaneToolbarButton title={t("New folder")} onClick={() => void newFolder()}>
-          {(size) => <FolderPlus size={size} />}
-        </PaneToolbarButton>
-        <PaneToolbarButton title={t("Refresh")} onClick={() => void store().refresh()}>
-          {(size) => <RefreshCw size={size} />}
-        </PaneToolbarButton>
+        {/* gap:0 — the buttons' own padding is the spacing; the
+            toolbar's gap made the pair look unrelated. */}
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <PaneToolbarButton title={t("New folder")} onClick={() => void newFolder()}>
+            {(size) => <FolderPlus size={size} />}
+          </PaneToolbarButton>
+          <PaneToolbarButton title={t("Refresh")} onClick={() => void store().refresh()}>
+            {(size) => <RefreshCw size={size} />}
+          </PaneToolbarButton>
+        </div>
       </div>
 
       <div style={{

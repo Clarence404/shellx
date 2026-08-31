@@ -227,15 +227,19 @@ export function LocalPane({ remote }: { remote?: RemoteAdapter } = {}) {
       }}>
         <LocalPathDropdown currentPath={leftPath} onSelect={setLeftPath} />
         <div style={{ flex: 1 }} />
-        <PaneToolbarButton title="New folder" onClick={() => {
-          setMkdirName("");
-          setCreatingFolder(true);
-        }}>
-          {(size) => <FolderPlus size={size} />}
-        </PaneToolbarButton>
-        <PaneToolbarButton title="Refresh" onClick={() => void loadLeft()}>
-          {(size) => <RefreshCw size={size} />}
-        </PaneToolbarButton>
+        {/* gap:0 — the buttons' own padding is the spacing; the
+            toolbar's gap made the pair look unrelated. */}
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <PaneToolbarButton title="New folder" onClick={() => {
+            setMkdirName("");
+            setCreatingFolder(true);
+          }}>
+            {(size) => <FolderPlus size={size} />}
+          </PaneToolbarButton>
+          <PaneToolbarButton title="Refresh" onClick={() => void loadLeft()}>
+            {(size) => <RefreshCw size={size} />}
+          </PaneToolbarButton>
+        </div>
       </div>
       <div style={{ height: 30, padding: "0 10px", display: "flex", alignItems: "center",
         background: "var(--panel-1)", borderBottom: "0.5px solid var(--border)" }}>

@@ -229,20 +229,24 @@ export function FileBrowserView({ connectionId }: Props) {
         display: "flex", alignItems: "center", gap: 8,
       }}>
         <PathBreadcrumb path={state.cwd} onNavigate={(p) => loadDir(connectionId, p)} />
-        <PaneToolbarButton
-          title="New folder"
-          onClick={() => setCreatingFolder(true)}>
-          {(size) => <FolderPlus size={size} />}
-        </PaneToolbarButton>
-        <PaneToolbarButton title="Refresh"
-          onClick={() => loadDir(connectionId, state.cwd)}>
-          {(size) => <RefreshCw size={size} />}
-        </PaneToolbarButton>
-        <PaneToolbarButton
-          title="Upload"
-          onClick={handleUploadClick}>
-          {(size) => <Upload size={size} />}
-        </PaneToolbarButton>
+        {/* gap:0 — the buttons' own padding is the spacing; the
+            toolbar's gap made the cluster look unrelated. */}
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <PaneToolbarButton
+            title="New folder"
+            onClick={() => setCreatingFolder(true)}>
+            {(size) => <FolderPlus size={size} />}
+          </PaneToolbarButton>
+          <PaneToolbarButton title="Refresh"
+            onClick={() => loadDir(connectionId, state.cwd)}>
+            {(size) => <RefreshCw size={size} />}
+          </PaneToolbarButton>
+          <PaneToolbarButton
+            title="Upload"
+            onClick={handleUploadClick}>
+            {(size) => <Upload size={size} />}
+          </PaneToolbarButton>
+        </div>
         <ActivitySwitcherSlot sessionId={connectionId} />
       </div>
       <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}

@@ -318,21 +318,25 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
           onNewConnection={onNewConnection}
         />
         <div style={{ flex: 1 }} />
-        <PaneToolbarButton title="New folder"
-          disabled={isDisconnected}
-          onClick={async () => {
-            const name = prompt("New folder name");
-            if (!name) return;
-            await sftpMkdir(rightHost, joinPath(rightPath, name));
-            await loadRight();
-          }}>
-          {(size) => <FolderPlus size={size} />}
-        </PaneToolbarButton>
-        <PaneToolbarButton title="Refresh"
-          disabled={isDisconnected}
-          onClick={() => void loadRight()}>
-          {(size) => <RefreshCw size={size} />}
-        </PaneToolbarButton>
+        {/* gap:0 — the buttons' own padding is the spacing; the
+            toolbar's gap made the pair look unrelated. */}
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <PaneToolbarButton title="New folder"
+            disabled={isDisconnected}
+            onClick={async () => {
+              const name = prompt("New folder name");
+              if (!name) return;
+              await sftpMkdir(rightHost, joinPath(rightPath, name));
+              await loadRight();
+            }}>
+            {(size) => <FolderPlus size={size} />}
+          </PaneToolbarButton>
+          <PaneToolbarButton title="Refresh"
+            disabled={isDisconnected}
+            onClick={() => void loadRight()}>
+            {(size) => <RefreshCw size={size} />}
+          </PaneToolbarButton>
+        </div>
       </div>
 
       {isDisconnected ? (
