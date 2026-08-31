@@ -38,6 +38,7 @@ function host(over: Partial<FtpHost> = {}): FtpHost {
 const RESET = {
   hosts: [], loaded: false, activeId: null, connected: [], connecting: [],
   cwd: "/", entries: [], listedKey: null, listing: false, error: null,
+  listingCache: {},
 };
 
 describe("joinPath", () => {
@@ -205,5 +206,40 @@ describe("ftp store", () => {
     useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/upload" });
     await useFtpStore.getState().upload("C:/a.csv", "a.csv", "file");
     expect(useFtpStore.getState().error).toContain("550");
+  });
+
+  it("revisiting a directory shows the cached rows before the server answers", async () => {
+    // Each FTP LIST is a fresh data connection — seconds on a far-away
+    // server. The cache is what makes the second visit instant.
+    const fileA = { name: "a.csv", kind: "file", size: 1, modified: null, permissions: 0 };
+    const fileB = { name: "b.csv", kind: "file", size: 2, modified: null, permissions: 0 };
+    useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/" });
+
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockResolvedValueOnce([fileA]);
+    await useFtpStore.getState().navigate("/upload");
+    expect(useFtpStore.getState().entries).toEqual([fileA]);
+
+    // Second visit: the fetch hangs, yet the cached rows are on screen
+    // immediately, and the revalidation swaps them when it lands.
+    let resolveLate!: (v: unknown) => void;
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      new Promise((r) => { resolveLate = r; }),
+    );
+    const nav = useFtpStore.getState().navigate("/upload");
+    expect(useFtpStore.getState().entries).toEqual([fileA]);
+    expect(useFtpStore.getState().cwd).toBe("/upload");
+    resolveLate([fileA, fileB]);
+    await nav;
+    expect(useFtpStore.getState().entries).toEqual([fileA, fileB]);
+  });
+
+  it("disconnecting drops that connection's cache", async () => {
+    (ipc.ftpDisconnect as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    useFtpStore.setState({
+      hosts: [host()], activeId: "h1", connected: ["h1"],
+      listingCache: { "h1:/upload": [], "h2:/other": [] },
+    });
+    await useFtpStore.getState().disconnect("h1");
+    expect(Object.keys(useFtpStore.getState().listingCache)).toEqual(["h2:/other"]);
   });
 });

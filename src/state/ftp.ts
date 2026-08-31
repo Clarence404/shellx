@@ -32,6 +32,13 @@ interface State {
   listedKey: string | null;
   listing: boolean;
   error: string | null;
+  /** `id:path` → the last listing that came back. FTP opens a fresh
+   *  data connection per LIST — 3-4 round trips, whole seconds on a
+   *  far-away server — so revisiting a directory shows the cached rows
+   *  instantly while the fetch revalidates in the background. This is
+   *  the same trick WinSCP's directory cache plays. Dropped per
+   *  connection on connect / disconnect. */
+  listingCache: Record<string, FtpEntry[]>;
 
   load: () => Promise<void>;
   addHost: (args: SaveFtpHostArgs) => Promise<FtpHost>;
@@ -57,6 +64,18 @@ interface State {
   remove: (path: string, isDir: boolean) => Promise<void>;
   refresh: () => Promise<void>;
   clearError: () => void;
+}
+
+/** Forgets every cached listing that belongs to one connection. */
+function dropCacheFor(
+  cache: Record<string, FtpEntry[]>,
+  id: string,
+): Record<string, FtpEntry[]> {
+  const next: Record<string, FtpEntry[]> = {};
+  for (const [k, v] of Object.entries(cache)) {
+    if (!k.startsWith(`${id}:`)) next[k] = v;
+  }
+  return next;
 }
 
 /** Every remote change ends the same way: do it, then re-read the
@@ -90,6 +109,7 @@ export const useFtpStore = create<State>((set, get) => ({
   listedKey: null,
   listing: false,
   error: null,
+  listingCache: {},
 
   load: async () => {
     // Live connections outlive a view unmount — they are held on the
@@ -141,6 +161,9 @@ export const useFtpStore = create<State>((set, get) => ({
       entries: [],
       listedKey: null,
       error: null,
+      // A fresh session starts with a fresh cache for this server —
+      // whatever changed while we were away must not show as truth.
+      listingCache: dropCacheFor(s.listingCache, id),
     }));
     try {
       const { cwd } = await ipc.ftpConnect(id);
@@ -162,6 +185,7 @@ export const useFtpStore = create<State>((set, get) => ({
     await ipc.ftpDisconnect(id).catch(() => {});
     set((s) => ({
       connected: s.connected.filter((x) => x !== id),
+      listingCache: dropCacheFor(s.listingCache, id),
       ...(s.activeId === id ? { entries: [], listedKey: null } : {}),
     }));
   },
@@ -171,10 +195,27 @@ export const useFtpStore = create<State>((set, get) => ({
   navigate: async (path) => {
     const id = get().activeId;
     if (!id) return;
-    set({ listing: true, error: null });
+    const key = `${id}:${path}`;
+    const cached = get().listingCache[key];
+    if (cached) {
+      // Seen this directory before: show it NOW, then revalidate. The
+      // fetch below still runs — the swap when it lands is invisible
+      // unless the server actually changed.
+      set({ entries: cached, cwd: path, listedKey: key, listing: true, error: null });
+    } else {
+      set({ listing: true, error: null });
+    }
     try {
       const entries = await ipc.ftpListDir(id, path);
-      set({ entries, cwd: path, listedKey: `${id}:${path}` });
+      set((s) => {
+        const listingCache = { ...s.listingCache, [key]: entries };
+        // Apply to the screen only if this directory is still the one
+        // being shown — a slow reply for a folder the user already left
+        // must not overwrite where they are now.
+        return s.activeId === id && (!cached || s.cwd === path)
+          ? { entries, cwd: path, listedKey: key, listingCache }
+          : { listingCache };
+      });
     } catch (e) {
       // Keep the directory that was on screen: dropping the user out of
       // a working folder because one listing failed helps nobody. The
