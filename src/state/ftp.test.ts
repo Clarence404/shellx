@@ -22,6 +22,7 @@ vi.mock("../ipc/ftp", () => ({
   ftpDisconnect: vi.fn(),
   ftpActiveIds: vi.fn(),
   ftpListDir: vi.fn(),
+  ftpListDirBg: vi.fn(),
   ftpPwd: vi.fn(),
 }));
 
@@ -241,14 +242,15 @@ describe("ftp store", () => {
     const fileX = { name: "x.csv", kind: "file", size: 1, modified: null, permissions: 0 };
     useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/" });
 
-    (ipc.ftpListDir as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce([dirDone])   // the navigation itself
-      .mockResolvedValueOnce([fileX]);    // the background warm of /upload/done
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockResolvedValueOnce([dirDone]);
+    // The warm goes through the _bg variant — its own connection, so it
+    // can never delay a real click.
+    (ipc.ftpListDirBg as ReturnType<typeof vi.fn>).mockResolvedValueOnce([fileX]);
     await useFtpStore.getState().navigate("/upload");
     await vi.waitFor(() => {
       expect(useFtpStore.getState().listingCache["h1:/upload/done"]).toEqual([fileX]);
     });
-    expect(ipc.ftpListDir).toHaveBeenLastCalledWith("h1", "/upload/done");
+    expect(ipc.ftpListDirBg).toHaveBeenCalledWith("h1", "/upload/done");
   });
 
   it("disconnecting drops that connection's cache", async () => {

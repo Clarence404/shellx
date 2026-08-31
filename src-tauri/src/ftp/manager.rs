@@ -15,6 +15,12 @@ use uuid::Uuid;
 #[derive(Default, Clone)]
 pub struct FtpManager {
     live: Arc<Mutex<HashMap<Uuid, Arc<Mutex<FtpClient>>>>>,
+    /// A second, lazily-opened connection per server that serves ONLY
+    /// the background cache warming. FTP does one thing at a time per
+    /// control channel; when the warm loop shared the browsing
+    /// connection, a user's click queued behind whatever the warm was
+    /// fetching. On its own connection it can never delay a click.
+    warm: Arc<Mutex<HashMap<Uuid, Arc<Mutex<FtpClient>>>>>,
     /// SFTP rows in this view are ordinary SSH sessions with no shell,
     /// so what is tracked here is which session belongs to which saved
     /// row. Keeping it on this side rather than in the frontend means a
@@ -40,6 +46,17 @@ impl FtpManager {
             .ok_or_else(|| Error::Protocol(format!("no live FTP session {id}")))
     }
 
+    /// The warm connection for a server, if one has been opened.
+    pub async fn get_warm(&self, id: Uuid) -> Option<Arc<Mutex<FtpClient>>> {
+        self.warm.lock().await.get(&id).cloned()
+    }
+
+    pub async fn insert_warm(&self, id: Uuid, client: FtpClient) -> Arc<Mutex<FtpClient>> {
+        let arc = Arc::new(Mutex::new(client));
+        self.warm.lock().await.insert(id, arc.clone());
+        arc
+    }
+
     /// Records that a saved row is being served by an SSH session.
     pub async fn bind_sftp(&self, host_id: Uuid, session_id: Uuid) {
         self.sftp.lock().await.insert(host_id, session_id);
@@ -62,6 +79,10 @@ impl FtpManager {
     pub async fn close(&self, id: Uuid) {
         let entry = self.live.lock().await.remove(&id);
         if let Some(client) = entry {
+            client.lock().await.quit().await;
+        }
+        let warm = self.warm.lock().await.remove(&id);
+        if let Some(client) = warm {
             client.lock().await.quit().await;
         }
     }

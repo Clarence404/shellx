@@ -353,6 +353,37 @@ pub async fn ftp_list_dir(
     deadline("list directory", client.list_dir(&args.path)).await
 }
 
+/// `ftp_list_dir` for the cache-warming loop: never touches the
+/// browsing connection. FTP rows get a second, lazily-opened connection
+/// dedicated to warming; SFTP sessions multiplex, so the ordinary path
+/// is already contention-free and is used as is. Failures are the
+/// caller's cue to stop warming — never surfaced to the user.
+#[tauri::command]
+pub async fn ftp_list_dir_bg(
+    args: FtpListArgs,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+    store: State<'_, FtpHostStore>,
+    keychain: State<'_, KeychainStore>,
+) -> Result<Vec<Entry>> {
+    if let Some(session) = ftp.session_of(args.id).await {
+        return deadline("list directory", sessions.sftp_list_dir(session, &args.path)).await;
+    }
+    // Only warm servers the user is actually browsing — a stale warm
+    // request must not resurrect a connection the user closed.
+    ftp.get(args.id).await?;
+    let client = match ftp.get_warm(args.id).await {
+        Some(c) => c,
+        None => {
+            let (_, spec) = spec_for(&store, &keychain, args.id).await?;
+            let fresh = deadline("connect", spec.connect()).await?;
+            ftp.insert_warm(args.id, fresh).await
+        }
+    };
+    let mut client = client.lock().await;
+    deadline("list directory", client.list_dir(&args.path)).await
+}
+
 #[tauri::command]
 pub async fn ftp_pwd(
     args: IdArgs,

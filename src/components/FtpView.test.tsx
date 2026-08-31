@@ -26,6 +26,7 @@ vi.mock("../ipc/ftp", () => ({
   ftpDisconnect: vi.fn().mockResolvedValue(undefined),
   ftpActiveIds: vi.fn().mockResolvedValue([]),
   ftpListDir: vi.fn().mockResolvedValue([]),
+  ftpListDirBg: vi.fn().mockResolvedValue([]),
   ftpPwd: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));

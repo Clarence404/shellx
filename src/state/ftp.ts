@@ -99,7 +99,9 @@ async function prefetchChildren(id: string, base: string, entries: FtpEntry[]) {
     const key = `${id}:${path}`;
     if (st.listingCache[key]) continue;
     try {
-      const rows = await ipc.ftpListDir(id, path);
+      // The _bg variant runs on its own connection — warming can never
+      // make a real click wait.
+      const rows = await ipc.ftpListDirBg(id, path);
       useFtpStore.setState((s) => ({
         listingCache: { ...s.listingCache, [key]: rows },
       }));
