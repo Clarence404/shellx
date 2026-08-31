@@ -1,4 +1,5 @@
 import { Palette, Info, Wrench, Shield, Keyboard, FileText, PackageOpen, type LucideIcon } from "lucide-react";
+import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { useSettingsStore, useIconSizes } from "../../state/settings";
 import { SectionHeader } from "../SectionHeader";
 import { useT } from "../../i18n";
@@ -61,7 +62,11 @@ export function SettingsSidebar({ active, onSelect }: Props) {
       <div style={{ flex: 1 }} />
       <button
         onClick={() => {
-          if (confirm(t("Reset all settings to defaults?"))) reset();
+          // window.confirm is async here (dialog plugin shim) — unawaited
+          // it is always truthy and the reset fired unconditionally.
+          void confirmDialog(t("Reset all settings to defaults?")).then((ok) => {
+            if (ok) reset();
+          });
         }}
         style={{
           margin: 4, padding: "6px 8px",

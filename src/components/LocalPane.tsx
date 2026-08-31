@@ -5,6 +5,7 @@ import { useRailFiles } from "../state/railFiles";
 import { useSessions } from "../state/sessions";
 import { localOpenInOs, localMkdir, localRename, localRemoveFile, localRemoveDir, localDefaultRoots, localCopyInto, localListDisks } from "../ipc/local";
 import { sftpUpload, sftpDownload, sftpUploadDir, sftpDownloadDir } from "../ipc/transfers";
+import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { dragOut } from "../dragOut";
 import { LocalPathDropdown } from "./LocalPathDropdown";
 import { PathBreadcrumb } from "./PathBreadcrumb";
@@ -390,7 +391,9 @@ export function LocalPane({ remote }: { remote?: RemoteAdapter } = {}) {
                 await loadLeft();
               }}
               onDelete={async () => {
-                if (!confirm(`Delete "${e.name}"?`)) return;
+                // window.confirm is async here (dialog plugin shim) —
+                // it must be awaited or the guard never guards.
+                if (!(await confirmDialog(`Delete "${e.name}"?`))) return;
                 if (e.kind === "directory") await localRemoveDir(joinPath(leftPath, e.name));
                 else await localRemoveFile(joinPath(leftPath, e.name));
                 await loadLeft();

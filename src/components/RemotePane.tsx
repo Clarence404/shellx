@@ -17,7 +17,7 @@ import { PaneToolbarButton } from "./PaneToolbarButton";
 import { HostContextMenu } from "./HostContextMenu";
 import { ConnectingPanel } from "./ConnectingPanel";
 import { ErrorDialog } from "./ErrorDialog";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 
 import type { HostInfo } from "../types/host";
 
@@ -481,7 +481,9 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                     await loadRight();
                   }}
                   onDelete={async () => {
-                    if (!confirm(`Delete "${e.name}"?`)) return;
+                    // window.confirm is async here (dialog plugin shim) —
+                    // it must be awaited or the guard never guards.
+                    if (!(await confirmDialog(`Delete "${e.name}"?`))) return;
                     try {
                       if (e.kind === "directory") {
                         await sftpRemoveDirRecursive(rightHost, joinPath(rightPath, e.name));
