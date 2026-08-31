@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import * as ipc from "../ipc/ftp";
 import { localIsDir } from "../ipc/local";
+import { logPush } from "../ipc/logs";
 import type { GestureGroup } from "../ipc/transfers";
 import type { FtpEntry, FtpHost, SaveFtpHostArgs, UpdateFtpHostArgs } from "../types/ftp";
 
@@ -255,6 +256,11 @@ export const useFtpStore = create<State>((set, get) => ({
     // A real click owns the control channel: any warm loop still
     // running for the previous directory stands down now.
     prefetchGen++;
+    // Click-to-content timing, straight into the shared log stream:
+    // shown_ms is what the user felt (0-ish on a cache hit), server_ms
+    // is when the server's own answer replaced it. Pairs with the Rust
+    // side's per-phase "ftp data command finished" line.
+    const t0 = performance.now();
     const cached = get().listingCache[key];
     if (cached) {
       // Seen this directory before: show it NOW, then revalidate. The
@@ -274,6 +280,17 @@ export const useFtpStore = create<State>((set, get) => ({
         return s.activeId === id && (!cached || s.cwd === path)
           ? { entries, cwd: path, listedKey: key, listingCache }
           : { listingCache };
+      });
+      void logPush({
+        level: "info",
+        category: "sftp",
+        message: "ftp navigate timing",
+        fields: {
+          path,
+          cache_hit: !!cached,
+          shown_ms: Math.round(cached ? 0 : performance.now() - t0),
+          server_ms: Math.round(performance.now() - t0),
+        },
       });
       // Fire-and-forget: warm this directory's children while the user
       // reads it, so their next click lands on the cache.
