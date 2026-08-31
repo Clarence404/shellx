@@ -150,6 +150,7 @@ export function FtpRemotePane() {
   const hosts = useFtpStore((s) => s.hosts);
   const connected = useFtpStore((s) => s.connected);
   const connecting = useFtpStore((s) => s.connecting);
+  const connectPhase = useFtpStore((s) => s.connectPhase);
   const cwd = useFtpStore((s) => s.cwd);
   const entries = useFtpStore((s) => s.entries);
   const listedKey = useFtpStore((s) => s.listedKey);
@@ -246,7 +247,11 @@ export function FtpRemotePane() {
 
   // Same panel the Hosts view shows while a connection is being made, so
   // the two views do not have their own idea of what connecting looks like.
+  // It narrates the phases WinSCP-style and stays up until the first
+  // directory is actually on screen — connect() only clears the
+  // connecting flag after the initial listing lands.
   if (host && !!activeId && connecting.includes(activeId)) {
+    const listingPhase = connectPhase === "listing";
     return (
       <ConnectingPanel
         hostLabel={host.label}
@@ -255,6 +260,16 @@ export function FtpRemotePane() {
         subtitle={host.protocol === "sftp"
           ? t("Establishing the SSH session.")
           : t("Opening the control connection.")}
+        steps={[
+          {
+            label: listingPhase ? t("Connected") : t("Connecting…"),
+            state: listingPhase ? "done" : "active",
+          },
+          {
+            label: t("Reading remote directory…"),
+            state: listingPhase ? "active" : "pending",
+          },
+        ]}
       />
     );
   }

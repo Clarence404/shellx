@@ -37,6 +37,7 @@ function host(over: Partial<FtpHost> = {}): FtpHost {
 
 const RESET = {
   hosts: [], loaded: false, activeId: null, connected: [], connecting: [],
+  connectPhase: null as null,
   cwd: "/", entries: [], listedKey: null, listing: false, error: null,
   listingCache: {},
 };

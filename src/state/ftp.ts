@@ -23,6 +23,10 @@ interface State {
   connected: string[];
   /** Ids currently mid-connect, so the row can say so. */
   connecting: string[];
+  /** Where the active connect is, WinSCP-style: opening the session, or
+   *  already connected and reading the first directory. The connecting
+   *  panel narrates it. Null when nothing is connecting. */
+  connectPhase: "session" | "listing" | null;
   cwd: string;
   entries: FtpEntry[];
   /** `id:path` of the last listing that came back, successful or not.
@@ -145,6 +149,7 @@ export const useFtpStore = create<State>((set, get) => ({
   activeId: null,
   connected: [],
   connecting: [],
+  connectPhase: null,
   cwd: "/",
   entries: [],
   listedKey: null,
@@ -198,6 +203,7 @@ export const useFtpStore = create<State>((set, get) => ({
     // failure that is also where the error belongs.
     set((s) => ({
       connecting: [...s.connecting, id],
+      connectPhase: "session",
       activeId: id,
       entries: [],
       listedKey: null,
@@ -213,12 +219,19 @@ export const useFtpStore = create<State>((set, get) => ({
         activeId: id,
         cwd,
         listedKey: null,
+        connectPhase: "listing",
       }));
+      // Still inside the connecting screen: the panel narrates "reading
+      // remote directory…" and only hands over to the pane when the
+      // rows are actually there — the WinSCP order of events.
       await get().refresh();
     } catch (e) {
       set({ error: String(e) });
     } finally {
-      set((s) => ({ connecting: s.connecting.filter((x) => x !== id) }));
+      set((s) => ({
+        connecting: s.connecting.filter((x) => x !== id),
+        connectPhase: null,
+      }));
     }
   },
 

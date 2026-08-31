@@ -1,4 +1,9 @@
-import { Plug } from "lucide-react";
+import { Plug, Check } from "lucide-react";
+
+export interface ConnectStep {
+  label: string;
+  state: "done" | "active" | "pending";
+}
 
 interface Props {
   /** Host label — "192.168.1.10" or "prod-web-1", whichever is available. */
@@ -17,6 +22,9 @@ interface Props {
    * "cancel" (the connecting flag drives the whole state, no session yet).
    */
   onCancel?: () => void;
+  /** Progress narration, WinSCP-style: each phase gets a line, checked
+   *  off as it completes. When absent only title + subtitle show. */
+  steps?: ConnectStep[];
 }
 
 /**
@@ -26,7 +34,7 @@ interface Props {
  * (SSH). Keyframes (`shellx-plug-left/right`, `shellx-dot-pulse`) live in
  * reset.css alongside hostrow-pulse — pure CSS, no JS animation loop.
  */
-export function ConnectingPanel({ hostLabel, title, subtitle, onCancel }: Props) {
+export function ConnectingPanel({ hostLabel, title, subtitle, onCancel, steps }: Props) {
   return (
     <div style={{
       flex: 1, minHeight: 0, height: "100%",
@@ -72,6 +80,34 @@ export function ConnectingPanel({ hostLabel, title, subtitle, onCancel }: Props)
           {subtitle ?? "Establishing the SSH session."}
         </div>
       </div>
+      {steps && steps.length > 0 && (
+        <div role="list" aria-label="connect progress" style={{
+          display: "flex", flexDirection: "column", gap: 5,
+          textAlign: "left", minWidth: 180,
+        }}>
+          {steps.map((s) => (
+            <div key={s.label} role="listitem" style={{
+              display: "flex", alignItems: "center", gap: 7, fontSize: 11,
+              color: s.state === "pending" ? "var(--text-3)" : "var(--text-1)",
+              opacity: s.state === "pending" ? 0.6 : 1,
+            }}>
+              <span style={{ width: 12, display: "inline-flex", justifyContent: "center", flexShrink: 0 }}>
+                {s.state === "done" && <Check size={11} style={{ color: "var(--success)" }} />}
+                {s.state === "active" && (
+                  <span style={{
+                    width: 6, height: 6, borderRadius: "50%", background: "var(--accent)",
+                    animation: "hostrow-pulse 900ms ease-in-out infinite",
+                  }} />
+                )}
+                {s.state === "pending" && (
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--text-4)" }} />
+                )}
+              </span>
+              {s.label}
+            </div>
+          ))}
+        </div>
+      )}
       {onCancel && (
         <button onClick={onCancel}
           style={{
