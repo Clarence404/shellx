@@ -71,10 +71,15 @@ interface State {
   clearError: () => void;
 }
 
-/** How many subdirectories of the directory on screen get warmed into
- *  the cache. Capped so a directory of hundreds of folders does not
- *  turn into hundreds of background LISTs. */
+/** How many subdirectories of any one directory join the warm queue —
+ *  a directory of hundreds of folders must not monopolise it. */
 const PREFETCH_MAX = 16;
+/** How deep below the directory on screen the warm walks. */
+const PREFETCH_DEPTH = 3;
+/** Total listings one warm walk may spend. The typical report-server
+ *  tree (a handful of state folders, date subfolders below) fits whole;
+ *  a giant tree gets its first levels and the rest stays click-time. */
+const PREFETCH_BUDGET = 64;
 
 /** Bumped whenever the user navigates, so a stale warm loop stops
  *  competing for the control channel the moment a real click needs it. */
@@ -87,32 +92,59 @@ let prefetchGen = 0;
  *  looking at a directory are exactly enough to fetch its children.
  *  Runs on the same control channel as real navigation — a user click
  *  waits behind at most the one LIST already in flight. */
+/** Subdirectory names of a listing, ready for the warm queue. */
+function subdirPaths(base: string, rows: FtpEntry[]): string[] {
+  return rows
+    .filter((e) => e.kind === "directory" && e.name !== "..")
+    .slice(0, PREFETCH_MAX)
+    .map((e) => joinPath(base, e.name));
+}
+
 async function prefetchChildren(id: string, base: string, entries: FtpEntry[]) {
   const gen = ++prefetchGen;
-  const queue = entries
-    .filter((e) => e.kind === "directory" && e.name !== "..")
-    .slice(0, PREFETCH_MAX);
-  // Two workers — matching the backend's warm-connection pool — so a
-  // directory's children warm in half the wall-clock. What decides
-  // whether the user's FIRST click hits the cache is exactly this race
-  // between their reading pause and the warm loop.
+  // Breadth-first over the whole tree under the directory on screen,
+  // within a budget: children first, then grandchildren, and so on —
+  // the order the user is most likely to click. Every listing that
+  // lands is a directory that will open instantly.
+  const queue: { path: string; depth: number }[] =
+    subdirPaths(base, entries).map((path) => ({ path, depth: 1 }));
+  let budget = PREFETCH_BUDGET;
+  // Two workers — matching the backend's warm-connection pool — so the
+  // tree warms in half the wall-clock. What decides whether the user's
+  // FIRST click hits the cache is exactly this race between their
+  // reading pause and the warm loop.
   const worker = async () => {
     for (;;) {
       if (gen !== prefetchGen) return;
       const st = useFtpStore.getState();
       if (st.activeId !== id) return;
-      const d = queue.shift();
-      if (!d) return;
-      const path = joinPath(base, d.name);
-      const key = `${id}:${path}`;
-      if (st.listingCache[key]) continue;
+      const next = queue.shift();
+      if (!next || budget <= 0) return;
+      const key = `${id}:${next.path}`;
+      const known = st.listingCache[key];
+      if (known) {
+        // Already cached (an earlier walk got it) — still descend, its
+        // children may not be.
+        if (next.depth < PREFETCH_DEPTH) {
+          for (const p of subdirPaths(next.path, known)) {
+            queue.push({ path: p, depth: next.depth + 1 });
+          }
+        }
+        continue;
+      }
+      budget--;
       try {
         // The _bg variant runs on its own connection — warming can
         // never make a real click wait.
-        const rows = await ipc.ftpListDirBg(id, path);
+        const rows = await ipc.ftpListDirBg(id, next.path);
         useFtpStore.setState((s) => ({
           listingCache: { ...s.listingCache, [key]: rows },
         }));
+        if (next.depth < PREFETCH_DEPTH) {
+          for (const p of subdirPaths(next.path, rows)) {
+            queue.push({ path: p, depth: next.depth + 1 });
+          }
+        }
       } catch {
         // A failure ends this worker quietly — the warm is a hint, not
         // a promise, and errors belong to real navigation only.

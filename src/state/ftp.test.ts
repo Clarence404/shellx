@@ -242,15 +242,21 @@ describe("ftp store", () => {
     const fileX = { name: "x.csv", kind: "file", size: 1, modified: null, permissions: 0 };
     useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/" });
 
+    const dirSub = { name: "2026-08", kind: "directory", size: 0, modified: null, permissions: 0 };
     (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockResolvedValueOnce([dirDone]);
     // The warm goes through the _bg variant — its own connection, so it
-    // can never delay a real click.
-    (ipc.ftpListDirBg as ReturnType<typeof vi.fn>).mockResolvedValueOnce([fileX]);
+    // can never delay a real click. It walks breadth-first: the child
+    // first, then the child's own subdirectories.
+    (ipc.ftpListDirBg as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([dirSub])
+      .mockResolvedValueOnce([fileX]);
     await useFtpStore.getState().navigate("/upload");
     await vi.waitFor(() => {
-      expect(useFtpStore.getState().listingCache["h1:/upload/done"]).toEqual([fileX]);
+      expect(useFtpStore.getState().listingCache["h1:/upload/done"]).toEqual([dirSub]);
+      expect(useFtpStore.getState().listingCache["h1:/upload/done/2026-08"]).toEqual([fileX]);
     });
     expect(ipc.ftpListDirBg).toHaveBeenCalledWith("h1", "/upload/done");
+    expect(ipc.ftpListDirBg).toHaveBeenCalledWith("h1", "/upload/done/2026-08");
   });
 
   it("disconnecting drops that connection's cache", async () => {
