@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { HelpCircle } from "lucide-react";
 import { useSettingsStore } from "../../state/settings";
+import { historyClear } from "../../ipc/history";
 import { ADVANCED_RANGES, LOG_LEVEL_META } from "../../types/settings";
 import type { AdvancedSettings } from "../../types/settings";
 import { useT } from "../../i18n";
@@ -27,6 +28,8 @@ const RETRY_DELAY_STOPS = [2, 5, 15, 30];
 export function AdvancedPanel() {
   const t = useT();
   const a = useSettingsStore((s) => s.advanced);
+  const commandSuggest = useSettingsStore((s) => s.terminal.commandSuggest);
+  const [clearedCount, setClearedCount] = useState<number | null>(null);
   const set = <K extends keyof AdvancedSettings>(key: K, value: AdvancedSettings[K]) =>
     useSettingsStore.getState().setAdvanced(key, value);
 
@@ -101,6 +104,36 @@ export function AdvancedPanel() {
             unit={t("lines")}
             aria-label="Scrollback lines"
           />
+        </Row>
+        <Row
+          label={t("Command suggestions")}
+          help={t("Typed commands are recorded locally per host and offered as ghost text; → accepts. Lines that look like they carry secrets are never stored.")}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: FS_BODY }}>
+              <input
+                type="checkbox"
+                aria-label="Command suggestions"
+                checked={commandSuggest}
+                onChange={(e) => useSettingsStore.getState().setCommandSuggest(e.target.checked)}
+              />
+              {commandSuggest ? t("On") : t("Off")}
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                void historyClear().then((n) => setClearedCount(n));
+              }}
+              style={{
+                padding: "3px 10px", borderRadius: 4, fontSize: FS_META,
+                border: "1px solid var(--border-hi)", background: "transparent",
+                color: "var(--text-2)", cursor: "pointer",
+              }}>
+              {clearedCount === null
+                ? t("Clear history")
+                : `${t("Cleared")} ${clearedCount}`}
+            </button>
+          </div>
         </Row>
 
         <Section label={t("Tunnel reconnect")} />

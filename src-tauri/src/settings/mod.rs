@@ -132,6 +132,14 @@ pub struct TerminalSettings {
     pub font_family: String,
     pub font_size: u32,
     pub cursor_style: String,
+    /// Inline command suggestions from locally recorded history.
+    /// Defaulted for settings.json files written before the field existed.
+    #[serde(default = "default_command_suggest")]
+    pub command_suggest: bool,
+}
+
+fn default_command_suggest() -> bool {
+    true
 }
 
 /// Read the sanitized `advanced` block, falling back to defaults when
@@ -206,6 +214,7 @@ mod tests {
                 font_family: "fira-code".into(),
                 font_size: 14,
                 cursor_style: "underline".into(),
+                command_suggest: true,
             },
             local_shell: None,
             language: "en".into(),

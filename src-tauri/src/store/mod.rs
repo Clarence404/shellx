@@ -1,3 +1,4 @@
+pub mod command_history;
 pub mod hosts;
 pub mod snippets;
 pub mod keychain;

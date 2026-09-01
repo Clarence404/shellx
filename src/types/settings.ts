@@ -8,6 +8,9 @@ export interface Settings {
     fontFamily: "jetbrains-mono" | "sf-mono" | "fira-code" | "cascadia-code" | "consolas";
     fontSize: number;
     cursorStyle: "block" | "underline" | "bar";
+    /** Inline command suggestions from locally recorded history. Off
+     *  also stops recording. */
+    commandSuggest: boolean;
   };
   localShell?: string;
   language: "en" | "zh";
@@ -70,6 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
     fontFamily: "jetbrains-mono",
     fontSize: 13,
     cursorStyle: "block",
+    commandSuggest: true,
   },
   language: "en",
   autoUpdateCheck: true,

@@ -6,6 +6,7 @@ pub mod config;
 pub mod dragout;
 pub mod events;
 pub mod ftp;
+pub mod history;
 pub mod hostkeys;
 pub mod hosts;
 pub mod keys;

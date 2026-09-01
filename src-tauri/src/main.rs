@@ -22,6 +22,8 @@ fn main() {
         .expect("failed to prepare ftp_hosts");
     let snippet_store = shellx::store::snippets::SnippetStore::new(host_store.conn_arc())
         .expect("failed to prepare snippets");
+    let command_history = shellx::store::command_history::CommandHistoryStore::new(host_store.conn_arc())
+        .expect("failed to prepare command_history");
     let keychain = KeychainStore::open();
     let settings_store = SettingsStore::open(&config_dir);
     // Advanced knobs are read once here: the log floor and the transfer
@@ -86,6 +88,7 @@ fn main() {
         .manage(tunnel_store)
         .manage(ftp_host_store)
         .manage(snippet_store)
+        .manage(command_history)
         .manage(FtpManager::new())
         .manage(keychain)
         .manage(settings_store)
@@ -159,6 +162,9 @@ fn main() {
             ipc::snippets::snippet_save,
             ipc::snippets::snippet_update,
             ipc::snippets::snippet_delete,
+            ipc::history::history_record,
+            ipc::history::history_suggest,
+            ipc::history::history_clear,
             ipc::transfer::transfer_pause,
             ipc::transfer::transfer_resume,
             ipc::local::local_list_dir,

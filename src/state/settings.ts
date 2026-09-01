@@ -27,6 +27,7 @@ interface State extends Settings {
   /** One setter for the whole Advanced block: every control passes the
    *  field it owns, values are clamped to ADVANCED_RANGES on the way in.
    *  A single setter keeps eight near-identical ones out of the store. */
+  setCommandSuggest(on: boolean): void;
   setAdvanced<K extends keyof AdvancedSettings>(key: K, value: AdvancedSettings[K]): void;
   reset(): void;
 }
@@ -99,6 +100,10 @@ export const useSettingsStore = create<State>((set, get) => ({
         ...loaded,
         localShell: loaded.localShell ?? "",
         advanced: { ...DEFAULT_ADVANCED, ...(loaded.advanced ?? {}) },
+        // Same defence for terminal: fields added after a settings.json
+        // was written (commandSuggest) must land as their defaults, not
+        // as undefined.
+        terminal: { ...DEFAULT_SETTINGS.terminal, ...(loaded.terminal ?? {}) },
       });
     }
     // If null (missing / malformed), keep DEFAULT_SETTINGS as-is.
@@ -133,6 +138,10 @@ export const useSettingsStore = create<State>((set, get) => ({
   setTerminalFontSize(size) {
     const clamped = Math.max(10, Math.min(20, Math.round(size)));
     set((st) => ({ terminal: { ...st.terminal, fontSize: clamped } }));
+    scheduleSave(get);
+  },
+  setCommandSuggest(on) {
+    set((st) => ({ terminal: { ...st.terminal, commandSuggest: on } }));
     scheduleSave(get);
   },
   setTerminalCursorStyle(style) {
