@@ -100,51 +100,27 @@ function subdirPaths(base: string, rows: FtpEntry[]): string[] {
     .map((e) => joinPath(base, e.name));
 }
 
-async function prefetchChildren(id: string, base: string, entries: FtpEntry[]) {
-  const gen = ++prefetchGen;
-  // Breadth-first over the whole tree under the directory on screen,
-  // within a budget: children first, then grandchildren, and so on —
-  // the order the user is most likely to click. Every listing that
-  // lands is a directory that will open instantly.
-  const queue: { path: string; depth: number }[] =
-    subdirPaths(base, entries).map((path) => ({ path, depth: 1 }));
-  let budget = PREFETCH_BUDGET;
-  // Two workers — matching the backend's warm-connection pool — so the
-  // tree warms in half the wall-clock. What decides whether the user's
-  // FIRST click hits the cache is exactly this race between their
-  // reading pause and the warm loop.
+/** Fetches a set of directories into the cache — two workers, matching
+ *  the backend's warm-connection pool. Resolves when every path is
+ *  either cached or given up on; it never throws. */
+async function warmMany(id: string, paths: string[], gen: number): Promise<void> {
+  const queue = [...paths];
   const worker = async () => {
     for (;;) {
       if (gen !== prefetchGen) return;
       const st = useFtpStore.getState();
       if (st.activeId !== id) return;
-      const next = queue.shift();
-      if (!next || budget <= 0) return;
-      const key = `${id}:${next.path}`;
-      const known = st.listingCache[key];
-      if (known) {
-        // Already cached (an earlier walk got it) — still descend, its
-        // children may not be.
-        if (next.depth < PREFETCH_DEPTH) {
-          for (const p of subdirPaths(next.path, known)) {
-            queue.push({ path: p, depth: next.depth + 1 });
-          }
-        }
-        continue;
-      }
-      budget--;
+      const path = queue.shift();
+      if (!path) return;
+      const key = `${id}:${path}`;
+      if (st.listingCache[key]) continue;
       try {
         // The _bg variant runs on its own connection — warming can
         // never make a real click wait.
-        const rows = await ipc.ftpListDirBg(id, next.path);
+        const rows = await ipc.ftpListDirBg(id, path);
         useFtpStore.setState((s) => ({
           listingCache: { ...s.listingCache, [key]: rows },
         }));
-        if (next.depth < PREFETCH_DEPTH) {
-          for (const p of subdirPaths(next.path, rows)) {
-            queue.push({ path: p, depth: next.depth + 1 });
-          }
-        }
       } catch {
         // A failure ends this worker quietly — the warm is a hint, not
         // a promise, and errors belong to real navigation only.
@@ -154,6 +130,43 @@ async function prefetchChildren(id: string, base: string, entries: FtpEntry[]) {
   };
   await Promise.all([worker(), worker()]);
 }
+
+/** Walks the tree under `base` into the cache, breadth-first within the
+ *  budget: children first, then grandchildren — the order the user is
+ *  most likely to click. `levelOne` resolves when the immediate
+ *  children are done (the connect flow holds its panel on it); `all`
+ *  when the walk has finished or given up. */
+function startWarmWalk(
+  id: string,
+  base: string,
+  entries: FtpEntry[],
+): { levelOne: Promise<void>; all: Promise<void> } {
+  const gen = ++prefetchGen;
+  const level1 = subdirPaths(base, entries);
+  const levelOne = warmMany(id, level1, gen);
+  const all = levelOne.then(async () => {
+    let frontier = level1;
+    let budget = PREFETCH_BUDGET - level1.length;
+    for (let depth = 2; depth <= PREFETCH_DEPTH && budget > 0; depth++) {
+      const next: string[] = [];
+      const cache = useFtpStore.getState().listingCache;
+      for (const p of frontier) {
+        const rows = cache[`${id}:${p}`];
+        if (rows) next.push(...subdirPaths(p, rows));
+      }
+      const take = next.slice(0, budget);
+      if (take.length === 0) return;
+      budget -= take.length;
+      await warmMany(id, take, gen);
+      frontier = take;
+    }
+  });
+  return { levelOne, all };
+}
+
+/** The most recent walk, so the connect flow can hold its "reading
+ *  remote directory" panel until the first level is actually cached. */
+let lastWalk: { levelOne: Promise<void> } | null = null;
 
 /** Forgets every cached listing that belongs to one connection. */
 function dropCacheFor(
@@ -269,6 +282,16 @@ export const useFtpStore = create<State>((set, get) => ({
       // remote directory…" and only hands over to the pane when the
       // rows are actually there — the WinSCP order of events.
       await get().refresh();
+      // …and then some: hold the panel until the immediate children are
+      // cached too, so the first click after it disappears is instant.
+      // The race is a backstop — a server that refuses the warm
+      // connections must not trap the user on the panel.
+      if (lastWalk) {
+        await Promise.race([
+          lastWalk.levelOne,
+          new Promise((r) => setTimeout(r, 15_000)),
+        ]);
+      }
     } catch (e) {
       set({ error: String(e) });
     } finally {
@@ -333,9 +356,10 @@ export const useFtpStore = create<State>((set, get) => ({
           server_ms: Math.round(performance.now() - t0),
         },
       });
-      // Fire-and-forget: warm this directory's children while the user
-      // reads it, so their next click lands on the cache.
-      void prefetchChildren(id, path, entries);
+      // Fire-and-forget: warm the tree under this directory while the
+      // user reads it, so their next click lands on the cache.
+      lastWalk = startWarmWalk(id, path, entries);
+      void lastWalk.levelOne;
     } catch (e) {
       // Keep the directory that was on screen: dropping the user out of
       // a working folder because one listing failed helps nobody. The
