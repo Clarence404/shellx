@@ -8,8 +8,11 @@ const SHORTCUTS: Array<{ action: string; keys: string[] }> = [
   { action: "Next tab", keys: ["Ctrl", "Tab"] },
   { action: "Previous tab", keys: ["Ctrl", "Shift", "Tab"] },
   { action: "Command palette", keys: ["Ctrl", "K"] },
+  { action: "Snippets", keys: ["Ctrl", "Shift", "K"] },
   { action: "Toggle sidebar", keys: ["Ctrl", "Shift", "B"] },
   { action: "Search in terminal", keys: ["Ctrl", "Shift", "F"] },
+  { action: "Copy terminal selection", keys: ["Ctrl", "Shift", "C"] },
+  { action: "Paste into terminal", keys: ["Ctrl", "Shift", "V"] },
 ];
 
 const kbdStyle: React.CSSProperties = {

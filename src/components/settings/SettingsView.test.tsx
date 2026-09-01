@@ -26,6 +26,14 @@ describe("SettingsView", () => {
     expect(screen.getByRole("heading", { name: "Appearance" })).toBeInTheDocument();
   });
 
+  it("an available update marks the About row, so the gear's dot has a trail", async () => {
+    const { useUpdater } = await import("../../state/updater");
+    useUpdater.setState({ status: "available" });
+    render(<SettingsView />);
+    expect(screen.getByTestId("update-dot")).toBeInTheDocument();
+    useUpdater.setState({ status: "idle" });
+  });
+
   it("switches to About when its sidebar row is clicked", () => {
     render(<SettingsView />);
     fireEvent.click(screen.getByText("About"));

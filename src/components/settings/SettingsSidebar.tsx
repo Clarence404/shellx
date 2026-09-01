@@ -1,6 +1,7 @@
 import { Palette, Info, Wrench, Shield, Keyboard, FileText, PackageOpen, type LucideIcon } from "lucide-react";
 import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { useSettingsStore, useIconSizes } from "../../state/settings";
+import { useUpdater } from "../../state/updater";
 import { SectionHeader } from "../SectionHeader";
 import { useT } from "../../i18n";
 
@@ -15,9 +16,14 @@ export function SettingsSidebar({ active, onSelect }: Props) {
   const t = useT();
   const iconSizes = useIconSizes();
   const reset = () => useSettingsStore.getState().reset();
+  const updateAvailable = useUpdater((s) => s.status === "available");
 
-  function Row({ id, label, Icon, onClick }: {
+  function Row({ id, label, Icon, onClick, showDot }: {
     id: string; label: string; Icon: LucideIcon; onClick?: () => void;
+    /** Same red dot the rail's gear carries — it has to keep pointing
+     *  the way once the user is inside Settings, or the trail goes
+     *  cold at the sidebar. */
+    showDot?: boolean;
   }) {
     return (
       <div
@@ -34,6 +40,12 @@ export function SettingsSidebar({ active, onSelect }: Props) {
       >
         <Icon size={iconSizes.md} strokeWidth={1.8} style={{ flexShrink: 0 }} />
         <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+        {showDot && (
+          <span data-testid="update-dot" style={{
+            width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
+            marginLeft: "auto", background: "var(--error)",
+          }} />
+        )}
       </div>
     );
   }
@@ -57,7 +69,7 @@ export function SettingsSidebar({ active, onSelect }: Props) {
         onClick={() => onSelect("advanced")} />
       <Row id="backup" label={t("Import & export")} Icon={PackageOpen}
         onClick={() => onSelect("backup")} />
-      <Row id="about" label={t("About")} Icon={Info}
+      <Row id="about" label={t("About")} Icon={Info} showDot={updateAvailable}
         onClick={() => onSelect("about")} />
       <div style={{ flex: 1 }} />
       <button

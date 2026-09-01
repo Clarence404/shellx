@@ -62,6 +62,7 @@ tauri-plugin-dialog = "2"
 dirs = "5"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+tauri-plugin-clipboard-manager = "2"
 chrono = { version = "0.4", features = ["serde"] }
 encoding_rs = "0.8.35"
 # `deprecated` is only there for implicit FTPS: upstream considers it

@@ -51,8 +51,11 @@ export interface SaveFtpHostArgs {
 export interface UpdateFtpHostArgs
   extends Partial<Omit<SaveFtpHostArgs, "password" | "passphrase">> {
   id: string;
-  password?: string;
-  passphrase?: string;
+  /** A string stores it, null deletes it from the keychain (the Forget
+   *  checkboxes), absent keeps whatever is there — the same three-state
+   *  contract the host form uses. */
+  password?: string | null;
+  passphrase?: string | null;
 }
 
 export interface FtpHostSaveResult extends FtpHost {

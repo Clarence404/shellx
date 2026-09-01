@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { TriangleAlert, ChevronRight, ChevronDown } from "lucide-react";
 import { useFtpStore } from "../state/ftp";
+import { useHostsStore } from "../state/hosts";
+import { KeyPicker } from "./KeyPicker";
 import type {
   FtpAuthMethod, FtpCharset, FtpHost, FtpProtocol, FtpTlsMode,
 } from "../types/ftp";
@@ -48,6 +49,9 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
   const [authMethod, setAuthMethod] = useState<FtpAuthMethod>(initial?.auth_method ?? "password");
   const [keyPath, setKeyPath] = useState(initial?.key_path ?? "");
   const [passphrase, setPassphrase] = useState("");
+  const [forgetPassword, setForgetPassword] = useState(false);
+  const [forgetPassphrase, setForgetPassphrase] = useState(false);
+  const keychainAvailable = useHostsStore((st) => st.keychainAvailable);
   const [anonymous, setAnonymous] = useState(
     initial?.protocol !== "sftp" && initial?.username === "anonymous",
   );
@@ -102,11 +106,6 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
   const canSave =
     !!host.trim() && !!username.trim() && portValid && !busy && (!usesKey || !!keyPath.trim());
 
-  async function browseForKey() {
-    const picked = await openDialog({ multiple: false, directory: false });
-    if (picked) setKeyPath(String(picked));
-  }
-
   async function handleSave() {
     if (!canSave) return;
     setBusy(true);
@@ -119,16 +118,25 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
         auth_method: authMethod,
         key_path: usesKey ? keyPath.trim() : null,
         tls_mode: tlsMode,
-        // Secrets are omitted rather than sent empty: an empty string
-        // would overwrite what is already in the keychain.
-        ...(password ? { password } : {}),
-        ...(passphrase ? { passphrase } : {}),
       };
+      // Secrets are omitted rather than sent empty: an empty string
+      // would overwrite what is already in the keychain. An explicit
+      // null (the Forget checkboxes, edit mode only) deletes it —
+      // same semantics as the host form.
       if (editing && initial) {
-        await useFtpStore.getState().updateHost({ id: initial.id, ...common });
+        await useFtpStore.getState().updateHost({
+          id: initial.id,
+          ...common,
+          ...(forgetPassword ? { password: null } : password ? { password } : {}),
+          ...(forgetPassphrase ? { passphrase: null } : passphrase ? { passphrase } : {}),
+        });
         onDone(initial.id);
       } else {
-        onDone((await useFtpStore.getState().addHost(common)).id);
+        onDone((await useFtpStore.getState().addHost({
+          ...common,
+          ...(password ? { password } : {}),
+          ...(passphrase ? { passphrase } : {}),
+        })).id);
       }
     } catch (e) {
       setErr(String(e));
@@ -225,13 +233,33 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
                 value={password}
                 onChange={setPassword}
                 type="password"
-                disabled={anonymous}
+                disabled={anonymous || forgetPassword}
                 placeholder={editing && !anonymous ? t("leave blank to keep the stored one") : ""}
               />
             </Field>
           </div>
         )}
       </div>
+
+      {!keychainAvailable && (
+        <div style={{ fontSize: 10, color: "var(--text-3)", margin: "-4px 0 8px" }}>
+          {t("(Password storage unavailable on this system)")}
+        </div>
+      )}
+
+      {editing && keychainAvailable && !usesKey && !anonymous && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, marginBottom: 10, color: "var(--text-1)" }}>
+          <input
+            type="checkbox"
+            checked={forgetPassword}
+            onChange={(e) => setForgetPassword(e.target.checked)}
+          />
+          {t("Forget stored password")}
+          <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+            {t("Removes the saved password. You'll need to type it next connection.")}
+          </span>
+        </label>
+      )}
 
       {family === "ftp" && (
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, marginBottom: 10 }}>
@@ -313,30 +341,33 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
               {usesKey && (
                 <>
                   <Field label={t("Private key")}>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <Input value={keyPath} onChange={setKeyPath} placeholder="~/.ssh/id_ed25519" />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void browseForKey()}
-                        style={{
-                          flexShrink: 0, height: 26, padding: "0 10px", borderRadius: 4,
-                          fontSize: 12, border: "1px solid var(--border-hi)",
-                          background: "var(--panel-1)", color: "var(--text-2)",
-                        }}>
-                        {t("Browse…")}
-                      </button>
-                    </div>
+                    <KeyPicker
+                      value={keyPath || null}
+                      onChange={(p) => setKeyPath(p ?? "")}
+                      autoPreselect={!editing}
+                    />
                   </Field>
                   <Field label={t("Key passphrase")}>
                     <Input
                       value={passphrase}
                       onChange={setPassphrase}
                       type="password"
-                      placeholder={t("leave blank if the key has none")}
+                      disabled={forgetPassphrase}
+                      placeholder={editing
+                        ? t("leave blank to keep the stored one")
+                        : t("leave blank if the key has none")}
                     />
                   </Field>
+                  {editing && keychainAvailable && (
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, marginBottom: 9, color: "var(--text-1)" }}>
+                      <input
+                        type="checkbox"
+                        checked={forgetPassphrase}
+                        onChange={(e) => setForgetPassphrase(e.target.checked)}
+                      />
+                      {t("Forget stored passphrase")}
+                    </label>
+                  )}
                 </>
               )}
             </>

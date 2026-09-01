@@ -142,6 +142,32 @@ describe("PaneLayout", () => {
     expect(document.querySelectorAll('[data-surface="a"]')).toHaveLength(1);
   });
 
+  it("closing the second tab hands the pane back to the first, surface attached", () => {
+    // The user-reported blank: open A, open B, close B — A's pane came
+    // back white. The surface host must be attached inside A's pane
+    // slot, not left in the hidden park.
+    useSessions.setState({ sessions: [session("a", "ubuntu")], activeId: "a", layout: null });
+    render(<PaneLayout />);
+    expect(document.querySelector('[data-pane-id="a"] [data-surface="a"]')).not.toBeNull();
+
+    act(() => {
+      useSessions.getState().addSession(session("b", "db01"));
+    });
+    expect(document.querySelector('[data-pane-id="b"] [data-surface="b"]')).not.toBeNull();
+
+    act(() => {
+      useSessions.getState().removeSession("b");
+    });
+    expect(useSessions.getState().activeId).toBe("a");
+    const surfaceA = document.querySelector('[data-surface="a"]');
+    expect(surfaceA).not.toBeNull();
+    expect(document.querySelector('[data-pane-id="a"] [data-surface="a"]')).not.toBeNull();
+    // The dead session's host div must leave the DOM entirely — left in
+    // the slot, its full-height corpse sat on top of A and the pane
+    // showed white.
+    expect(document.querySelector('[data-surface="b"]')).toBeNull();
+  });
+
   it("a pane header press arms a drag without moving anything yet", () => {
     useSessions.setState({ layout: tree.splitPane(tree.leaf("a"), "a", "right", "b") });
     render(<PaneLayout />);

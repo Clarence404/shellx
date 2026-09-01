@@ -97,6 +97,15 @@ const zh: Record<string, string> = {
   "passive mode": "被动",
   "active mode": "主动",
 
+  // Terminal clipboard
+  "Paste": "粘贴",
+  "Copy terminal selection": "复制终端选中内容",
+  "Paste into terminal": "粘贴到终端",
+  "Select all": "全选",
+  "Paste into the terminal?": "粘贴到终端？",
+  "chars": "字符",
+  "every line break runs a command the moment it lands": "每个换行都会立即执行一条命令",
+
   // Snippets
   "Snippets": "命令片段",
   "Manage snippets": "管理片段",

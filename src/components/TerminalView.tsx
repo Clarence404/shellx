@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
-import { ChevronUp, ChevronDown, X } from "lucide-react";
+import { ChevronUp, ChevronDown, X, Copy, ClipboardPaste, TextSelect } from "lucide-react";
+import { HostContextMenu } from "./HostContextMenu";
+import { needsPasteConfirm } from "../terminal/pasteGuard";
+import {
+  readText as clipboardReadText,
+  writeText as clipboardWriteText,
+} from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
 import { onSessionClosed } from "../ipc/events";
 import { subscribeSession } from "../state/sessionStream";
@@ -26,6 +32,9 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  /** A paste big enough to deserve a look before it hits the shell. */
+  const [pastePending, setPastePending] = useState<string | null>(null);
   const terminal = useSettingsStore((s) => s.terminal);
   const themeId = useSettingsStore((s) => s.themeId);
 
@@ -47,6 +56,45 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
 
   function findPrev(q: string) {
     if (q) searchRef.current?.findPrevious(q);
+  }
+
+  function copySelection() {
+    const sel = termRef.current?.getSelection();
+    // The Tauri plugin talks to the OS clipboard directly —
+    // navigator.clipboard.readText made WebView2 raise a browser-style
+    // permission prompt over the app.
+    if (sel) void clipboardWriteText(sel);
+  }
+
+  /** Ctrl+Shift+V and the context menu both land here. Anything with a
+   *  line break — which the shell would EXECUTE on arrival — or simply
+   *  very long goes through a confirmation with a preview first. */
+  async function pasteFromClipboard() {
+    let text = "";
+    try {
+      text = await clipboardReadText();
+    } catch {
+      return; // clipboard unreadable (empty, or holds a non-text item)
+    }
+    if (!text) return;
+    if (needsPasteConfirm(text)) {
+      setPastePending(text);
+    } else {
+      doPaste(text);
+    }
+  }
+
+  function doPaste(text: string) {
+    // Straight to the PTY, deliberately WITHOUT bracketed paste:
+    // xterm's paste() wraps the text in \x1b[200~ markers when the
+    // shell asked for them, and bash 5.1+ then paints the whole paste
+    // in reverse video until Enter — which read as a rendering bug.
+    // The multi-line-executes-immediately risk those markers guard is
+    // already covered by the confirmation dialog above.
+    const normalized = text.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
+    void writeSessionInput(sessionId, Array.from(new TextEncoder().encode(normalized)));
+    setPastePending(null);
+    termRef.current?.focus();
   }
 
   useEffect(() => {
@@ -91,6 +139,23 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     term.attachCustomKeyEventHandler((ev) => {
       if (ev.type === "keydown" && ev.ctrlKey && ev.shiftKey && (ev.key === "F" || ev.key === "f")) {
         openSearch();
+        return false;
+      }
+      // Terminus-style clipboard chords. Plain Ctrl+C stays SIGINT and
+      // plain Ctrl+V stays readline's quoted-insert — only the Shift
+      // variants are ours, and both are consumed even when they end up
+      // doing nothing (an empty selection must not leak a ^C).
+      if (ev.type === "keydown" && ev.ctrlKey && ev.shiftKey && (ev.key === "C" || ev.key === "c")) {
+        // preventDefault matters: Ctrl+Shift+C/V are ALSO the browser's
+        // own copy/paste-as-plain-text chords, and without it the
+        // WebView pasted a second copy natively right after ours.
+        ev.preventDefault();
+        copySelection();
+        return false;
+      }
+      if (ev.type === "keydown" && ev.ctrlKey && ev.shiftKey && (ev.key === "V" || ev.key === "v")) {
+        ev.preventDefault();
+        void pasteFromClipboard();
         return false;
       }
       return true;
@@ -293,7 +358,12 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
   }, [themeId]);
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div
+      style={{ position: "relative", width: "100%", height: "100%" }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setMenu({ x: e.clientX, y: e.clientY });
+      }}>
       <div
         ref={hostRef}
         // Gutter (8px padding around xterm) matches the current xterm
@@ -350,6 +420,121 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
           </button>
         </div>
       )}
+      {menu && (
+        <HostContextMenu
+          x={menu.x} y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            // Copy only offers itself when there is something to copy —
+            // a disabled row would just restate the obvious.
+            ...(termRef.current?.hasSelection()
+              ? [{
+                  label: `${t("Copy")}  (Ctrl+Shift+C)`,
+                  icon: <Copy size={12} />,
+                  onClick: copySelection,
+                }]
+              : []),
+            {
+              label: `${t("Paste")}  (Ctrl+Shift+V)`,
+              icon: <ClipboardPaste size={12} />,
+              onClick: () => void pasteFromClipboard(),
+            },
+            { kind: "separator" as const },
+            {
+              label: t("Select all"),
+              icon: <TextSelect size={12} />,
+              onClick: () => termRef.current?.selectAll(),
+            },
+          ]}
+        />
+      )}
+      {pastePending !== null && (
+        <PasteConfirm
+          text={pastePending}
+          onCancel={() => { setPastePending(null); termRef.current?.focus(); }}
+          onPaste={() => doPaste(pastePending)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The look-before-it-runs dialog for big pastes. Every line break in a
+ * pasted block EXECUTES on arrival (unless the remote app negotiated
+ * bracketed paste), so a multi-line paste deserves one glance — the
+ * same guard Windows Terminal and Terminus put up.
+ */
+function PasteConfirm({ text, onCancel, onPaste }: {
+  text: string;
+  onCancel: () => void;
+  onPaste: () => void;
+}) {
+  const t = useT();
+  const lines = text.split(/\r\n|\r|\n/).length;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onCancel(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <div
+      role="dialog"
+      aria-label="confirm paste"
+      onClick={onCancel}
+      style={{
+        position: "absolute", inset: 0, zIndex: 30,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(560px, 90%)", padding: "14px 16px",
+          background: "var(--panel-2)", border: "1px solid var(--border)",
+          borderRadius: 8, boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+        }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)", marginBottom: 4 }}>
+          {t("Paste into the terminal?")}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8 }}>
+          {lines > 1
+            ? `${lines} ${t("lines")} · ${text.length} ${t("chars")} — ${t("every line break runs a command the moment it lands")}`
+            : `${text.length} ${t("chars")}`}
+        </div>
+        <pre style={{
+          maxHeight: 180, overflow: "auto", margin: 0, marginBottom: 10,
+          padding: "6px 8px", borderRadius: 4,
+          background: "var(--panel-1)", border: "1px solid var(--border)",
+          fontSize: 11, lineHeight: 1.5, color: "var(--text-2)",
+          fontFamily: '"JetBrains Mono", var(--font-mono)',
+          whiteSpace: "pre-wrap", wordBreak: "break-all",
+        }}>{text.length > 4000 ? `${text.slice(0, 4000)}\n…` : text}</pre>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            autoFocus
+            onClick={onPaste}
+            style={{
+              flex: 1, height: 28, borderRadius: 5, border: "none",
+              background: "var(--accent)", color: "var(--text-on-accent)",
+              fontSize: 12, fontWeight: 600, cursor: "pointer",
+            }}>
+            {t("Paste")}
+          </button>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1, height: 28, borderRadius: 5, fontSize: 12,
+              border: "1px solid var(--border-hi)", background: "transparent",
+              color: "var(--text-2)", cursor: "pointer",
+            }}>
+            {t("Cancel")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
