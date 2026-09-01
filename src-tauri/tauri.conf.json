@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ShellX",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "identifier": "io.github.clarence404.shellx",
   "build": {
     "frontendDist": "../dist",

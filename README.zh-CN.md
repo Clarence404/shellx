@@ -4,7 +4,7 @@
 
 一个小巧、精致的终端 + 文件传输客户端 —— 跨平台（Windows / macOS / Linux），开源，基于 Tauri + Rust + React。
 
-当前版本：**v0.23.0** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
+当前版本：**v0.27.0** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
 
 ---
 
@@ -12,7 +12,7 @@
 
 ShellX 是一个桌面应用，提供：
 
-- **SSH 终端**（多 tab）—— 连接 Linux / BSD / macOS 服务器，主题、字体、光标样式全可定制；支持公钥（Ed25519/RSA/ECDSA）或密码认证，连接时对照 `~/.ssh/known_hosts` 验证 host key
+- **SSH 终端**（多 tab）—— 连接 Linux / BSD / macOS 服务器，主题、字体、光标样式全可定制；支持公钥（Ed25519/RSA/ECDSA）或密码认证，连接时对照 `~/.ssh/known_hosts` 验证 host key。Ctrl+Shift+C/V 复制粘贴，多行粘贴先预览再执行，右键菜单提供复制 / 粘贴 / 全选
 - **本地终端** —— 在 SSH 会话旁边直接打开本机 shell（Windows 默认 PowerShell，可在设置里换任意 shell）
 - **SSH 隧道（端口转发）** —— 全新的「隧道」总览页在一个视图里列出所有主机的所有转发规则；直接点启动即可开通（主机若未连接，shellx 会在后台悄悄开一条 SSH 传输），断线自动退避重连、开机自动启动指定隧道、行内拖拽排序、跨主机移动规则免删除重建、局域网共享（绑定 0.0.0.0），也能粘贴 `ssh -L …` 命令批量导入
 - **结构化日志** —— 「设置 → 日志」实时查看所有隧道、会话、文件传输、SFTP、监控、Host key、钥匙串、更新子系统的事件；按级别/类别/关键字筛选、点行看完整 JSON、一键导出 jsonl 用于反馈 bug；日志文件按天轮转在 `~/.shellx/logs/` 下，保留 7 天
@@ -185,6 +185,8 @@ pnpm tsc --noEmit
 | 命令面板                | `Ctrl+K`                         | `Cmd+K`                          |
 | 侧边栏抽屉开关          | `Ctrl+Shift+B`                   | `Cmd+B`                          |
 | 终端内搜索              | `Ctrl+Shift+F`                   | `Ctrl+Shift+F`                   |
+| 命令片段                | `Ctrl+Shift+K`                   | `Cmd+Shift+K`                    |
+| 终端复制 / 粘贴         | `Ctrl+Shift+C` / `Ctrl+Shift+V`  | `Ctrl+Shift+C` / `Ctrl+Shift+V`  |
 
 Windows/Linux 上用 `Ctrl+Shift+T` / `Ctrl+Shift+W`（不是 `Ctrl+T` / `Ctrl+W`），避免和终端里的常用绑定冲突（bash / tmux 通常都用 `Ctrl+T` 和 `Ctrl+W`）。
 

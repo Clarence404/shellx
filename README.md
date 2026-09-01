@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.23.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.27.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -12,7 +12,7 @@ Current release: **v0.23.0** — see [`docs/release-notes/`](docs/release-notes/
 
 ShellX is a desktop app that gives you:
 
-- **SSH terminal** in tabs — connect to Linux / BSD / macOS servers, get a working shell with themes, custom fonts, cursor style; public-key (Ed25519/RSA/ECDSA) or password auth, host-key verification against `~/.ssh/known_hosts`
+- **SSH terminal** in tabs — connect to Linux / BSD / macOS servers, get a working shell with themes, custom fonts, cursor style; public-key (Ed25519/RSA/ECDSA) or password auth, host-key verification against `~/.ssh/known_hosts`. Ctrl+Shift+C/V copy and paste with a preview before multi-line pastes run, and right-click offers Copy / Paste / Select all
 - **Local terminal** — open a shell on your own machine (PowerShell by default on Windows; any shell via Settings) in a tab right next to your SSH sessions
 - **SSH tunnels (port forwarding)** — a dedicated Tunnels view lists every saved forward across every host in one place; start any rule directly (shellx opens the SSH transport silently when the host isn't already connected), auto-reconnect with backoff when a tunnel drops, autostart selected rules on app launch, drag rows to reorder, move a rule between hosts without recreating, share on the LAN (bind 0.0.0.0), or paste an `ssh -L …` command to bulk-import rules
 - **Structured logs** — Settings → Logs shows a real-time stream of every event across tunnels, sessions, file transfers, sftp, monitor, host-key checks, keychain and updater. Filter by level / category / free-text, click any row for full JSON, and export a jsonl dump for bug reports; daily-rotated files at `~/.shellx/logs/` with 7-day retention
@@ -185,6 +185,8 @@ pnpm tsc --noEmit
 | Command palette         | `Ctrl+K`                         | `Cmd+K`                          |
 | Toggle sidebar drawer   | `Ctrl+Shift+B`                   | `Cmd+B`                          |
 | Search in terminal      | `Ctrl+Shift+F`                   | `Ctrl+Shift+F`                   |
+| Snippets                | `Ctrl+Shift+K`                   | `Cmd+Shift+K`                    |
+| Terminal copy / paste   | `Ctrl+Shift+C` / `Ctrl+Shift+V`  | `Ctrl+Shift+C` / `Ctrl+Shift+V`  |
 
 Windows/Linux use `Ctrl+Shift+T` / `Ctrl+Shift+W` (not `Ctrl+T` / `Ctrl+W`) so they don't collide with terminal-inside-terminal muscle memory (`Ctrl+T` and `Ctrl+W` are common bash/tmux bindings).
 
