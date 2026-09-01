@@ -34,6 +34,14 @@ vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({ onDragDropEvent: () => Promise.resolve(() => {}) }),
 }));
 vi.mock("../ipc/local", () => ({ localIsDir: vi.fn().mockResolvedValue(false) }));
+vi.mock("../ipc/keys", () => ({
+  keysDiscover: vi.fn().mockResolvedValue([
+    {
+      path: "C:/Users/x/.ssh/id_ed25519", fileName: "id_ed25519",
+      kind: "supported", algo: "ED25519", comment: null, encrypted: false,
+    },
+  ]),
+}));
 vi.mock("../ipc/hosts", () => ({
   listHosts: vi.fn().mockResolvedValue([]),
   keychainAvailable: vi.fn().mockResolvedValue(false),
@@ -216,16 +224,16 @@ describe("FtpView", () => {
 
   it("will not save a key connection with no key chosen", async () => {
     const user = userEvent.setup();
+    // Nothing on disk to auto-preselect this time.
+    const { keysDiscover } = await import("../ipc/keys");
+    (keysDiscover as ReturnType<typeof vi.fn>).mockResolvedValueOnce([]);
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
     await user.selectOptions(screen.getByLabelText("File protocol"), "sftp");
     await user.selectOptions(screen.getByLabelText("Authentication"), "publickey");
     await user.type(screen.getByPlaceholderText("10.20.1.40"), "10.0.0.5");
     await user.type(screen.getByPlaceholderText("ftpuser"), "deploy");
-
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-    await user.type(screen.getByPlaceholderText("~/.ssh/id_ed25519"), "/home/me/.ssh/id_ed25519");
-    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
   it("sends the key path and leaves the passphrase out when blank", async () => {
@@ -239,13 +247,15 @@ describe("FtpView", () => {
     await user.selectOptions(screen.getByLabelText("Authentication"), "publickey");
     await user.type(screen.getByPlaceholderText("10.20.1.40"), "10.0.0.5");
     await user.type(screen.getByPlaceholderText("ftpuser"), "deploy");
-    await user.type(screen.getByPlaceholderText("~/.ssh/id_ed25519"), "/home/me/.ssh/id_ed25519");
+    // The discovered key pre-selects in create mode, the same nicety
+    // the host form has; picking a chip works the same way.
+    await user.click(await screen.findByRole("button", { name: "id_ed25519" }));
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(ipc.ftpHostSave).toHaveBeenCalled());
     const args = (ipc.ftpHostSave as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(args).toMatchObject({
-      protocol: "sftp", auth_method: "publickey", key_path: "/home/me/.ssh/id_ed25519", port: 22,
+      protocol: "sftp", auth_method: "publickey", key_path: "C:/Users/x/.ssh/id_ed25519", port: 22,
     });
     // An empty passphrase would overwrite whatever the keychain holds,
     // so it is omitted rather than sent blank.

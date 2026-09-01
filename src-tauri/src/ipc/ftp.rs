@@ -43,8 +43,13 @@ pub struct UpdateFtpHostArgs {
     pub id: Uuid,
     #[serde(flatten)]
     pub patch: FtpHostUpdate,
-    pub password: Option<String>,
-    pub passphrase: Option<String>,
+    /// Three states, same contract as the host form: absent keeps the
+    /// stored secret, an explicit null deletes it (the Forget
+    /// checkboxes), a string replaces it.
+    #[serde(default, deserialize_with = "crate::store::hosts::double_option_deserialize")]
+    pub password: Option<Option<String>>,
+    #[serde(default, deserialize_with = "crate::store::hosts::double_option_deserialize")]
+    pub passphrase: Option<Option<String>>,
 }
 
 #[derive(Deserialize)]
@@ -84,8 +89,21 @@ pub async fn ftp_host_update(
     keychain: State<'_, KeychainStore>,
 ) -> Result<FtpHostSaveResult> {
     let host = store.update(args.id, args.patch).await?;
-    let password_stored = store_password(&keychain, host.id, args.password.as_deref());
-    store_passphrase(&keychain, host.id, args.passphrase.as_deref());
+    let password_stored = match &args.password {
+        None => true, // keep whatever is stored
+        Some(None) => {
+            let _ = keychain.delete_password(host.id);
+            true
+        }
+        Some(Some(p)) => store_password(&keychain, host.id, Some(p)),
+    };
+    match &args.passphrase {
+        None => {}
+        Some(None) => {
+            let _ = keychain.delete_passphrase(host.id);
+        }
+        Some(Some(p)) => store_passphrase(&keychain, host.id, Some(p)),
+    }
     Ok(FtpHostSaveResult { host, password_stored })
 }
 

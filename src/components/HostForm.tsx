@@ -1,19 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useT } from "../i18n";
 import { useHostsStore } from "../state/hosts";
 import { openConnection } from "../ipc/commands";
-import { keysDiscover } from "../ipc/keys";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { KeyPicker } from "./KeyPicker";
 import type { HostInfo } from "../types/host";
-import type { DiscoveredKey } from "../ipc/keys";
 
 type Mode = "create" | "edit";
 type DoneAction = "connected" | "saved";
-
-// Windows paths can arrive with either \ or / depending on whether they came
-// from keysDiscover() (forward slashes) or from a stored DB value (whatever
-// the file picker produced). Normalise before comparing.
-function normPath(p: string) { return p.replace(/\\/g, "/"); }
 
 interface Props {
   mode: Mode;
@@ -54,22 +47,6 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   );
   const [passphrase, setPassphrase] = useState("");
   const [forgetPassphrase, setForgetPassphrase] = useState(false);
-  const [discoveredKeys, setDiscoveredKeys] = useState<DiscoveredKey[]>([]);
-  const [keyDropdownOpen, setKeyDropdownOpen] = useState(false);
-  const [keyFilter, setKeyFilter] = useState("");
-
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  const supportedKeys = useMemo(
-    () => discoveredKeys.filter((k) => k.kind === "supported"),
-    [discoveredKeys]
-  );
-  const filteredKeys = useMemo(
-    () => supportedKeys.filter((k) =>
-      k.fileName.toLowerCase().includes(keyFilter.toLowerCase())
-    ),
-    [supportedKeys, keyFilter]
-  );
 
   // Auto-fill label from username@host in create mode when both are entered
   useEffect(() => {
@@ -78,42 +55,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     }
   }, [mode, username, host, label]);
 
-  // Discover available keys on mount in both create and edit modes.
-  // In create mode: auto-switch to publickey and pre-select the best key.
-  // In edit mode: just populate the picker so the user can see and change keys.
-  useEffect(() => {
-    keysDiscover().then((keys) => {
-      setDiscoveredKeys(keys);
-      if (mode === "create" && keys.length > 0) {
-        // Pre-select the best key so the picker is ready if the user switches to key mode,
-        // but do NOT auto-switch authMode — password is the default.
-        const firstSupported = keys.find((k) => k.kind === "supported");
-        if (firstSupported) setSelectedKeyPath(firstSupported.path);
-      }
-    }).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Click-outside to close key dropdown
-  useEffect(() => {
-    if (!keyDropdownOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setKeyDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [keyDropdownOpen]);
-
   const canRememberPw = keychainAvailable && password.length > 0;
-
-  async function handleBrowse() {
-    const p = await openDialog({
-      multiple: false,
-      filters: [{ name: "SSH Keys", extensions: [] }],
-    });
-    if (typeof p === "string") setSelectedKeyPath(p);
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -229,187 +171,6 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
 
   const busyLabel = mode === "edit" ? t("Saving…") : t("Connecting…");
 
-  // Render the key picker (chips or dropdown)
-  function renderKeyPicker() {
-    const unsupportedKeys = discoveredKeys.filter((k) => k.kind !== "supported");
-    // If the currently selected path isn't in the discovered list (e.g. was
-    // manually browsed or came from initial.key_path), surface it as a
-    // standalone chip so the user can see something is selected.
-    const selectedInList = selectedKeyPath
-      ? supportedKeys.some((k) => normPath(k.path) === normPath(selectedKeyPath))
-      : true;
-    const externalChip = selectedKeyPath && !selectedInList ? (
-      <div style={{
-        display: "flex", alignItems: "center", gap: 4,
-        padding: "3px 8px", fontSize: 11, borderRadius: 4,
-        border: "1px solid var(--accent)",
-        background: "var(--accent)", color: "var(--text-on-accent)",
-      }}>
-        <span>{selectedKeyPath.split(/[/\\]/).pop()}</span>
-        <button
-          type="button"
-          onClick={() => setSelectedKeyPath(null)}
-          style={{ background: "none", border: "none", cursor: "pointer", padding: 0,
-            color: "inherit", fontSize: 13, lineHeight: 1 }}
-          title={t("Deselect")}
-        >×</button>
-      </div>
-    ) : null;
-
-    if (supportedKeys.length >= 5) {
-      // Dropdown mode for 5+ supported keys
-      const selectedKey = supportedKeys.find((k) => normPath(k.path) === normPath(selectedKeyPath ?? ""));
-      return (
-        <div ref={dropdownRef} style={{ position: "relative" }}>
-          {externalChip && <div style={{ marginBottom: 4 }}>{externalChip}</div>}
-          <button
-            type="button"
-            onClick={() => setKeyDropdownOpen((v) => !v)}
-            style={{
-              width: "100%", textAlign: "left", padding: "5px 8px", fontSize: 12,
-              background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 4,
-              color: "var(--text-1)", cursor: "pointer",
-            }}
-          >
-            {selectedKey?.fileName ?? "— choose a key —"}
-          </button>
-          {keyDropdownOpen && (
-            <div style={{
-              position: "absolute", zIndex: 10, top: "100%", left: 0, right: 0,
-              background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 4,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.2)", overflow: "hidden",
-            }}>
-              <input
-                type="text"
-                value={keyFilter}
-                onChange={(e) => setKeyFilter(e.target.value)}
-                placeholder={t("Filter…")}
-                style={{
-                  width: "100%", padding: "6px 8px", fontSize: 12,
-                  background: "var(--panel-1)", border: "none",
-                  borderBottom: "1px solid var(--border)",
-                  color: "var(--text-1)", boxSizing: "border-box",
-                }}
-              />
-              <div style={{ maxHeight: 160, overflowY: "auto" }}>
-                {filteredKeys.map((k) => (
-                  <button
-                    key={k.path}
-                    type="button"
-                    onClick={() => {
-                      setSelectedKeyPath(k.path);
-                      setKeyDropdownOpen(false);
-                      setKeyFilter("");
-                    }}
-                    style={{
-                      display: "block", width: "100%", textAlign: "left",
-                      padding: "5px 8px", fontSize: 12, border: "none", cursor: "pointer",
-                      background: normPath(k.path) === normPath(selectedKeyPath ?? "") ? "var(--accent)" : "transparent",
-                      color: normPath(k.path) === normPath(selectedKeyPath ?? "") ? "var(--text-on-accent)" : "var(--text-1)",
-                    }}
-                  >
-                    {k.fileName}
-                    {k.algo && (
-                      <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 6 }}>{k.algo}</span>
-                    )}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={async () => { await handleBrowse(); setKeyDropdownOpen(false); }}
-                  style={{
-                    display: "block", width: "100%", textAlign: "left",
-                    padding: "5px 8px", fontSize: 12, border: "none",
-                    borderTop: "1px solid var(--border)", cursor: "pointer",
-                    background: "transparent", color: "var(--text-2)",
-                  }}
-                >
-                  {t("Browse…")}
-                </button>
-              </div>
-            </div>
-          )}
-          {/* Disabled chips for ppk/ssh2 keys */}
-          {unsupportedKeys.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-              {unsupportedKeys.map((k) => (
-                <div
-                  key={k.path}
-                  role="button"
-                  aria-disabled="true"
-                  title={
-                    k.kind === "ppk"
-                      ? "PuTTY 格式 — 需转换：puttygen key.ppk -O private-openssh"
-                      : "SSH2 格式 — 需转换"
-                  }
-                  style={{
-                    opacity: 0.55, cursor: "not-allowed", padding: "3px 8px",
-                    fontSize: 11, borderRadius: 4, border: "1px solid var(--border)",
-                    background: "var(--panel-1)",
-                  }}
-                >
-                  {k.fileName}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Chips row mode for 0–4 supported keys
-    return (
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        {externalChip}
-        {supportedKeys.map((k) => (
-          <button
-            key={k.path}
-            type="button"
-            onClick={() => setSelectedKeyPath(k.path)}
-            style={{
-              padding: "3px 8px", fontSize: 11, borderRadius: 4, cursor: "pointer",
-              border: "1px solid var(--border)",
-              background: normPath(k.path) === normPath(selectedKeyPath ?? "") ? "var(--accent)" : "var(--panel-1)",
-              color: normPath(k.path) === normPath(selectedKeyPath ?? "") ? "var(--text-on-accent)" : "var(--text-1)",
-            }}
-          >
-            {k.fileName}
-          </button>
-        ))}
-        {unsupportedKeys.map((k) => (
-          <div
-            key={k.path}
-            role="button"
-            aria-disabled="true"
-            title={
-              k.kind === "ppk"
-                ? "PuTTY 格式 — 需转换：puttygen key.ppk -O private-openssh"
-                : "SSH2 格式 — 需转换"
-            }
-            style={{
-              opacity: 0.55, cursor: "not-allowed", padding: "3px 8px",
-              fontSize: 11, borderRadius: 4, border: "1px solid var(--border)",
-              background: "var(--panel-1)",
-            }}
-          >
-            {k.fileName}
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={handleBrowse}
-          style={{
-            padding: "3px 8px", fontSize: 11, borderRadius: 4, cursor: "pointer",
-            border: "1px solid var(--border)", background: "var(--panel-1)",
-            color: "var(--text-2)",
-          }}
-        >
-          {t("Browse…")}
-        </button>
-      </div>
-    );
-  }
-
   return (
     <form onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()} style={{
       background: "var(--panel-2)", borderRadius: 8,
@@ -431,49 +192,42 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             errorText={portInvalid ? t("Port must be 1–65535") : undefined} />
           <Field label={t("Username")} value={username} onChange={setUsername} placeholder="root" required />
 
-          {/* Auth method segmented switch */}
-          <div style={{ display: "flex", gap: 4 }}>
-            <button
-              type="button"
-              aria-pressed={authMode === "password"}
-              onClick={() => setAuthMode("password")}
+          {/* Auth method dropdown — the same control the FTP form uses,
+              so the two credential flows read identically. */}
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{
+              fontSize: 11, color: "var(--text-1)", fontWeight: 500,
+              textTransform: "uppercase", letterSpacing: 0.8,
+            }}>{t("Authentication")}</span>
+            <select
+              aria-label={t("Authentication")}
+              value={authMode}
+              onChange={(e) => setAuthMode(e.target.value as "password" | "publickey")}
               style={{
-                flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 4, cursor: "pointer",
-                border: "1px solid var(--border)",
-                background: authMode === "password" ? "var(--accent)" : "var(--panel-1)",
-                color: authMode === "password" ? "var(--text-on-accent)" : "var(--text-2)",
-                fontWeight: authMode === "password" ? 600 : 400,
-              }}
-            >
-              {t("Password")}
-            </button>
-            <button
-              type="button"
-              aria-pressed={authMode === "publickey"}
-              onClick={() => setAuthMode("publickey")}
-              style={{
-                flex: 1, padding: "5px 8px", fontSize: 12, borderRadius: 4, cursor: "pointer",
-                border: "1px solid var(--border)",
-                background: authMode === "publickey" ? "var(--accent)" : "var(--panel-1)",
-                color: authMode === "publickey" ? "var(--text-on-accent)" : "var(--text-2)",
-                fontWeight: authMode === "publickey" ? 600 : 400,
-              }}
-            >
-              {t("Key file")}
-            </button>
-          </div>
+                background: "var(--panel-1)", border: "1px solid var(--border)",
+                borderRadius: 4, padding: "6px 8px", fontSize: 12,
+                color: "var(--text-1)",
+              }}>
+              <option value="password">{t("Password")}</option>
+              <option value="publickey">{t("Key file…")}</option>
+            </select>
+          </label>
 
           {/* Public-key section */}
           {authMode === "publickey" && (
             <>
-              {renderKeyPicker()}
+              <KeyPicker
+                value={selectedKeyPath}
+                onChange={setSelectedKeyPath}
+                autoPreselect={mode === "create"}
+              />
 
               <Field
                 label={t("Passphrase")}
                 type="password"
                 value={passphrase}
                 onChange={setPassphrase}
-                placeholder={mode === "edit" ? t("leave blank to keep current") : t("Key passphrase (optional)")}
+                placeholder={mode === "edit" ? t("leave blank to keep the stored one") : t("leave blank if the key has none")}
               />
 
               {mode === "edit" && keychainAvailable && (
@@ -497,7 +251,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 type="password"
                 value={password}
                 onChange={setPassword}
-                placeholder={mode === "edit" ? t("leave blank to keep current") : t("SSH login password")}
+                placeholder={mode === "edit" ? t("leave blank to keep the stored one") : t("SSH login password")}
               />
 
               {mode === "edit" && keychainAvailable && (
