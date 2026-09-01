@@ -99,6 +99,8 @@ const zh: Record<string, string> = {
 
   // Terminal clipboard
   "Paste": "粘贴",
+  "Copy terminal selection": "复制终端选中内容",
+  "Paste into terminal": "粘贴到终端",
   "Select all": "全选",
   "Paste into the terminal?": "粘贴到终端？",
   "chars": "字符",
