@@ -46,6 +46,7 @@ const zh: Record<string, string> = {
   "Pick a connection": "选择连接",
   "Connected": "已连接",
   "Reading remote directory…": "正在读取远程目录…",
+  "Cannot open this folder": "无法打开该目录",
   "Protocol": "协议",
   "FTP is not encrypted: the password and every byte travel in the clear. Use it only on a network you trust.":
     "FTP 不加密：密码和每一个字节都是明文传输。仅在可信网络里使用。",

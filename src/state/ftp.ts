@@ -37,6 +37,11 @@ interface State {
   listedKey: string | null;
   listing: boolean;
   error: string | null;
+  /** A directory the user tried to ENTER and the server refused —
+   *  permission denied, mostly. Shown as a modal (the click deserves a
+   *  clear answer), unlike `error`, which annotates the listing that is
+   *  already on screen. */
+  navError: string | null;
   /** `id:path` → the last listing that came back. FTP opens a fresh
    *  data connection per LIST — 3-4 round trips, whole seconds on a
    *  far-away server — so revisiting a directory shows the cached rows
@@ -212,6 +217,7 @@ export const useFtpStore = create<State>((set, get) => ({
   listedKey: null,
   listing: false,
   error: null,
+  navError: null,
   listingCache: {},
 
   load: async () => {
@@ -367,7 +373,14 @@ export const useFtpStore = create<State>((set, get) => ({
       // The key names the directory still on screen, not the one that
       // failed — otherwise the pane would see "not listed yet" and ask
       // again on every render.
-      set({ error: String(e), listedKey: `${id}:${get().cwd}` });
+      if (path !== get().cwd) {
+        // The user clicked INTO a directory and was refused (permission,
+        // usually) — that deserves a modal answer, not a line of red
+        // text above the directory they are still in.
+        set({ navError: String(e), listedKey: `${id}:${get().cwd}` });
+      } else {
+        set({ error: String(e), listedKey: `${id}:${get().cwd}` });
+      }
     } finally {
       set({ listing: false });
     }

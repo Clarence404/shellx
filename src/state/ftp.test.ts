@@ -40,6 +40,7 @@ const RESET = {
   hosts: [], loaded: false, activeId: null, connected: [], connecting: [],
   connectPhase: null as null,
   cwd: "/", entries: [], listedKey: null, listing: false, error: null,
+  navError: null,
   listingCache: {},
 };
 
@@ -108,8 +109,23 @@ describe("ftp store", () => {
     const s = useFtpStore.getState();
     expect(s.cwd).toBe("/upload");
     expect(s.entries).toHaveLength(1);
-    expect(s.error).toContain("550");
+    // A refused ENTRY answers with a modal (navError); the inline error
+    // stays for failures of the directory already on screen.
+    expect(s.navError).toContain("550");
+    expect(s.error).toBeNull();
     expect(s.listing).toBe(false);
+  });
+
+  it("a failed refresh of the directory on screen stays inline, no modal", async () => {
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockRejectedValue("426 broken pipe");
+    useFtpStore.setState({
+      hosts: [host()], activeId: "h1", connected: ["h1"],
+      cwd: "/upload", entries: [],
+    });
+    await useFtpStore.getState().navigate("/upload");
+    const s = useFtpStore.getState();
+    expect(s.error).toContain("426");
+    expect(s.navError).toBeNull();
   });
 
   it("marks an empty directory as listed, so nothing asks for it again", async () => {

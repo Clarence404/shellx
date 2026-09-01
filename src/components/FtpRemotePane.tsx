@@ -7,6 +7,7 @@ import { PathBreadcrumb } from "./PathBreadcrumb";
 import { PaneToolbarButton } from "./PaneToolbarButton";
 import { FileRow, buildFolderMenuItems } from "./FileRow";
 import { HostContextMenu } from "./HostContextMenu";
+import { ErrorDialog } from "./ErrorDialog";
 import { joinPath, useFtpStore } from "../state/ftp";
 import { ftpDownload, ftpDownloadDir } from "../ipc/ftp";
 import { newGesture } from "../ipc/transfers";
@@ -156,6 +157,7 @@ export function FtpRemotePane() {
   const listedKey = useFtpStore((s) => s.listedKey);
   const listing = useFtpStore((s) => s.listing);
   const error = useFtpStore((s) => s.error);
+  const navError = useFtpStore((s) => s.navError);
   const [blankMenu, setBlankMenu] = useState<{ x: number; y: number } | null>(null);
   const paneRef = useRef<HTMLDivElement | null>(null);
   const [osDragOver, setOsDragOver] = useState(false);
@@ -373,16 +375,6 @@ export function FtpRemotePane() {
             padding: "8px 10px", color: "var(--error)", fontSize: 11, whiteSpace: "pre-wrap",
           }}>{error}</div>
         )}
-        {listing && entries.length === 0 && (
-          <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>
-            {t("Loading")}…
-          </div>
-        )}
-        {!listing && entries.length === 0 && !error && (
-          <div style={{ padding: "8px 10px", color: "var(--text-3)", fontSize: 11 }}>
-            {t("This folder is empty")}
-          </div>
-        )}
         {cwd !== "" && cwd !== "/" && (
           <FileRow
             name=".." kind="directory" size={0}
@@ -390,6 +382,24 @@ export function FtpRemotePane() {
             onRename={() => {}} onDelete={() => {}}
             disabled
           />
+        )}
+        {/* The hints sit BELOW the ".." row, centred with room to
+            breathe — above it they read as a mislaid label. */}
+        {listing && entries.length === 0 && (
+          <div style={{
+            padding: "36px 16px", textAlign: "center",
+            color: "var(--text-3)", fontSize: 12,
+          }}>
+            {t("Loading")}…
+          </div>
+        )}
+        {!listing && entries.length === 0 && !error && (
+          <div style={{
+            padding: "36px 16px", textAlign: "center",
+            color: "var(--text-3)", fontSize: 12,
+          }}>
+            {t("This folder is empty")}
+          </div>
         )}
         {sortEntries(entries).map((e) => (
           <div key={e.name}
@@ -484,6 +494,13 @@ export function FtpRemotePane() {
           onClose={() => setBlankMenu(null)}
         />
       )}
+      {/* A refused entry (permission denied, usually) answers the click
+          with a modal, then leaves the user where they were. */}
+      <ErrorDialog
+        title={t("Cannot open this folder")}
+        message={navError}
+        onClose={() => useFtpStore.setState({ navError: null })}
+      />
     </div>
   );
 }
