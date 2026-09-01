@@ -3,7 +3,7 @@ import { RefreshCw, Upload, FolderPlus } from "lucide-react";
 import { PaneToolbarButton } from "./PaneToolbarButton";
 import { HostContextMenu } from "./HostContextMenu";
 import { buildFolderMenuItems, type FolderMenuHandlers } from "./FileRow";
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog, confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useFilesStore } from "../state/files";
 import { ActivitySwitcherSlot } from "./paneChrome";
@@ -186,7 +186,9 @@ export function FileBrowserView({ connectionId }: Props) {
   }
 
   async function handleDelete(name: string, isDir: boolean) {
-    if (!confirm(`Delete "${name}"?`)) return;
+    // The dialog plugin replaces window.confirm with an ASYNC function —
+    // unawaited, its Promise is always truthy and the guard is dead.
+    if (!(await confirmDialog(`Delete "${name}"?`))) return;
     const path = joinPath(state.cwd, name);
     if (isDir) await sftpRemoveDir(connectionId, path);
     else await sftpRemoveFile(connectionId, path);
@@ -229,20 +231,24 @@ export function FileBrowserView({ connectionId }: Props) {
         display: "flex", alignItems: "center", gap: 8,
       }}>
         <PathBreadcrumb path={state.cwd} onNavigate={(p) => loadDir(connectionId, p)} />
-        <PaneToolbarButton
-          title="New folder"
-          onClick={() => setCreatingFolder(true)}>
-          {(size) => <FolderPlus size={size} />}
-        </PaneToolbarButton>
-        <PaneToolbarButton title="Refresh"
-          onClick={() => loadDir(connectionId, state.cwd)}>
-          {(size) => <RefreshCw size={size} />}
-        </PaneToolbarButton>
-        <PaneToolbarButton
-          title="Upload"
-          onClick={handleUploadClick}>
-          {(size) => <Upload size={size} />}
-        </PaneToolbarButton>
+        {/* gap:0 — the buttons' own padding is the spacing; the
+            toolbar's gap made the cluster look unrelated. */}
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <PaneToolbarButton
+            title="New folder"
+            onClick={() => setCreatingFolder(true)}>
+            {(size) => <FolderPlus size={size} />}
+          </PaneToolbarButton>
+          <PaneToolbarButton title="Refresh"
+            onClick={() => loadDir(connectionId, state.cwd)}>
+            {(size) => <RefreshCw size={size} />}
+          </PaneToolbarButton>
+          <PaneToolbarButton
+            title="Upload"
+            onClick={handleUploadClick}>
+            {(size) => <Upload size={size} />}
+          </PaneToolbarButton>
+        </div>
         <ActivitySwitcherSlot sessionId={connectionId} />
       </div>
       <div role="list" style={{ flex: 1, minHeight: 0, overflow: "auto" }}

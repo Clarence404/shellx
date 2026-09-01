@@ -37,6 +37,11 @@ export const ftpPwd = (id: string) => invoke<string>("ftp_pwd", { args: { id } }
 export const ftpMkdir = (id: string, path: string) =>
   invoke<void>("ftp_mkdir", { args: { id, path } });
 
+/** The cache-warming variant of ftpListDir: runs on a dedicated second
+ *  connection so it can never delay a real click. */
+export const ftpListDirBg = (id: string, path: string) =>
+  invoke<FtpEntry[]>("ftp_list_dir_bg", { args: { id, path } });
+
 export const ftpRename = (id: string, from: string, to: string) =>
   invoke<void>("ftp_rename", { args: { id, from, to } });
 

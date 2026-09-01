@@ -15,6 +15,15 @@ use uuid::Uuid;
 #[derive(Default, Clone)]
 pub struct FtpManager {
     live: Arc<Mutex<HashMap<Uuid, Arc<Mutex<FtpClient>>>>>,
+    /// Up to two extra connections per server that serve ONLY the
+    /// background cache warming. FTP does one thing at a time per
+    /// control channel; when the warm loop shared the browsing
+    /// connection, a user's click queued behind whatever the warm was
+    /// fetching. On their own connections warming can never delay a
+    /// click — and two of them cut the time to warm a directory's
+    /// children in half, which is what decides whether the user's
+    /// first click lands on the cache.
+    warm: Arc<Mutex<HashMap<Uuid, Vec<Arc<Mutex<FtpClient>>>>>>,
     /// SFTP rows in this view are ordinary SSH sessions with no shell,
     /// so what is tracked here is which session belongs to which saved
     /// row. Keeping it on this side rather than in the frontend means a
@@ -40,6 +49,24 @@ impl FtpManager {
             .ok_or_else(|| Error::Protocol(format!("no live FTP session {id}")))
     }
 
+    /// The warm-connection pool for a server (possibly empty).
+    pub async fn warm_pool(&self, id: Uuid) -> Vec<Arc<Mutex<FtpClient>>> {
+        self.warm.lock().await.get(&id).cloned().unwrap_or_default()
+    }
+
+    /// Adds a warm connection, capped at two per server. The cap is a
+    /// backstop — the frontend runs at most two warm fetches at once,
+    /// so a third is never asked for.
+    pub async fn insert_warm(&self, id: Uuid, client: FtpClient) -> Arc<Mutex<FtpClient>> {
+        let arc = Arc::new(Mutex::new(client));
+        let mut map = self.warm.lock().await;
+        let pool = map.entry(id).or_default();
+        if pool.len() < 2 {
+            pool.push(arc.clone());
+        }
+        arc
+    }
+
     /// Records that a saved row is being served by an SSH session.
     pub async fn bind_sftp(&self, host_id: Uuid, session_id: Uuid) {
         self.sftp.lock().await.insert(host_id, session_id);
@@ -62,6 +89,10 @@ impl FtpManager {
     pub async fn close(&self, id: Uuid) {
         let entry = self.live.lock().await.remove(&id);
         if let Some(client) = entry {
+            client.lock().await.quit().await;
+        }
+        let warm = self.warm.lock().await.remove(&id);
+        for client in warm.unwrap_or_default() {
             client.lock().await.quit().await;
         }
     }

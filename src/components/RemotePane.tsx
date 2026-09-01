@@ -17,7 +17,7 @@ import { PaneToolbarButton } from "./PaneToolbarButton";
 import { HostContextMenu } from "./HostContextMenu";
 import { ConnectingPanel } from "./ConnectingPanel";
 import { ErrorDialog } from "./ErrorDialog";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 
 import type { HostInfo } from "../types/host";
 
@@ -318,21 +318,25 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
           onNewConnection={onNewConnection}
         />
         <div style={{ flex: 1 }} />
-        <PaneToolbarButton title="New folder"
-          disabled={isDisconnected}
-          onClick={async () => {
-            const name = prompt("New folder name");
-            if (!name) return;
-            await sftpMkdir(rightHost, joinPath(rightPath, name));
-            await loadRight();
-          }}>
-          {(size) => <FolderPlus size={size} />}
-        </PaneToolbarButton>
-        <PaneToolbarButton title="Refresh"
-          disabled={isDisconnected}
-          onClick={() => void loadRight()}>
-          {(size) => <RefreshCw size={size} />}
-        </PaneToolbarButton>
+        {/* gap:0 — the buttons' own padding is the spacing; the
+            toolbar's gap made the pair look unrelated. */}
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <PaneToolbarButton title="New folder"
+            disabled={isDisconnected}
+            onClick={async () => {
+              const name = prompt("New folder name");
+              if (!name) return;
+              await sftpMkdir(rightHost, joinPath(rightPath, name));
+              await loadRight();
+            }}>
+            {(size) => <FolderPlus size={size} />}
+          </PaneToolbarButton>
+          <PaneToolbarButton title="Refresh"
+            disabled={isDisconnected}
+            onClick={() => void loadRight()}>
+            {(size) => <RefreshCw size={size} />}
+          </PaneToolbarButton>
+        </div>
       </div>
 
       {isDisconnected ? (
@@ -477,7 +481,9 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                     await loadRight();
                   }}
                   onDelete={async () => {
-                    if (!confirm(`Delete "${e.name}"?`)) return;
+                    // window.confirm is async here (dialog plugin shim) —
+                    // it must be awaited or the guard never guards.
+                    if (!(await confirmDialog(`Delete "${e.name}"?`))) return;
                     try {
                       if (e.kind === "directory") {
                         await sftpRemoveDirRecursive(rightHost, joinPath(rightPath, e.name));

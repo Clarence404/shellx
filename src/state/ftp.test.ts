@@ -22,6 +22,7 @@ vi.mock("../ipc/ftp", () => ({
   ftpDisconnect: vi.fn(),
   ftpActiveIds: vi.fn(),
   ftpListDir: vi.fn(),
+  ftpListDirBg: vi.fn(),
   ftpPwd: vi.fn(),
 }));
 
@@ -37,7 +38,10 @@ function host(over: Partial<FtpHost> = {}): FtpHost {
 
 const RESET = {
   hosts: [], loaded: false, activeId: null, connected: [], connecting: [],
+  connectPhase: null as null,
   cwd: "/", entries: [], listedKey: null, listing: false, error: null,
+  navError: null,
+  listingCache: {},
 };
 
 describe("joinPath", () => {
@@ -105,8 +109,23 @@ describe("ftp store", () => {
     const s = useFtpStore.getState();
     expect(s.cwd).toBe("/upload");
     expect(s.entries).toHaveLength(1);
-    expect(s.error).toContain("550");
+    // A refused ENTRY answers with a modal (navError); the inline error
+    // stays for failures of the directory already on screen.
+    expect(s.navError).toContain("550");
+    expect(s.error).toBeNull();
     expect(s.listing).toBe(false);
+  });
+
+  it("a failed refresh of the directory on screen stays inline, no modal", async () => {
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockRejectedValue("426 broken pipe");
+    useFtpStore.setState({
+      hosts: [host()], activeId: "h1", connected: ["h1"],
+      cwd: "/upload", entries: [],
+    });
+    await useFtpStore.getState().navigate("/upload");
+    const s = useFtpStore.getState();
+    expect(s.error).toContain("426");
+    expect(s.navError).toBeNull();
   });
 
   it("marks an empty directory as listed, so nothing asks for it again", async () => {
@@ -205,5 +224,64 @@ describe("ftp store", () => {
     useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/upload" });
     await useFtpStore.getState().upload("C:/a.csv", "a.csv", "file");
     expect(useFtpStore.getState().error).toContain("550");
+  });
+
+  it("revisiting a directory shows the cached rows before the server answers", async () => {
+    // Each FTP LIST is a fresh data connection — seconds on a far-away
+    // server. The cache is what makes the second visit instant.
+    const fileA = { name: "a.csv", kind: "file", size: 1, modified: null, permissions: 0 };
+    const fileB = { name: "b.csv", kind: "file", size: 2, modified: null, permissions: 0 };
+    useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/" });
+
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockResolvedValueOnce([fileA]);
+    await useFtpStore.getState().navigate("/upload");
+    expect(useFtpStore.getState().entries).toEqual([fileA]);
+
+    // Second visit: the fetch hangs, yet the cached rows are on screen
+    // immediately, and the revalidation swaps them when it lands.
+    let resolveLate!: (v: unknown) => void;
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+      new Promise((r) => { resolveLate = r; }),
+    );
+    const nav = useFtpStore.getState().navigate("/upload");
+    expect(useFtpStore.getState().entries).toEqual([fileA]);
+    expect(useFtpStore.getState().cwd).toBe("/upload");
+    resolveLate([fileA, fileB]);
+    await nav;
+    expect(useFtpStore.getState().entries).toEqual([fileA, fileB]);
+  });
+
+  it("after a listing lands, its subdirectories are warmed into the cache", async () => {
+    // What makes the FIRST click into a folder instant: while the user
+    // reads a directory, its children are quietly listed behind it.
+    const dirDone = { name: "done", kind: "directory", size: 0, modified: null, permissions: 0 };
+    const fileX = { name: "x.csv", kind: "file", size: 1, modified: null, permissions: 0 };
+    useFtpStore.setState({ hosts: [host()], activeId: "h1", connected: ["h1"], cwd: "/" });
+
+    const dirSub = { name: "2026-08", kind: "directory", size: 0, modified: null, permissions: 0 };
+    (ipc.ftpListDir as ReturnType<typeof vi.fn>).mockResolvedValueOnce([dirDone]);
+    // The warm goes through the _bg variant — its own connection, so it
+    // can never delay a real click. It walks breadth-first: the child
+    // first, then the child's own subdirectories.
+    (ipc.ftpListDirBg as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([dirSub])
+      .mockResolvedValueOnce([fileX]);
+    await useFtpStore.getState().navigate("/upload");
+    await vi.waitFor(() => {
+      expect(useFtpStore.getState().listingCache["h1:/upload/done"]).toEqual([dirSub]);
+      expect(useFtpStore.getState().listingCache["h1:/upload/done/2026-08"]).toEqual([fileX]);
+    });
+    expect(ipc.ftpListDirBg).toHaveBeenCalledWith("h1", "/upload/done");
+    expect(ipc.ftpListDirBg).toHaveBeenCalledWith("h1", "/upload/done/2026-08");
+  });
+
+  it("disconnecting drops that connection's cache", async () => {
+    (ipc.ftpDisconnect as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    useFtpStore.setState({
+      hosts: [host()], activeId: "h1", connected: ["h1"],
+      listingCache: { "h1:/upload": [], "h2:/other": [] },
+    });
+    await useFtpStore.getState().disconnect("h1");
+    expect(Object.keys(useFtpStore.getState().listingCache)).toEqual(["h2:/other"]);
   });
 });

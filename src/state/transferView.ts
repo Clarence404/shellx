@@ -52,6 +52,8 @@ export interface StripModel {
   doneFiles: number;
   totalFiles: number;
   failedCount: number;
+  /** Combined speed across every moving transfer, bytes/sec. */
+  rateBps: number;
   anyActive: boolean;
   anyPaused: boolean;
 }
@@ -180,6 +182,7 @@ export function buildStripModel(
     doneFiles,
     totalFiles,
     failedCount: failedFiles,
+    rateBps: gestures.reduce((n, g) => n + g.rateBps, 0),
     anyActive,
     anyPaused,
   };

@@ -26,6 +26,7 @@ vi.mock("../ipc/ftp", () => ({
   ftpDisconnect: vi.fn().mockResolvedValue(undefined),
   ftpActiveIds: vi.fn().mockResolvedValue([]),
   ftpListDir: vi.fn().mockResolvedValue([]),
+  ftpListDirBg: vi.fn().mockResolvedValue([]),
   ftpPwd: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
@@ -120,32 +121,61 @@ describe("FtpView", () => {
     expect(useFtpStore.getState().connecting).toEqual([]);
   });
 
-  it("the form drops charset and transfer mode for SFTP", async () => {
+  it("the form keeps charset and transfer mode under Advanced, and drops them for SFTP", async () => {
     const user = userEvent.setup();
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
 
-    // FTP is the default, so both are on screen…
-    expect(screen.getByText("Filename encoding")).toBeInTheDocument();
-    expect(screen.getByLabelText(/Passive mode/)).toBeInTheDocument();
+    // Advanced opens by default; the header still folds it away.
+    expect(screen.getByLabelText("Filename encoding")).toBeInTheDocument();
+    expect(screen.getByLabelText("Transfer mode")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Advanced settings/ }));
+    expect(screen.queryByLabelText("Filename encoding")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Advanced settings/ }));
 
     // …and gone for SFTP, where neither concept exists.
-    await user.click(screen.getByRole("button", { name: "SFTP" }));
-    expect(screen.queryByText("Filename encoding")).toBeNull();
-    expect(screen.queryByLabelText(/Passive mode/)).toBeNull();
+    await user.selectOptions(screen.getByLabelText("File protocol"), "sftp");
+    expect(screen.queryByLabelText("Filename encoding")).toBeNull();
+    expect(screen.queryByLabelText("Transfer mode")).toBeNull();
   });
 
-  it("switching protocol moves the default port with it", async () => {
+  it("protocol and encryption both move the default port with them", async () => {
     const user = userEvent.setup();
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
 
     // FTP is the default, so the port starts at 21.
     expect(document.querySelector('input[value="21"]')).not.toBeNull();
-    await user.click(screen.getByRole("button", { name: "SFTP" }));
+    await user.selectOptions(screen.getByLabelText("File protocol"), "sftp");
     await waitFor(() => expect(document.querySelector('input[value="22"]')).not.toBeNull());
-    await user.click(screen.getByRole("button", { name: "FTPS" }));
+    await user.selectOptions(screen.getByLabelText("File protocol"), "ftp");
     await waitFor(() => expect(document.querySelector('input[value="21"]')).not.toBeNull());
+    // Implicit TLS lives on 990; going back to explicit restores 21.
+    await user.selectOptions(screen.getByLabelText("Encryption"), "implicit");
+    await waitFor(() => expect(document.querySelector('input[value="990"]')).not.toBeNull());
+    await user.selectOptions(screen.getByLabelText("Encryption"), "explicit");
+    await waitFor(() => expect(document.querySelector('input[value="21"]')).not.toBeNull());
+  });
+
+  it("anonymous login fills the username and locks both credential fields", async () => {
+    const user = userEvent.setup();
+    (ipc.ftpHostSave as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...host(), password_stored: false,
+    });
+    render(<FtpView />);
+    await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
+
+    await user.type(screen.getByPlaceholderText("10.20.1.40"), "10.20.1.40");
+    await user.click(screen.getByLabelText("Anonymous login"));
+    const userInput = screen.getByPlaceholderText("ftpuser") as HTMLInputElement;
+    expect(userInput.value).toBe("anonymous");
+    expect(userInput).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(ipc.ftpHostSave).toHaveBeenCalled());
+    const args = (ipc.ftpHostSave as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args).toMatchObject({ username: "anonymous" });
+    expect("password" in args).toBe(false);
   });
 
   it("saving a new connection sends the password separately from the row", async () => {
@@ -167,32 +197,29 @@ describe("FtpView", () => {
     expect(args.label).toBe("ftpuser@10.20.1.40");
   });
 
-  it("offers key authentication for SFTP, and only for SFTP", async () => {
+  it("offers key authentication for SFTP under Advanced, and only for SFTP", async () => {
     const user = userEvent.setup();
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
 
-    // FTP has no key authentication, so the switch is not there at all.
-    expect(screen.queryByText("Authentication")).toBeNull();
+    // FTP has no key authentication, so the dropdown is not there at all.
+    expect(screen.queryByLabelText("Authentication")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "SFTP" }));
-    expect(screen.getByText("Authentication")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Key" }));
+    await user.selectOptions(screen.getByLabelText("File protocol"), "sftp");
+    await user.selectOptions(screen.getByLabelText("Authentication"), "publickey");
 
     // A key replaces the password field rather than sitting beside it.
-    // "Password" still appears once — as the other half of the switch.
     expect(screen.getByText("Private key")).toBeInTheDocument();
     expect(screen.getByText("Key passphrase")).toBeInTheDocument();
-    expect(screen.getAllByText("Password")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Password" })).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("leave blank to keep the stored one")).toBeNull();
   });
 
   it("will not save a key connection with no key chosen", async () => {
     const user = userEvent.setup();
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
-    await user.click(screen.getByRole("button", { name: "SFTP" }));
-    await user.click(screen.getByRole("button", { name: "Key" }));
+    await user.selectOptions(screen.getByLabelText("File protocol"), "sftp");
+    await user.selectOptions(screen.getByLabelText("Authentication"), "publickey");
     await user.type(screen.getByPlaceholderText("10.20.1.40"), "10.0.0.5");
     await user.type(screen.getByPlaceholderText("ftpuser"), "deploy");
 
@@ -208,8 +235,8 @@ describe("FtpView", () => {
     });
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
-    await user.click(screen.getByRole("button", { name: "SFTP" }));
-    await user.click(screen.getByRole("button", { name: "Key" }));
+    await user.selectOptions(screen.getByLabelText("File protocol"), "sftp");
+    await user.selectOptions(screen.getByLabelText("Authentication"), "publickey");
     await user.type(screen.getByPlaceholderText("10.20.1.40"), "10.0.0.5");
     await user.type(screen.getByPlaceholderText("ftpuser"), "deploy");
     await user.type(screen.getByPlaceholderText("~/.ssh/id_ed25519"), "/home/me/.ssh/id_ed25519");
@@ -225,21 +252,21 @@ describe("FtpView", () => {
     expect("passphrase" in args).toBe(false);
   });
 
-  it("FTPS offers a TLS mode, and implicit moves the port to 990", async () => {
+  it("picking a TLS option makes the row FTPS, without a third protocol", async () => {
     const user = userEvent.setup();
+    (ipc.ftpHostSave as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...host({ protocol: "ftps" }), password_stored: false,
+    });
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
-    expect(screen.queryByText("TLS mode")).toBeNull();
+    await user.selectOptions(screen.getByLabelText("Encryption"), "implicit");
+    await user.type(screen.getByPlaceholderText("10.20.1.40"), "10.20.1.40");
+    await user.type(screen.getByPlaceholderText("ftpuser"), "ftpuser");
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
-    await user.click(screen.getByRole("button", { name: "FTPS" }));
-    expect(screen.getByText("TLS mode")).toBeInTheDocument();
-    expect(document.querySelector('input[value="21"]')).not.toBeNull();
-
-    await user.click(screen.getByRole("button", { name: /Implicit/ }));
-    await waitFor(() => expect(document.querySelector('input[value="990"]')).not.toBeNull());
-    // And back again, so a mis-click is not a trap.
-    await user.click(screen.getByRole("button", { name: /Explicit/ }));
-    await waitFor(() => expect(document.querySelector('input[value="21"]')).not.toBeNull());
+    await waitFor(() => expect(ipc.ftpHostSave).toHaveBeenCalled());
+    const args = (ipc.ftpHostSave as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(args).toMatchObject({ protocol: "ftps", tls_mode: "implicit", port: 990 });
   });
 
   function savedHost(over: Partial<HostInfo> = {}): HostInfo {

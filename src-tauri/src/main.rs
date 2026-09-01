@@ -117,6 +117,7 @@ fn main() {
             ipc::ftp::ftp_disconnect,
             ipc::ftp::ftp_active_ids,
             ipc::ftp::ftp_list_dir,
+            ipc::ftp::ftp_list_dir_bg,
             ipc::ftp::ftp_pwd,
             ipc::ftp::ftp_mkdir,
             ipc::ftp::ftp_rename,

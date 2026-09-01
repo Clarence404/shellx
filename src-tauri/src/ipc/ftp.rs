@@ -241,6 +241,29 @@ pub async fn ftp_connect(
     // beats assuming "/" on a box that chroots into an upload folder.
     let cwd = client.pwd().await.unwrap_or_else(|_| "/".to_string());
     ftp.insert(host.id, client).await;
+
+    // Open the first warm connection NOW, in parallel with the initial
+    // listing: opening it lazily on the first warm request cost its own
+    // 2s of TCP + login, and the user's first click regularly beat it.
+    // Best-effort — a server that refuses a second connection just
+    // leaves warming off.
+    let spec = FtpSpec {
+        host: host.host.clone(),
+        port: host.port,
+        username: host.username.clone(),
+        password,
+        charset: Charset::parse(&host.charset),
+        passive: host.passive,
+        tls: Tls::parse(&host.protocol, &host.tls_mode),
+    };
+    let ftp2 = (*ftp).clone();
+    let id = host.id;
+    tauri::async_runtime::spawn(async move {
+        if let Ok(fresh) = deadline("connect", spec.connect()).await {
+            ftp2.insert_warm(id, fresh).await;
+        }
+    });
+
     Ok(FtpConnected { id: host.id, cwd })
 }
 
@@ -349,6 +372,41 @@ pub async fn ftp_list_dir(
         return deadline("list directory", sessions.sftp_list_dir(session, &args.path)).await;
     }
     let client = ftp.get(args.id).await?;
+    let mut client = client.lock().await;
+    deadline("list directory", client.list_dir(&args.path)).await
+}
+
+/// `ftp_list_dir` for the cache-warming loop: never touches the
+/// browsing connection. FTP rows get a second, lazily-opened connection
+/// dedicated to warming; SFTP sessions multiplex, so the ordinary path
+/// is already contention-free and is used as is. Failures are the
+/// caller's cue to stop warming — never surfaced to the user.
+#[tauri::command]
+pub async fn ftp_list_dir_bg(
+    args: FtpListArgs,
+    ftp: State<'_, FtpManager>,
+    sessions: State<'_, SessionManager>,
+    store: State<'_, FtpHostStore>,
+    keychain: State<'_, KeychainStore>,
+) -> Result<Vec<Entry>> {
+    if let Some(session) = ftp.session_of(args.id).await {
+        return deadline("list directory", sessions.sftp_list_dir(session, &args.path)).await;
+    }
+    // Only warm servers the user is actually browsing — a stale warm
+    // request must not resurrect a connection the user closed.
+    ftp.get(args.id).await?;
+    // Prefer a pool member that is idle right now; grow the pool (to
+    // the manager's cap of two) when everyone is busy; only then wait.
+    let pool = ftp.warm_pool(args.id).await;
+    let client = match pool.iter().find(|c| c.clone().try_lock().is_ok()) {
+        Some(c) => c.clone(),
+        None if pool.len() < 2 => {
+            let (_, spec) = spec_for(&store, &keychain, args.id).await?;
+            let fresh = deadline("connect", spec.connect()).await?;
+            ftp.insert_warm(args.id, fresh).await
+        }
+        None => pool[0].clone(),
+    };
     let mut client = client.lock().await;
     deadline("list directory", client.list_dir(&args.path)).await
 }
