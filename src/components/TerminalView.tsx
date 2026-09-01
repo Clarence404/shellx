@@ -5,6 +5,10 @@ import { SearchAddon } from "@xterm/addon-search";
 import { ChevronUp, ChevronDown, X, Copy, ClipboardPaste, TextSelect } from "lucide-react";
 import { HostContextMenu } from "./HostContextMenu";
 import { needsPasteConfirm } from "../terminal/pasteGuard";
+import {
+  readText as clipboardReadText,
+  writeText as clipboardWriteText,
+} from "@tauri-apps/plugin-clipboard-manager";
 import "@xterm/xterm/css/xterm.css";
 import { onSessionClosed } from "../ipc/events";
 import { subscribeSession } from "../state/sessionStream";
@@ -56,7 +60,10 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
 
   function copySelection() {
     const sel = termRef.current?.getSelection();
-    if (sel) void navigator.clipboard.writeText(sel);
+    // The Tauri plugin talks to the OS clipboard directly —
+    // navigator.clipboard.readText made WebView2 raise a browser-style
+    // permission prompt over the app.
+    if (sel) void clipboardWriteText(sel);
   }
 
   /** Ctrl+Shift+V and the context menu both land here. Anything with a
@@ -65,7 +72,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
   async function pasteFromClipboard() {
     let text = "";
     try {
-      text = await navigator.clipboard.readText();
+      text = await clipboardReadText();
     } catch {
       return; // clipboard unreadable (empty, or holds a non-text item)
     }
@@ -78,9 +85,14 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
   }
 
   function doPaste(text: string) {
-    // xterm's paste(): normalises line endings and wraps in bracketed
-    // paste when the remote app has asked for it.
-    termRef.current?.paste(text);
+    // Straight to the PTY, deliberately WITHOUT bracketed paste:
+    // xterm's paste() wraps the text in \x1b[200~ markers when the
+    // shell asked for them, and bash 5.1+ then paints the whole paste
+    // in reverse video until Enter — which read as a rendering bug.
+    // The multi-line-executes-immediately risk those markers guard is
+    // already covered by the confirmation dialog above.
+    const normalized = text.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
+    void writeSessionInput(sessionId, Array.from(new TextEncoder().encode(normalized)));
     setPastePending(null);
     termRef.current?.focus();
   }
