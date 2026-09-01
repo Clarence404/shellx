@@ -65,6 +65,17 @@ pub struct BundleTunnel {
     pub sort_order: i32,
 }
 
+/// One saved command snippet, as it travels in a bundle. No id: on
+/// import a snippet is matched by content, not identity.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleSnippet {
+    pub name: String,
+    pub command: String,
+    #[serde(default)]
+    pub auto_enter: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Bundle {
@@ -78,6 +89,10 @@ pub struct Bundle {
     /// only hosts and tunnels.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<Settings>,
+    /// The command-snippet library. Absent from bundles written before
+    /// snippets existed — serde default keeps those importable.
+    #[serde(default)]
+    pub snippets: Vec<BundleSnippet>,
 }
 
 /// Whether a host in the keychain had each kind of secret. Gathered by
@@ -92,6 +107,7 @@ pub fn build(
     hosts: &[HostRecord],
     tunnels: &[TunnelRule],
     settings: Option<Settings>,
+    snippets: &[crate::store::snippets::Snippet],
     flags: impl Fn(Uuid) -> SecretFlags,
     app_version: &str,
     exported_at: i64,
@@ -144,6 +160,14 @@ pub fn build(
         hosts,
         tunnels,
         settings,
+        snippets: snippets
+            .iter()
+            .map(|s| BundleSnippet {
+                name: s.name.clone(),
+                command: s.command.clone(),
+                auto_enter: s.auto_enter,
+            })
+            .collect(),
     }
 }
 
@@ -266,7 +290,7 @@ mod tests {
 
     #[test]
     fn carries_hosts_and_their_rules() {
-        let b = build(&[host(1, "web")], &[rule(1, 5432)], None, no_secrets, "0.22.0", 42);
+        let b = build(&[host(1, "web")], &[rule(1, 5432)], None, &[], no_secrets, "0.22.0", 42);
         assert_eq!(b.format, FORMAT);
         assert_eq!(b.version, VERSION);
         assert_eq!(b.app_version, "0.22.0");
@@ -282,7 +306,7 @@ mod tests {
         // The flags say a password existed; the text must still contain
         // no password. This is the whole point of the module.
         let flags = |_: Uuid| SecretFlags { has_password: true, has_passphrase: true };
-        let b = build(&[host(1, "web")], &[], None, flags, "0.22.0", 0);
+        let b = build(&[host(1, "web")], &[], None, &[], flags, "0.22.0", 0);
         assert!(b.hosts[0].has_password);
         let text = serde_json::to_string(&b).unwrap();
         assert!(!text.contains("password\":\"") , "no password value may be serialized");
@@ -293,14 +317,14 @@ mod tests {
     fn drops_a_rule_whose_host_is_not_in_the_bundle() {
         // Deleting a host leaves its rules behind in the database, so a
         // rule pointing at nothing is a real state, not a hypothetical.
-        let b = build(&[host(1, "web")], &[rule(1, 5432), rule(2, 6000)], None, no_secrets, "0", 0);
+        let b = build(&[host(1, "web")], &[rule(1, 5432), rule(2, 6000)], None, &[], no_secrets, "0", 0);
         assert_eq!(b.tunnels.len(), 1);
         assert_eq!(b.tunnels[0].local_port, 5432);
     }
 
     #[test]
     fn a_round_trip_survives_json() {
-        let b = build(&[host(1, "web")], &[rule(1, 5432)], Some(settings("zh")), no_secrets, "0.22.0", 7);
+        let b = build(&[host(1, "web")], &[rule(1, 5432)], Some(settings("zh")), &[], no_secrets, "0.22.0", 7);
         let text = serde_json::to_string_pretty(&b).unwrap();
         let back = parse(&text).unwrap();
         assert_eq!(back.hosts, b.hosts);
@@ -328,7 +352,7 @@ mod tests {
 
     #[test]
     fn a_bundle_without_settings_still_loads() {
-        let b = build(&[host(1, "web")], &[], None, no_secrets, "0", 0);
+        let b = build(&[host(1, "web")], &[], None, &[], no_secrets, "0", 0);
         let text = serde_json::to_string(&b).unwrap();
         assert!(!text.contains("settings"), "an absent block is omitted, not null");
         assert!(parse(&text).unwrap().settings.is_none());
@@ -339,7 +363,7 @@ mod tests {
         let b = build(
             &[host(1, "web"), host(2, "db")],
             &[rule(1, 5432), rule(1, 6379), rule(2, 8080)],
-            None, no_secrets, "0", 0,
+            None, &[], no_secrets, "0", 0,
         );
         // The same machine under a different label is still the same.
         let mut existing = host(77, "web");
@@ -354,7 +378,7 @@ mod tests {
 
     #[test]
     fn a_different_port_or_user_is_a_different_machine() {
-        let b = build(&[host(1, "web")], &[], None, no_secrets, "0", 0);
+        let b = build(&[host(1, "web")], &[], None, &[], no_secrets, "0", 0);
         let mut other_port = host(2, "web");
         other_port.port = 2222;
         assert!(!plan(&b, &[other_port])[0].duplicate);

@@ -3,6 +3,7 @@ use crate::error::{Error, Result};
 use crate::settings::SettingsStore;
 use crate::store::hosts::NewHost;
 use crate::store::tunnels::NewTunnelRule;
+use crate::store::snippets::SnippetStore;
 use crate::store::{HostStore, KeychainStore, TunnelStore};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -16,6 +17,7 @@ pub struct ExportSummary {
     pub hosts: usize,
     pub tunnels: usize,
     pub settings_included: bool,
+    pub snippets: usize,
     /// How many exported hosts will need their password typed again on
     /// the other machine. Said out loud at export time, because that is
     /// when someone can still write it down.
@@ -39,12 +41,13 @@ pub async fn config_bundle_export(
     hosts: State<'_, HostStore>,
     tunnels: State<'_, TunnelStore>,
     settings: State<'_, SettingsStore>,
+    snippets: State<'_, SnippetStore>,
     keychain: State<'_, KeychainStore>,
 ) -> Result<ExportSummary> {
     // Probe presence only. `get_password` returns the plaintext, so the
     // value is dropped right here and never travels any further.
     let kc = &*keychain;
-    export_to(&args, &hosts, &tunnels, &settings, |id| SecretFlags {
+    export_to(&args, &hosts, &tunnels, &settings, &snippets, |id| SecretFlags {
         has_password: kc.get_password(id).ok().flatten().is_some(),
         has_passphrase: kc.get_passphrase(id).ok().flatten().is_some(),
     })
@@ -56,10 +59,12 @@ pub async fn export_to(
     hosts: &HostStore,
     tunnels: &TunnelStore,
     settings: &SettingsStore,
+    snippets: &SnippetStore,
     secrets: impl Fn(Uuid) -> SecretFlags,
 ) -> Result<ExportSummary> {
     let host_records = hosts.list().await?;
     let tunnel_rules = tunnels.list_all().await?;
+    let snippet_rows = snippets.list().await?;
     let settings_block = if args.include_settings {
         settings.load()?
     } else {
@@ -70,6 +75,7 @@ pub async fn export_to(
         &host_records,
         &tunnel_rules,
         settings_block,
+        &snippet_rows,
         secrets,
         env!("CARGO_PKG_VERSION"),
         now_ms(),
@@ -84,6 +90,7 @@ pub async fn export_to(
         hosts: bundle.hosts.len(),
         tunnels: bundle.tunnels.len(),
         settings_included: bundle.settings.is_some(),
+        snippets: bundle.snippets.len(),
         secrets_left_behind: bundle
             .hosts
             .iter()
@@ -109,6 +116,7 @@ pub struct BundlePreview {
     pub rows: Vec<ImportRow>,
     pub tunnels: usize,
     pub has_settings: bool,
+    pub snippets: usize,
 }
 
 #[derive(Deserialize)]
@@ -135,6 +143,7 @@ pub async fn preview_of(args: PathArgs, hosts: &HostStore) -> Result<BundlePrevi
         rows: bundle::plan(&parsed, &existing),
         tunnels: parsed.tunnels.len(),
         has_settings: parsed.settings.is_some(),
+        snippets: parsed.snippets.len(),
     })
 }
 
@@ -154,6 +163,7 @@ pub struct ImportSummary {
     pub hosts_added: usize,
     pub tunnels_added: usize,
     pub settings_applied: bool,
+    pub snippets_added: usize,
     /// Hosts that were selected but could not be written, with the
     /// reason. An import that half-worked has to say which half.
     pub failures: Vec<String>,
@@ -168,8 +178,9 @@ pub async fn config_bundle_import(
     hosts: State<'_, HostStore>,
     tunnels: State<'_, TunnelStore>,
     settings: State<'_, SettingsStore>,
+    snippets: State<'_, SnippetStore>,
 ) -> Result<ImportSummary> {
-    import_from(args, &hosts, &tunnels, &settings).await
+    import_from(args, &hosts, &tunnels, &settings, &snippets).await
 }
 
 pub async fn import_from(
@@ -177,12 +188,14 @@ pub async fn import_from(
     hosts: &HostStore,
     tunnels: &TunnelStore,
     settings: &SettingsStore,
+    snippets: &SnippetStore,
 ) -> Result<ImportSummary> {
     let parsed = read_bundle(&args.path)?;
     let mut summary = ImportSummary {
         hosts_added: 0,
         tunnels_added: 0,
         settings_applied: false,
+        snippets_added: 0,
         failures: Vec::new(),
     };
 
@@ -233,6 +246,26 @@ pub async fn import_from(
                     .failures
                     .push(format!("{} · {}: {e}", h.label, rule.local_port)),
             }
+        }
+    }
+
+    // Snippets ride along whole: they are global, carry no secrets, and
+    // an exact duplicate (same name, same command) is simply skipped.
+    for snip in &parsed.snippets {
+        match snippets.exists(&snip.name, &snip.command).await {
+            Ok(true) => {}
+            Ok(false) => match snippets
+                .insert(crate::store::snippets::NewSnippet {
+                    name: snip.name.clone(),
+                    command: snip.command.clone(),
+                    auto_enter: snip.auto_enter,
+                })
+                .await
+            {
+                Ok(_) => summary.snippets_added += 1,
+                Err(e) => summary.failures.push(format!("snippet {}: {e}", snip.name)),
+            },
+            Err(e) => summary.failures.push(format!("snippet {}: {e}", snip.name)),
         }
     }
 
@@ -291,6 +324,7 @@ mod tests {
         hosts: HostStore,
         tunnels: TunnelStore,
         settings: SettingsStore,
+        snippets: SnippetStore,
     }
 
     fn machine() -> Machine {
@@ -298,7 +332,8 @@ mod tests {
         let hosts = HostStore::open(dir.path()).unwrap();
         let tunnels = TunnelStore::new(hosts.conn_arc());
         let settings = SettingsStore::open(dir.path());
-        Machine { _dir: dir, hosts, tunnels, settings }
+        let snippets = SnippetStore::new(hosts.conn_arc()).unwrap();
+        Machine { _dir: dir, hosts, tunnels, settings, snippets }
     }
 
     fn new_host(label: &str) -> NewHost {
@@ -327,6 +362,7 @@ mod tests {
             &m.hosts,
             &m.tunnels,
             &m.settings,
+            &m.snippets,
             no_secrets,
         )
         .await
@@ -345,6 +381,69 @@ mod tests {
             auto_reconnect: None,
             autostart: None,
         }
+    }
+
+    #[tokio::test]
+    async fn snippets_travel_and_duplicates_stay_single() {
+        let file = TempDir::new().unwrap();
+        let path = file.path().join("bundle.json");
+
+        let old = machine();
+        old.snippets
+            .insert(crate::store::snippets::NewSnippet {
+                name: "查磁盘".into(),
+                command: "df -h".into(),
+                auto_enter: true,
+            })
+            .await
+            .unwrap();
+        let summary = export(&old, &path, false).await;
+        assert_eq!(summary.snippets, 1);
+
+        let fresh = machine();
+        // Already having the identical snippet means the import adds nothing.
+        fresh
+            .snippets
+            .insert(crate::store::snippets::NewSnippet {
+                name: "查磁盘".into(),
+                command: "df -h".into(),
+                auto_enter: true,
+            })
+            .await
+            .unwrap();
+        let result = import_from(
+            ImportArgs {
+                path: path.display().to_string(),
+                host_ids: vec![],
+                include_settings: false,
+            },
+            &fresh.hosts,
+            &fresh.tunnels,
+            &fresh.settings,
+            &fresh.snippets,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.snippets_added, 0);
+        assert_eq!(fresh.snippets.list().await.unwrap().len(), 1);
+
+        // A machine without it gets it, auto_enter included.
+        let blank = machine();
+        let result = import_from(
+            ImportArgs {
+                path: path.display().to_string(),
+                host_ids: vec![],
+                include_settings: false,
+            },
+            &blank.hosts,
+            &blank.tunnels,
+            &blank.settings,
+            &blank.snippets,
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.snippets_added, 1);
+        assert!(blank.snippets.list().await.unwrap()[0].auto_enter);
     }
 
     #[tokio::test]
@@ -395,6 +494,7 @@ mod tests {
             &fresh.hosts,
             &fresh.tunnels,
             &fresh.settings,
+            &fresh.snippets,
         )
         .await
         .unwrap();
@@ -439,6 +539,7 @@ mod tests {
             &fresh.hosts,
             &fresh.tunnels,
             &fresh.settings,
+            &fresh.snippets,
         )
         .await
         .unwrap();
@@ -512,6 +613,7 @@ mod tests {
             &fresh.hosts,
             &fresh.tunnels,
             &fresh.settings,
+            &fresh.snippets,
         )
         .await
         .unwrap();
@@ -540,6 +642,7 @@ mod tests {
             &fresh.hosts,
             &fresh.tunnels,
             &fresh.settings,
+            &fresh.snippets,
         )
         .await
         .unwrap();

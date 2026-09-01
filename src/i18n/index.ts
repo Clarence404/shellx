@@ -97,6 +97,26 @@ const zh: Record<string, string> = {
   "passive mode": "被动",
   "active mode": "主动",
 
+  // Snippets
+  "Snippets": "命令片段",
+  "Manage snippets": "管理片段",
+  "Back": "返回",
+  "No active terminal — connect first, then pick a snippet.": "没有活动的终端——先连接主机，再选片段。",
+  "Type to filter snippets…": "输入以筛选片段…",
+  "No snippets yet — save your first with Manage snippets.": "还没有片段——点「管理片段」保存第一条。",
+  "No matching snippets.": "没有匹配的片段。",
+  "choose": "选择",
+  "insert": "上屏",
+  "close": "关闭",
+  "Runs on pick": "选中即执行",
+  "Insert": "上屏",
+  "New snippet": "新建片段",
+  "Snippet name": "片段名称",
+  "Snippet command": "片段命令",
+  "Name, e.g. tail nginx log": "名称，如：看 nginx 日志",
+  "${name} becomes a blank to fill when the snippet is used.": "${名称} 会在使用时变成待填的空。",
+  "Press Enter automatically (runs on pick)": "自动回车（选中即执行）",
+
   // Drawer / host list
   "New connection": "新建连接",
   "Import from SSH config": "从 SSH 配置导入",

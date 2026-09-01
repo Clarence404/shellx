@@ -1,4 +1,5 @@
 pub mod hosts;
+pub mod snippets;
 pub mod keychain;
 pub mod ftp_hosts;
 pub mod tunnels;

@@ -17,6 +17,7 @@ import { ConnectDialog } from "./components/ConnectDialog";
 import { SshConfigImport } from "./components/SshConfigImport";
 import { FtpView } from "./components/FtpView";
 import { CommandPalette } from "./components/CommandPalette";
+import { SnippetPalette } from "./components/SnippetPalette";
 import { SettingsView } from "./components/settings/SettingsView";
 import { useSessions } from "./state/sessions";
 import { useHostsStore } from "./state/hosts";
@@ -100,6 +101,7 @@ export function App() {
   >(null);
   const [importOpen, setImportOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [snippetsOpen, setSnippetsOpen] = useState(false);
   // In-app error banner. Replaces window.alert() which uses the OS's
   // native positioning (WebView2 opens it at the top-left of the app
   // window on Windows, floating disconnected from shellx's chrome).
@@ -271,7 +273,10 @@ export function App() {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
-        setPaletteOpen(true);
+        // Shift picks the snippet library; plain Ctrl+K stays the host
+        // search it has always been.
+        if (e.shiftKey) setSnippetsOpen(true);
+        else setPaletteOpen(true);
       }
     };
     window.addEventListener("keydown", handler, true);
@@ -462,6 +467,7 @@ export function App() {
         tabs={tabs}
         activeTabId={activeId}
         onOpenPalette={() => setPaletteOpen(true)}
+        onOpenSnippets={() => setSnippetsOpen(true)}
         onTabSelect={setActive}
         onTabClose={(id) => { void closeSession(id); removeSession(id); }}
         onTabsClose={(ids) => {
@@ -587,6 +593,7 @@ export function App() {
         onClose={() => setPaletteOpen(false)}
         onConnect={(host) => void handleConnectSavedHost(host)}
       />
+      <SnippetPalette open={snippetsOpen} onClose={() => setSnippetsOpen(false)} />
       <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />
       <HostKeyDialog />
       {passphraseReq && (

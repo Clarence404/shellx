@@ -19,6 +19,7 @@ interface Props {
   onEditHost?: (host: HostInfo) => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
   onOpenPalette?: () => void;
+  onOpenSnippets?: () => void;
   children?: ReactNode;
 }
 
@@ -40,6 +41,7 @@ export function AppShell({
   onEditHost,
   onConnectHost,
   onOpenPalette,
+  onOpenSnippets,
   children,
 }: Props) {
   const view = useSessions((s) => s.railView);
@@ -54,6 +56,7 @@ export function AppShell({
         onRename={onRename}
         onConnectHost={onConnectHost}
         onOpenPalette={onOpenPalette}
+        onOpenSnippets={onOpenSnippets}
       />
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
         <ActivityRail />

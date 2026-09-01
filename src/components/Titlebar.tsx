@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Minus, Square, X, Copy as Restore, Search, Sun, Moon } from "lucide-react";
+import { Minus, Square, X, Copy as Restore, Search, Sun, Moon, Zap } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { TabBar, type Tab } from "./TabBar";
 import type { HostInfo } from "../types/host";
@@ -17,6 +17,7 @@ interface Props {
   onRename?: (id: string, title: string) => void;
   onConnectHost?: (host: HostInfo, forceNew?: boolean) => void;
   onOpenPalette?: () => void;
+  onOpenSnippets?: () => void;
 }
 
 const IS_MAC = typeof navigator !== "undefined" &&
@@ -33,7 +34,7 @@ const MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
  * the window by any non-interactive area; TabBar / logo / controls are
  * interactive and NOT drag regions.
  */
-export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection, onNewLocalTerminal, onRename, onConnectHost, onOpenPalette }: Props) {
+export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClose, onNewConnection, onNewLocalTerminal, onRename, onConnectHost, onOpenPalette, onOpenSnippets }: Props) {
   const [maximized, setMaximized] = useState(false);
   const t = useT();
   const themeId = useSettingsStore((s) => s.themeId);
@@ -109,6 +110,14 @@ export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClo
         onDoubleClick={() => void win().toggleMaximize()}
         style={{ flexShrink: 0, width: 16, height: "100%" }}
       />
+      {onOpenSnippets && (
+        <PillButton
+          onClick={onOpenSnippets}
+          label={t("Snippets")}
+          shortcut={`${MOD_LABEL}+Shift+K`}
+          icon={<Zap size={12} />}
+        />
+      )}
       {onOpenPalette && (
         <SearchButton onClick={onOpenPalette} label={t("Search")} />
       )}
@@ -160,6 +169,36 @@ function TitleButton({
         border: "none", padding: 0, cursor: "pointer",
       }}
     >{children}</button>
+  );
+}
+
+/** Same pill as SearchButton, for the snippet palette — icon-first
+ *  because two labelled pills would crowd the titlebar. */
+function PillButton({ onClick, label, shortcut, icon }: {
+  onClick: () => void;
+  label: string;
+  shortcut: string;
+  icon: React.ReactNode;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={`${label}  (${shortcut})`}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        height: 22, width: 26, marginRight: 4,
+        border: "1px solid var(--border)",
+        background: hover ? "var(--panel-2)" : "var(--panel-1)",
+        color: hover ? "var(--text-1)" : "var(--text-3)",
+        borderRadius: 6, cursor: "pointer",
+      }}
+    >
+      {icon}
+    </button>
   );
 }
 
