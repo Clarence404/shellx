@@ -146,10 +146,15 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
       // variants are ours, and both are consumed even when they end up
       // doing nothing (an empty selection must not leak a ^C).
       if (ev.type === "keydown" && ev.ctrlKey && ev.shiftKey && (ev.key === "C" || ev.key === "c")) {
+        // preventDefault matters: Ctrl+Shift+C/V are ALSO the browser's
+        // own copy/paste-as-plain-text chords, and without it the
+        // WebView pasted a second copy natively right after ours.
+        ev.preventDefault();
         copySelection();
         return false;
       }
       if (ev.type === "keydown" && ev.ctrlKey && ev.shiftKey && (ev.key === "V" || ev.key === "v")) {
+        ev.preventDefault();
         void pasteFromClipboard();
         return false;
       }
