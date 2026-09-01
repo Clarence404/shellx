@@ -13,6 +13,7 @@ import "@xterm/xterm/css/xterm.css";
 import { onSessionClosed } from "../ipc/events";
 import { subscribeSession } from "../state/sessionStream";
 import { writeSessionInput, resizeSession } from "../ipc/commands";
+import { attachCommandSuggest } from "../terminal/suggest";
 import type { SessionId } from "../types/session";
 import { useSettingsStore } from "../state/settings";
 import { useSessions } from "../state/sessions";
@@ -133,9 +134,22 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     fitRef.current = fit;
     searchRef.current = search;
 
+    // Inline command suggestions (fish-style ghost text + → to accept),
+    // driven by the locally recorded history. The host element is the
+    // positioned ancestor the ghost is placed in.
+    const suggest = attachCommandSuggest({
+      term,
+      container: hostRef.current,
+      sessionId,
+      getHostKey: () =>
+        useSessions.getState().sessions.find((s) => s.id === sessionId)?.host_id ?? "adhoc",
+    });
+
     // Ctrl+Shift+F opens the scrollback search bar. Intercepted at the
     // xterm level so it works while the terminal has keyboard focus
     // (returning false stops xterm from forwarding it to the shell).
+    // The suggestion module gets the same hook — xterm allows only one
+    // custom key handler, so they share it.
     term.attachCustomKeyEventHandler((ev) => {
       if (ev.type === "keydown" && ev.ctrlKey && ev.shiftKey && (ev.key === "F" || ev.key === "f")) {
         openSearch();
@@ -158,6 +172,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
         void pasteFromClipboard();
         return false;
       }
+      if (!suggest.handleKey(ev)) return false;
       return true;
     });
 
@@ -315,6 +330,7 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
 
     return () => {
       cancelled = true;
+      suggest.dispose();
       dataDisp.dispose();
       resizeDisp.dispose();
       document.fonts?.removeEventListener("loadingdone", refitForFonts);

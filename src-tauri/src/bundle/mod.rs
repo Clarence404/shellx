@@ -279,6 +279,7 @@ mod tests {
                 font_family: "JetBrains Mono".into(),
                 font_size: 13,
                 cursor_style: "bar".into(),
+                command_suggest: true,
             },
             local_shell: None,
             language: language.into(),

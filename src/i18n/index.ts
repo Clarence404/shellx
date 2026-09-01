@@ -47,6 +47,12 @@ const zh: Record<string, string> = {
   "Connected": "已连接",
   "Reading remote directory…": "正在读取远程目录…",
   "Cannot open this folder": "无法打开该目录",
+  "Command suggestions": "命令联想",
+  "Typed commands are recorded locally per host and offered as ghost text; → accepts. Lines that look like they carry secrets are never stored.":
+    "输入过的命令按主机记录在本机，输入时以灰字提示，按 → 接受。疑似携带密码的命令不会被记录。",
+  "On": "开",
+  "Clear history": "清空历史",
+  "Cleared": "已清空",
   "Protocol": "协议",
   "FTP is not encrypted: the password and every byte travel in the clear. Use it only on a network you trust.":
     "FTP 不加密：密码和每一个字节都是明文传输。仅在可信网络里使用。",
