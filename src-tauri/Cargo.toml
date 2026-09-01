@@ -1,6 +1,6 @@
 [package]
 name = "shellx"
-version = "0.27.0"
+version = "0.28.0"
 description = "A Tauri App"
 authors = ["Clarence404"]
 license = ""
