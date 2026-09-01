@@ -50,6 +50,16 @@ export function placeSurfaces(
   sessionIds: string[],
   park: HTMLElement | null,
 ): void {
+  // Bury the dead first. A removed session's host div used to stay
+  // wherever it was — and when that was a pane slot, the next session
+  // moved in BEHIND the full-height corpse and the pane showed white.
+  const alive = new Set(sessionIds);
+  for (const [id, el] of hosts) {
+    if (!alive.has(id)) {
+      el.parentNode?.removeChild(el);
+      hosts.delete(id);
+    }
+  }
   const moved: string[] = [];
   for (const id of sessionIds) {
     const host = surfaceHost(id);
