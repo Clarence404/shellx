@@ -80,6 +80,12 @@ export function TransferBar({ connectionId, showAll, expanded, onToggle }: Scope
   const detail = [
     m.totalFiles > 1 ? `${m.doneFiles}/${m.totalFiles} ${t("files")}` : null,
     m.totalBytes > 0 ? `${formatSize(m.bytesDone)} / ${formatSize(m.totalBytes)}` : null,
+    // Speed and remaining time whenever bytes are moving — what a
+    // transfer bar is for.
+    m.anyActive && m.rateBps > 0 ? `${formatSize(m.rateBps)}/s` : null,
+    m.anyActive && m.rateBps > 0 && m.totalBytes > m.bytesDone
+      ? formatEta((m.totalBytes - m.bytesDone) / m.rateBps)
+      : null,
     m.totalBytes > 0 ? `${Math.round(m.pct)}%` : null,
   ].filter(Boolean).join(" · ");
 

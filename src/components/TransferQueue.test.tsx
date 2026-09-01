@@ -156,6 +156,16 @@ describe("transfer strip", () => {
     expect(useTransfersStore.getState().list.find((t) => t.id === "bad")).toBeUndefined();
   });
 
+  it("the bar shows speed and remaining time while bytes move", () => {
+    useTransfersStore.setState({ list: [
+      tr({ rateBps: 2 * 1024 * 1024, total_bytes: 1000 * 1024 * 1024, bytes_done: 500 * 1024 * 1024 }),
+    ] });
+    render(<TransferBar connectionId="c1" expanded={false} onToggle={() => {}} />);
+    expect(screen.getByText(/2\.0 MB\/s/)).toBeInTheDocument();
+    // 500 MB left at 2 MB/s ≈ 4m 10s.
+    expect(screen.getByText(/4m 10s/)).toBeInTheDocument();
+  });
+
   it("the bar goes red and says how many failed", () => {
     useTransfersStore.setState({ list: [
       tr({ id: "bad", remote_path: "/up/broken.bin", state: { kind: "failed", error: "x" } }),
