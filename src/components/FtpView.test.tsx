@@ -126,12 +126,12 @@ describe("FtpView", () => {
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
 
-    // Folded away on creation — the defaults are right nine times out
-    // of ten — but there for FTP once Advanced opens.
-    expect(screen.queryByLabelText("Filename encoding")).toBeNull();
-    await user.click(screen.getByRole("button", { name: /Advanced settings/ }));
+    // Advanced opens by default; the header still folds it away.
     expect(screen.getByLabelText("Filename encoding")).toBeInTheDocument();
     expect(screen.getByLabelText("Transfer mode")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Advanced settings/ }));
+    expect(screen.queryByLabelText("Filename encoding")).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Advanced settings/ }));
 
     // …and gone for SFTP, where neither concept exists.
     await user.selectOptions(screen.getByLabelText("File protocol"), "sftp");
@@ -201,7 +201,6 @@ describe("FtpView", () => {
     const user = userEvent.setup();
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
-    await user.click(screen.getByRole("button", { name: /Advanced settings/ }));
 
     // FTP has no key authentication, so the dropdown is not there at all.
     expect(screen.queryByLabelText("Authentication")).toBeNull();
@@ -219,7 +218,6 @@ describe("FtpView", () => {
     const user = userEvent.setup();
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
-    await user.click(screen.getByRole("button", { name: /Advanced settings/ }));
     await user.selectOptions(screen.getByLabelText("File protocol"), "sftp");
     await user.selectOptions(screen.getByLabelText("Authentication"), "publickey");
     await user.type(screen.getByPlaceholderText("10.20.1.40"), "10.0.0.5");
@@ -237,7 +235,6 @@ describe("FtpView", () => {
     });
     render(<FtpView />);
     await user.click(screen.getByRole("button", { name: /New FTP connection/ }));
-    await user.click(screen.getByRole("button", { name: /Advanced settings/ }));
     await user.selectOptions(screen.getByLabelText("File protocol"), "sftp");
     await user.selectOptions(screen.getByLabelText("Authentication"), "publickey");
     await user.type(screen.getByPlaceholderText("10.20.1.40"), "10.0.0.5");

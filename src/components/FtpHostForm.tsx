@@ -51,9 +51,9 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
   const [anonymous, setAnonymous] = useState(
     initial?.protocol !== "sftp" && initial?.username === "anonymous",
   );
-  // Editing opens with everything visible — the values in there are the
-  // reason most edits happen. Creation starts folded.
-  const [showAdv, setShowAdv] = useState(editing);
+  // Open by default: folding it saved seven rows of pixels and cost a
+  // click every time someone wanted the name or the encoding.
+  const [showAdv, setShowAdv] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
