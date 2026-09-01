@@ -3,98 +3,194 @@ import { ShadowLine } from "./shadowLine";
 import { historyRecord, historySuggest } from "../ipc/history";
 import { writeSessionInput } from "../ipc/commands";
 import { useSettingsStore } from "../state/settings";
+import { mergeCandidates, type Candidate } from "./suggestSources";
 
 export interface CommandSuggest {
   /** Wire into `attachCustomKeyEventHandler`; false means the key was
-   *  consumed (an accepted suggestion) and must not reach the shell. */
+   *  consumed by the dropdown and must not reach the shell. */
   handleKey(ev: KeyboardEvent): boolean;
   dispose(): void;
 }
 
 const FETCH_DEBOUNCE_MS = 80;
+const LIST_MAX_HEIGHT = 208;
 
 /**
- * fish-style inline suggestion for a terminal session: a dim ghost of
- * the best history match is painted after the cursor, and → accepts it.
+ * WindTerm-style command completion for a terminal session: as a line
+ * is typed, a dropdown under the cursor offers prefix matches — `h`
+ * rows from the locally recorded per-host history, `c` rows from a
+ * bundled command dictionary.
  *
  * Everything hangs off the shadow input line (see `ShadowLine`): the
- * moment it loses track — Tab, arrows, full-screen apps — the ghost
- * disappears and nothing is recorded until the next line starts. All
- * keys except the accepting → pass through untouched; the terminal
- * must never feel intercepted.
+ * moment it loses track — Tab, arrows, full-screen apps — the list
+ * disappears and nothing is recorded until the next line starts.
+ *
+ * Key contract while the list is visible: ↑/↓ move the highlight, Tab
+ * accepts (the highlight, or the top row), Enter accepts ONLY after an
+ * explicit ↑/↓ — an un-navigated Enter passes through and runs the
+ * typed line, so muscle memory never breaks. Esc closes. Every other
+ * key passes through untouched.
  */
 export function attachCommandSuggest(opts: {
   term: Terminal;
-  /** The positioned ancestor the ghost is absolutely placed in. */
+  /** The positioned ancestor the dropdown is absolutely placed in. */
   container: HTMLElement;
   sessionId: string;
   getHostKey: () => string;
 }): CommandSuggest {
   const { term, container, sessionId, getHostKey } = opts;
   const shadow = new ShadowLine();
-  let suggestion: string | null = null;
+  let candidates: Candidate[] = [];
+  /** -1 = nothing armed: Enter stays the shell's. */
+  let selIdx = -1;
   let dismissed = false;
   let fetchTimer: ReturnType<typeof setTimeout> | null = null;
   let fetchSeq = 0;
 
-  const ghost = document.createElement("div");
-  ghost.setAttribute("data-testid", "command-ghost");
-  Object.assign(ghost.style, {
+  const list = document.createElement("div");
+  list.setAttribute("data-testid", "command-dropdown");
+  Object.assign(list.style, {
     position: "absolute",
-    pointerEvents: "none",
-    whiteSpace: "pre",
-    zIndex: "5",
-    opacity: "0.45",
+    zIndex: "6",
     display: "none",
+    minWidth: "220px",
+    maxWidth: "440px",
+    maxHeight: `${LIST_MAX_HEIGHT}px`,
+    overflowY: "auto",
+    background: "var(--panel-2)",
+    border: "1px solid var(--border)",
+    borderRadius: "6px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+    padding: "3px",
   } as Partial<CSSStyleDeclaration>);
-  container.appendChild(ghost);
+  container.appendChild(list);
 
   const enabled = () => useSettingsStore.getState().terminal.commandSuggest;
+  const visible = () => list.style.display !== "none";
 
   function hide() {
-    suggestion = null;
-    ghost.style.display = "none";
+    candidates = [];
+    selIdx = -1;
+    list.style.display = "none";
   }
 
-  /** The part of the suggestion the user has not typed yet, or null. */
-  function remainder(): string | null {
-    if (!suggestion || dismissed || !shadow.valid) return null;
+  function accept(idx: number) {
+    const cand = candidates[idx];
     const line = shadow.line;
-    if (line.length < 2 || !suggestion.startsWith(line) || suggestion === line) return null;
-    return suggestion.slice(line.length);
+    if (!cand || !cand.text.startsWith(line)) return;
+    const rest = cand.text.slice(line.length);
+    if (rest) {
+      void writeSessionInput(sessionId, Array.from(new TextEncoder().encode(rest)));
+      shadow.pushText(rest);
+    }
+    hide();
   }
 
-  function render() {
-    const rest = remainder();
+  function renderRows() {
+    const line = shadow.line;
+    list.textContent = "";
+    candidates.forEach((c, i) => {
+      const row = document.createElement("div");
+      Object.assign(row.style, {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        padding: "3px 8px",
+        borderRadius: "4px",
+        cursor: "pointer",
+        background: i === selIdx ? "var(--accent-fade)" : "transparent",
+      } as Partial<CSSStyleDeclaration>);
+      row.addEventListener("mousedown", (e) => {
+        // mousedown, not click: the terminal steals focus on mouseup.
+        e.preventDefault();
+        accept(i);
+      });
+      row.addEventListener("mouseenter", () => {
+        selIdx = i;
+        renderRows();
+      });
+
+      const text = document.createElement("span");
+      Object.assign(text.style, {
+        flex: "1",
+        minWidth: "0",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "pre",
+        fontSize: "12px",
+        fontFamily: '"JetBrains Mono", var(--font-mono)',
+        color: "var(--text-2)",
+      } as Partial<CSSStyleDeclaration>);
+      const typed = document.createElement("b");
+      typed.textContent = line;
+      typed.style.color = "var(--text-1)";
+      text.appendChild(typed);
+      text.appendChild(document.createTextNode(c.text.slice(line.length)));
+
+      const badge = document.createElement("span");
+      badge.textContent = c.source;
+      Object.assign(badge.style, {
+        flexShrink: "0",
+        width: "14px",
+        textAlign: "center",
+        fontSize: "10px",
+        lineHeight: "15px",
+        borderRadius: "3px",
+        fontFamily: "var(--font-mono)",
+        // WindTerm's palette, near enough: warm for history, cool for
+        // the command dictionary.
+        background: c.source === "h" ? "rgba(240,113,120,0.25)" : "rgba(76,124,255,0.25)",
+        color: c.source === "h" ? "var(--error)" : "var(--accent)",
+      } as Partial<CSSStyleDeclaration>);
+
+      row.appendChild(text);
+      row.appendChild(badge);
+      list.appendChild(row);
+    });
+    // Keep the highlight on screen while ↑/↓ walk past the fold.
+    const sel = list.children[selIdx] as HTMLElement | undefined;
+    sel?.scrollIntoView({ block: "nearest" });
+  }
+
+  function position() {
     const buf = term.buffer.active;
-    // No ghost inside vim/less (alternate screen) or while scrolled up.
-    if (!rest || buf.type === "alternate" || buf.viewportY !== buf.baseY) {
-      ghost.style.display = "none";
-      return;
-    }
     const screen = container.querySelector(".xterm-screen") as HTMLElement | null;
-    if (!screen || term.cols === 0 || term.rows === 0) {
-      ghost.style.display = "none";
-      return;
-    }
+    if (!screen || term.cols === 0 || term.rows === 0) return hide();
     const cellW = screen.clientWidth / term.cols;
     const cellH = screen.clientHeight / term.rows;
     const sRect = screen.getBoundingClientRect();
     const cRect = container.getBoundingClientRect();
-    // Keep it on this row — a ghost that wraps would repaint the line
-    // below and read as real output.
-    const roomCols = Math.max(0, term.cols - buf.cursorX - 1);
-    if (roomCols === 0) {
-      ghost.style.display = "none";
+    // Anchor at the start of what was typed, like an IDE popup.
+    const startCol = Math.max(0, buf.cursorX - shadow.line.length);
+    const left = sRect.left - cRect.left + startCol * cellW;
+    const rowTop = sRect.top - cRect.top + buf.cursorY * cellH;
+    list.style.left = `${Math.max(0, Math.min(left, cRect.width - 240))}px`;
+    // Below the cursor row when there is room, above it when not.
+    const roomBelow = cRect.height - (rowTop + cellH);
+    if (roomBelow >= Math.min(LIST_MAX_HEIGHT, list.scrollHeight) + 4) {
+      list.style.top = `${rowTop + cellH + 2}px`;
+      list.style.bottom = "";
+    } else {
+      list.style.top = "";
+      list.style.bottom = `${cRect.height - rowTop + 2}px`;
+    }
+  }
+
+  function show() {
+    const buf = term.buffer.active;
+    if (
+      candidates.length === 0 ||
+      dismissed ||
+      !shadow.valid ||
+      buf.type === "alternate" ||
+      buf.viewportY !== buf.baseY
+    ) {
+      list.style.display = "none";
       return;
     }
-    ghost.textContent = rest.length > roomCols ? `${rest.slice(0, roomCols - 1)}…` : rest;
-    ghost.style.left = `${sRect.left - cRect.left + buf.cursorX * cellW}px`;
-    ghost.style.top = `${sRect.top - cRect.top + buf.cursorY * cellH}px`;
-    ghost.style.font = `${term.options.fontSize}px ${term.options.fontFamily}`;
-    ghost.style.lineHeight = `${cellH}px`;
-    ghost.style.color = term.options.theme?.foreground ?? "#9aa1b2";
-    ghost.style.display = "block";
+    renderRows();
+    list.style.display = "block";
+    position();
   }
 
   function scheduleFetch() {
@@ -102,17 +198,19 @@ export function attachCommandSuggest(opts: {
     fetchTimer = setTimeout(() => {
       fetchTimer = null;
       const line = shadow.line;
-      if (!enabled() || !shadow.valid || line.trim().length < 2) {
+      if (!enabled() || !shadow.valid || dismissed || line.trim().length < 2) {
         hide();
         return;
       }
       const seq = ++fetchSeq;
       historySuggest(getHostKey(), line)
         .then((rows) => {
-          // The line may have moved on while the query ran.
           if (seq !== fetchSeq) return;
-          suggestion = rows.find((r) => r.startsWith(shadow.line) && r !== shadow.line) ?? null;
-          render();
+          const line2 = shadow.line;
+          if (line2 !== line) return; // moved on while the query ran
+          candidates = mergeCandidates(line2, rows);
+          selIdx = -1;
+          show();
         })
         .catch(() => hide());
     }, FETCH_DEBOUNCE_MS);
@@ -124,34 +222,42 @@ export function attachCommandSuggest(opts: {
       for (const cmd of submitted) void historyRecord(getHostKey(), cmd).catch(() => {});
     }
     dismissed = false;
-    if (remainder() === null) hide();
+    hide();
     scheduleFetch();
-    render();
   });
 
-  // Remote echo moves the cursor after we do — reposition on every
-  // rendered frame. Cheap: style writes only while a ghost is showing.
+  // Remote echo moves the cursor after we do — keep the anchor pinned.
   const renderDisp = term.onRender(() => {
-    if (suggestion) render();
+    if (visible()) position();
   });
 
   function handleKey(ev: KeyboardEvent): boolean {
-    if (ev.type !== "keydown") return true;
-    if (ev.key === "ArrowRight" && !ev.ctrlKey && !ev.altKey && !ev.metaKey && !ev.shiftKey) {
-      const rest = remainder();
-      if (rest && ghost.style.display !== "none") {
-        // Send the completion instead of the arrow; onData never sees
-        // it, so the shadow is told by hand.
-        void writeSessionInput(sessionId, Array.from(new TextEncoder().encode(rest)));
-        shadow.pushText(rest);
-        hide();
-        return false;
-      }
+    if (ev.type !== "keydown" || !visible()) return true;
+    if (ev.key === "ArrowDown") {
+      selIdx = (selIdx + 1) % candidates.length;
+      renderRows();
+      return false;
     }
-    if (ev.key === "Escape" && suggestion) {
-      // Dismiss the ghost, but let Escape through — vim users own it.
+    if (ev.key === "ArrowUp") {
+      selIdx = selIdx <= 0 ? candidates.length - 1 : selIdx - 1;
+      renderRows();
+      return false;
+    }
+    if (ev.key === "Tab") {
+      ev.preventDefault();
+      accept(selIdx >= 0 ? selIdx : 0);
+      return false;
+    }
+    if (ev.key === "Enter" && selIdx >= 0) {
+      // Enter takes the highlight only after an explicit ↑/↓ — an
+      // un-navigated Enter still runs the line the user typed.
+      accept(selIdx);
+      return false;
+    }
+    if (ev.key === "Escape") {
       dismissed = true;
-      ghost.style.display = "none";
+      hide();
+      return false;
     }
     return true;
   }
@@ -162,7 +268,7 @@ export function attachCommandSuggest(opts: {
       if (fetchTimer) clearTimeout(fetchTimer);
       dataDisp.dispose();
       renderDisp.dispose();
-      ghost.remove();
+      list.remove();
     },
   };
 }
