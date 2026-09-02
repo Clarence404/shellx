@@ -9,14 +9,13 @@ export function SectionHeader({ label, action }: Props) {
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between",
-      paddingBottom: 6, marginBottom: 6,
+      paddingBottom: 8, marginBottom: 6,
       borderBottom: "1px solid var(--border)",
     }}>
       <span style={{
-        fontSize: 10, letterSpacing: 1, textTransform: "uppercase",
-        // 10px small-caps needs a step brighter than plain --text-2 to stay
-        // legible; still dimmer than --text-1 so it reads as a label.
-        color: "color-mix(in srgb, var(--text-1) 60%, var(--text-2))", fontWeight: 600,
+        // One step above body text: a real title, not a small-caps tag.
+        fontSize: "calc(var(--font-ui-size) + 1px)", fontWeight: 600,
+        letterSpacing: 0.2, color: "var(--text-1)", paddingLeft: 2,
       }}>{label}</span>
       {action}
     </div>

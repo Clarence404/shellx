@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Plug, Unplug, Download, PanelLeftClose } from "lucide-react";
+import { Plus, Plug, Unplug, Import, ChevronsLeft } from "lucide-react";
 import { Folder, File as FileIcon } from "lucide-react";
 import { LocalPane, type RemoteAdapter } from "./LocalPane";
 import { TransferStripSection } from "./TransferStripSection";
@@ -89,13 +89,19 @@ export function FtpView() {
               title={navigator.userAgent.includes("Mac") ? "Collapse (⌘+B)" : "Collapse (Ctrl+Shift+B)"}
               onClick={toggleDrawer}
               style={{
-                color: "var(--text-3)", padding: "2px 4px", borderRadius: 3,
-                display: "flex", alignItems: "center",
+                color: "var(--text-2)", width: 26, height: 26, borderRadius: 6,
+                display: "flex", alignItems: "center", justifyContent: "center",
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-1)"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--text-3)"; }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.color = "var(--text-1)"; el.style.background = "var(--panel-2)";
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.color = "var(--text-2)"; el.style.background = "transparent";
+              }}
             >
-              <PanelLeftClose size={12} strokeWidth={2} />
+              <ChevronsLeft size={16} strokeWidth={2} />
             </button>
           }
         />
@@ -156,17 +162,18 @@ export function FtpView() {
             );
           })}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 8 }}>
           <button
             onClick={() => setForm({ initial: null })}
             style={{
               flex: 1, minWidth: 0,
-              padding: "6px 8px", borderRadius: 5,
+              height: 34, borderRadius: 6,
               background: "var(--accent-fade)", color: "var(--text-1)",
               border: "1px solid var(--accent)", fontSize: "var(--font-ui-size)",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              fontWeight: 500,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
             }}>
-            <Plus size={12} strokeWidth={2.5} />
+            <Plus size={15} strokeWidth={2.2} />
             {t("New FTP connection")}
           </button>
           <button
@@ -174,12 +181,12 @@ export function FtpView() {
             title={t("Import from saved hosts")}
             onClick={() => setImporting(true)}
             style={{
-              flexShrink: 0, padding: "6px 8px", borderRadius: 5,
+              flexShrink: 0, width: 40, height: 34, borderRadius: 6,
               background: "var(--panel-2)", color: "var(--text-2)",
               border: "1px solid var(--border)",
-              display: "flex", alignItems: "center",
+              display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-            <Download size={12} strokeWidth={2.5} />
+            <Import size={16} strokeWidth={2} />
           </button>
         </div>
       </aside>
