@@ -61,12 +61,17 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
+    // A blank name falls back to user@host AT SAVE TIME — the same rule
+    // the FTP form applies. Creation auto-fills as you type, but editing
+    // had no fallback and stored the empty string, which is how a
+    // nameless row lands in the sidebar.
+    const finalLabel = label.trim() || `${username.trim()}@${host.trim()}`;
     try {
       if (mode === "edit" && initial) {
         if (authMode === "publickey") {
           const result = await updateHostById({
             id: initial.id,
-            label, host, port: Number(port), username,
+            label: finalLabel, host, port: Number(port), username,
             auth_method: "publickey",
             key_path: selectedKeyPath,
             passphrase: forgetPassphrase ? null : (passphrase || undefined),
@@ -81,7 +86,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
           // Password mode edit
           const result = await updateHostById({
             id: initial.id,
-            label, host, port: Number(port), username,
+            label: finalLabel, host, port: Number(port), username,
             password: forgetPassword ? null : (password.length > 0 ? password : undefined),
             connection_mode: connectionMode,
           });
@@ -97,7 +102,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
         if (authMode === "publickey") {
           if (saveHost) {
             const inserted = await addHost({
-              label, host, port: pn, username,
+              label: finalLabel, host, port: pn, username,
               auth_method: "publickey",
               key_path: selectedKeyPath ?? undefined,
               passphrase: passphrase || undefined,
@@ -108,7 +113,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               return;
             }
             const info = await openConnection({
-              host, port: pn, username, password: "", label,
+              host, port: pn, username, password: "", label: finalLabel,
               host_id: inserted.id,
               auth_method: "publickey",
               key_path: selectedKeyPath ?? undefined,
@@ -117,7 +122,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             onDone("connected", { id: info.id, label: info.label, host_id: info.host_id });
           } else {
             const info = await openConnection({
-              host, port: pn, username, password: "", label,
+              host, port: pn, username, password: "", label: finalLabel,
               auth_method: "publickey",
               key_path: selectedKeyPath ?? undefined,
               passphrase,
@@ -128,7 +133,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
           // Password mode create
           if (saveHost) {
             const inserted = await addHost({
-              label, host, port: pn, username,
+              label: finalLabel, host, port: pn, username,
               password: (rememberPassword && canRememberPw) ? password : undefined,
               connection_mode: connectionMode,
             });
@@ -137,13 +142,13 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               return;
             }
             const info = await openConnection({
-              host, port: pn, username, password, label,
+              host, port: pn, username, password, label: finalLabel,
               host_id: inserted.id,
             });
             onDone("connected", { id: info.id, label: info.label, host_id: info.host_id });
           } else {
             const info = await openConnection({
-              host, port: pn, username, password, label,
+              host, port: pn, username, password, label: finalLabel,
             });
             onDone("connected", { id: info.id, label: info.label, host_id: info.host_id });
           }
@@ -255,15 +260,21 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               />
 
               {mode === "edit" && keychainAvailable && (
-                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--text-1)" }}>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 11, color: "var(--text-1)" }}>
                   <input
                     type="checkbox"
                     checked={forgetPassword}
                     onChange={(e) => setForgetPassword(e.target.checked)}
+                    style={{ marginTop: 1, flexShrink: 0 }}
                   />
-                  {t("Forget stored password")}
-                  <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-                    {t("Removes the saved password. You'll need to type it next connection.")}
+                  {/* Two lines by design: label on its own line, the
+                      explanation dim underneath — inline they fought
+                      for one row and the label wrapped mid-word. */}
+                  <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                    <span style={{ whiteSpace: "nowrap" }}>{t("Forget stored password")}</span>
+                    <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+                      {t("Removes the saved password. You'll need to type it next connection.")}
+                    </span>
                   </span>
                 </label>
               )}

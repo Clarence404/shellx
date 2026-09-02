@@ -107,6 +107,48 @@ describe("HostForm", () => {
     expect(onDone).toHaveBeenCalledWith("saved");
   });
 
+  it("edit mode: a cleared name falls back to user@host instead of saving blank", async () => {
+    const user = userEvent.setup();
+    const updateHostById = vi.fn().mockResolvedValue({
+      id: "id-1", label: "chen@10.0.0.1", host: "10.0.0.1", port: 22, username: "chen",
+      notes: null, created_at: 0, last_connected_at: null, sort_order: 0,
+      auth_method: "password", key_path: null,
+      password_stored: true,
+    });
+    vi.resetModules();
+    vi.doMock("../state/hosts", () => ({
+      useHostsStore: Object.assign(
+        (selector: any) => selector({
+          keychainAvailable: true,
+          addHost: vi.fn(),
+          updateHostById,
+        }),
+        { getState: () => ({ keychainAvailable: true }) },
+      ),
+    }));
+    vi.doMock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
+    const { HostForm: HostFormReloaded } = await import("./HostForm");
+
+    render(<HostFormReloaded
+      mode="edit"
+      initial={{
+        id: "id-1", label: "prod-1", host: "10.0.0.1", port: 22,
+        username: "chen", notes: null,
+        created_at: 0, last_connected_at: null, sort_order: 0,
+        auth_method: "password", key_path: null, connection_mode: "terminal_only",
+      }}
+      onDone={() => {}} onCancel={() => {}} />);
+
+    await user.clear(screen.getByDisplayValue("prod-1"));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    // The placeholder promises user@host — the save keeps that promise
+    // rather than writing a nameless row into the sidebar.
+    expect(updateHostById).toHaveBeenCalledWith(expect.objectContaining({
+      label: "chen@10.0.0.1",
+    }));
+  });
+
   it("edit mode: no 'Forget stored password' checkbox when keychain is unavailable", async () => {
     vi.resetModules();
     vi.doMock("../state/hosts", () => ({

@@ -248,15 +248,19 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
       )}
 
       {editing && keychainAvailable && !usesKey && !anonymous && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, marginBottom: 10, color: "var(--text-1)" }}>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 11, marginBottom: 10, color: "var(--text-1)" }}>
           <input
             type="checkbox"
             checked={forgetPassword}
             onChange={(e) => setForgetPassword(e.target.checked)}
+            style={{ marginTop: 1, flexShrink: 0 }}
           />
-          {t("Forget stored password")}
-          <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-            {t("Removes the saved password. You'll need to type it next connection.")}
+          {/* Same two-line layout as the host form's row. */}
+          <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+            <span style={{ whiteSpace: "nowrap" }}>{t("Forget stored password")}</span>
+            <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+              {t("Removes the saved password. You'll need to type it next connection.")}
+            </span>
           </span>
         </label>
       )}
