@@ -255,8 +255,10 @@ impl FtpClient {
         // (address / firewall trouble), reading it (server side), or
         // closing it (server holding the socket open).
         let t0 = std::time::Instant::now();
-        let mut t_open = std::time::Duration::ZERO;
-        let mut t_read = std::time::Duration::ZERO;
+        // Assigned in every match arm below; declared here so the log
+        // line after the match can read them.
+        let t_open: std::time::Duration;
+        let t_read: std::time::Duration;
         let read = match &mut self.conn {
             Conn::Plain(s) => {
                 let (_, mut data) = s

@@ -50,6 +50,30 @@ pub async fn drag_out(args: DragOutArgs, window: Window) -> Result<()> {
     let handle = window.clone();
     window
         .run_on_main_thread(move || {
+            // The drag crate's per-platform backends want different
+            // window handles: the Windows/macOS ones take the tauri
+            // window, the GTK one wants the underlying ApplicationWindow
+            // — passing &Window there is a type error, which is how the
+            // Linux build stayed red from the day drag-out landed.
+            #[cfg(target_os = "linux")]
+            let result = match handle.gtk_window() {
+                Ok(gtk) => drag::start_drag(
+                    &gtk,
+                    drag::DragItem::Files(files),
+                    drag::Image::Raw(DRAG_ICON.to_vec()),
+                    |_result, _position| {},
+                    drag::Options::default(),
+                ),
+                Err(e) => {
+                    crate::log_warn!(
+                        crate::logs::categories::TRANSFER,
+                        "OS drag-out failed to start",
+                        "error": format!("no gtk window: {e}"),
+                    );
+                    return;
+                }
+            };
+            #[cfg(not(target_os = "linux"))]
             let result = drag::start_drag(
                 &handle,
                 drag::DragItem::Files(files),
