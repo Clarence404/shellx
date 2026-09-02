@@ -529,7 +529,17 @@ function PasteConfirm({ text, onCancel, onPaste }: {
           fontFamily: '"JetBrains Mono", var(--font-mono)',
           whiteSpace: "pre-wrap", wordBreak: "break-all",
         }}>{text.length > 4000 ? `${text.slice(0, 4000)}\n…` : text}</pre>
+        {/* House rule for dialogs: Cancel left, the primary action right. */}
         <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1, height: 28, borderRadius: 5, fontSize: 12,
+              border: "1px solid var(--border-hi)", background: "transparent",
+              color: "var(--text-2)", cursor: "pointer",
+            }}>
+            {t("Cancel")}
+          </button>
           <button
             autoFocus
             onClick={onPaste}
@@ -539,15 +549,6 @@ function PasteConfirm({ text, onCancel, onPaste }: {
               fontSize: 12, fontWeight: 600, cursor: "pointer",
             }}>
             {t("Paste")}
-          </button>
-          <button
-            onClick={onCancel}
-            style={{
-              flex: 1, height: 28, borderRadius: 5, fontSize: 12,
-              border: "1px solid var(--border-hi)", background: "transparent",
-              color: "var(--text-2)", cursor: "pointer",
-            }}>
-            {t("Cancel")}
           </button>
         </div>
       </div>

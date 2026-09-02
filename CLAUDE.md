@@ -40,6 +40,10 @@ The flow is always:
 
 **What the user sees between changes:** the running app via HMR (see `pnpm tauri:dev`). Do not stand up separate demos, screenshots, or throwaway builds unless asked. If the dev process exited, restart it; if it can't restart (port in use, corepack broken, etc.), diagnose and fix — do not skip verification because "the previous instance probably still shows it".
 
+## UI conventions
+
+- **Dialog buttons: Cancel on the left, the confirming / primary action on the right.** Applies to every modal dialog (confirmations, forms in overlays, import pickers). Side panels, inline forms and toolbars are exempt. Set by the host form; matches modern Windows and the web. When adding a dialog, follow it; when touching one that doesn't, fix it in passing.
+
 ## Docs language policy
 
 - **`README.md` and `README.zh-CN.md` are a bilingual pair — kept in strict sync.** Any change to one lands together with the equivalent change to the other, in the same commit. Structure, section order, and headings mirror each other; only the prose language differs. Do not update just one and let the other drift.

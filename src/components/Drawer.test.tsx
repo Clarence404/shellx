@@ -110,7 +110,9 @@ describe("Drawer multi-select", () => {
     const dialog = await screen.findByRole("dialog", { name: "confirm delete hosts" });
     expect(dialog).toHaveTextContent("alpha");
     expect(dialog).toHaveTextContent("charlie");
-    expect(dialog).toHaveTextContent(/tunnel rules go too/);
+    // The consequences line states facts now — and these two hosts have
+    // no live sessions and no tunnel rules, so there is nothing to say.
+    expect(dialog).not.toHaveTextContent(/sessions|tunnel/);
 
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(deleteHost).toHaveBeenCalledTimes(2));

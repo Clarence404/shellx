@@ -293,17 +293,18 @@ function FillForm({ snippet, names, onCancel, onSubmit }: {
         fontFamily: '"JetBrains Mono", var(--font-mono)',
         wordBreak: "break-all",
       }}>{preview}</div>
+      {/* House rule for dialogs: Cancel left, the primary action right. */}
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="submit" style={{
-          flex: 1, height: 26, borderRadius: 4, border: "none", fontSize: 12,
-          background: "var(--accent)", color: "var(--text-on-accent)", fontWeight: 600,
-          cursor: "pointer",
-        }}>{t("Insert")}</button>
         <button type="button" onClick={onCancel} style={{
           flex: 1, height: 26, borderRadius: 4, fontSize: 12,
           border: "1px solid var(--border-hi)", background: "transparent",
           color: "var(--text-2)", cursor: "pointer",
         }}>{t("Cancel")}</button>
+        <button type="submit" style={{
+          flex: 1, height: 26, borderRadius: 4, border: "none", fontSize: 12,
+          background: "var(--accent)", color: "var(--text-on-accent)", fontWeight: 600,
+          cursor: "pointer",
+        }}>{t("Insert")}</button>
       </div>
     </form>
   );
@@ -395,7 +396,16 @@ function ManagePane({ editing, onEdit, onDone }: {
             <input type="checkbox" checked={autoEnter} onChange={(e) => setAutoEnter(e.target.checked)} />
             {t("Press Enter automatically (runs on pick)")}
           </label>
+          {/* House rule for dialogs: Cancel left, the primary action right. */}
           <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => { setAdding(false); setName(""); setCommand(""); setAutoEnter(false); onDone(); }}
+              style={{
+                flex: 1, height: 26, borderRadius: 4, fontSize: 12,
+                border: "1px solid var(--border-hi)", background: "transparent",
+                color: "var(--text-2)", cursor: "pointer",
+              }}>{t("Cancel")}</button>
             <button
               type="button"
               disabled={!name.trim() || !command.trim()}
@@ -406,14 +416,6 @@ function ManagePane({ editing, onEdit, onDone }: {
                 color: name.trim() && command.trim() ? "var(--text-on-accent)" : "var(--text-3)",
                 fontWeight: 600, cursor: "pointer",
               }}>{t("Save")}</button>
-            <button
-              type="button"
-              onClick={() => { setAdding(false); setName(""); setCommand(""); setAutoEnter(false); onDone(); }}
-              style={{
-                flex: 1, height: 26, borderRadius: 4, fontSize: 12,
-                border: "1px solid var(--border-hi)", background: "transparent",
-                color: "var(--text-2)", cursor: "pointer",
-              }}>{t("Cancel")}</button>
           </div>
         </div>
       )}

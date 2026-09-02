@@ -1,5 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
+import { useSessions } from "../state/sessions";
+import { listTunnelsForHost } from "../ipc/tunnels";
 import type { HostInfo } from "../types/host";
 import { useT } from "../i18n";
 
@@ -21,6 +23,29 @@ interface Props {
  */
 export function ConfirmDeleteHosts({ hosts, onCancel, onConfirm }: Props) {
   const t = useT();
+  // The consequences line states facts, not boilerplate: how many live
+  // sessions this delete actually cuts, how many tunnel rules actually
+  // go with it. A host with neither gets told so.
+  const sessions = useSessions((s) => s.sessions);
+  const openCount = hosts
+    ? sessions.filter(
+        (s) => s.state === "active" && s.host_id && hosts.some((h) => h.id === s.host_id),
+      ).length
+    : 0;
+  const [ruleCount, setRuleCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!hosts || hosts.length === 0) {
+      setRuleCount(null);
+      return;
+    }
+    let cancelled = false;
+    Promise.all(hosts.map((h) => listTunnelsForHost(h.id).catch(() => [])))
+      .then((lists) => {
+        if (!cancelled) setRuleCount(lists.reduce((n, l) => n + l.length, 0));
+      });
+    return () => { cancelled = true; };
+  }, [hosts]);
+
   useEffect(() => {
     if (!hosts) return;
     const onKey = (e: KeyboardEvent) => {
@@ -89,11 +114,30 @@ export function ConfirmDeleteHosts({ hosts, onCancel, onConfirm }: Props) {
           </div>
         )}
 
-        <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 14, lineHeight: 1.6 }}>
-          {t("Open sessions close, and the tunnel rules go too.")}
-        </div>
+        {/* Consequences only when there ARE any — a clean delete needs
+            no reassuring paragraph, just the two buttons. */}
+        {(openCount > 0 || (ruleCount !== null && ruleCount > 0)) && (
+          <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 14, lineHeight: 1.6 }}>
+            {[
+              openCount > 0 ? `${openCount} ${t("open sessions will close")}` : null,
+              ruleCount !== null && ruleCount > 0
+                ? `${ruleCount} ${t("tunnel rules go with it")}`
+                : null,
+            ].filter(Boolean).join(" · ")}
+          </div>
+        )}
 
+        {/* House rule for dialogs: Cancel left, the primary action right. */}
         <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1, padding: "6px 10px", borderRadius: 5,
+              background: "transparent", color: "var(--text-2)",
+              border: "1px solid var(--border-hi)", fontSize: 12, cursor: "pointer",
+            }}>
+            {t("Cancel")}
+          </button>
           <button
             autoFocus
             onClick={onConfirm}
@@ -103,15 +147,6 @@ export function ConfirmDeleteHosts({ hosts, onCancel, onConfirm }: Props) {
               border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
             }}>
             {t("Delete")}
-          </button>
-          <button
-            onClick={onCancel}
-            style={{
-              flex: 1, padding: "6px 10px", borderRadius: 5,
-              background: "transparent", color: "var(--text-2)",
-              border: "1px solid var(--border-hi)", fontSize: 12, cursor: "pointer",
-            }}>
-            {t("Cancel")}
           </button>
         </div>
       </div>

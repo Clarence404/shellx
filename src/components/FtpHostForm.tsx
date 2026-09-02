@@ -248,15 +248,19 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
       )}
 
       {editing && keychainAvailable && !usesKey && !anonymous && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, marginBottom: 10, color: "var(--text-1)" }}>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 11, marginBottom: 10, color: "var(--text-1)" }}>
           <input
             type="checkbox"
             checked={forgetPassword}
             onChange={(e) => setForgetPassword(e.target.checked)}
+            style={{ marginTop: 1, flexShrink: 0 }}
           />
-          {t("Forget stored password")}
-          <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-            {t("Removes the saved password. You'll need to type it next connection.")}
+          {/* Same two-line layout as the host form's row. */}
+          <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+            <span style={{ whiteSpace: "nowrap" }}>{t("Forget stored password")}</span>
+            <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+              {t("Removes the saved password. You'll need to type it next connection.")}
+            </span>
           </span>
         </label>
       )}
@@ -377,7 +381,18 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
 
       {err && <div style={{ fontSize: 11, color: "var(--error)", marginBottom: 8 }}>{err}</div>}
 
+      {/* House rule for dialogs: Cancel left, the primary action right. */}
       <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{
+            flex: 1, height: 28, borderRadius: 5, fontSize: 12,
+            border: "1px solid var(--border-hi)", background: "transparent",
+            color: "var(--text-2)",
+          }}>
+          {t("Cancel")}
+        </button>
         <button
           type="button"
           disabled={!canSave}
@@ -389,16 +404,6 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
             fontSize: 12, fontWeight: 600,
           }}>
           {busy ? `${t("Saving")}…` : t("Save")}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          style={{
-            flex: 1, height: 28, borderRadius: 5, fontSize: 12,
-            border: "1px solid var(--border-hi)", background: "transparent",
-            color: "var(--text-2)",
-          }}>
-          {t("Cancel")}
         </button>
       </div>
     </div>
