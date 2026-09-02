@@ -381,7 +381,18 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
 
       {err && <div style={{ fontSize: 11, color: "var(--error)", marginBottom: 8 }}>{err}</div>}
 
+      {/* House rule for dialogs: Cancel left, the primary action right. */}
       <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{
+            flex: 1, height: 28, borderRadius: 5, fontSize: 12,
+            border: "1px solid var(--border-hi)", background: "transparent",
+            color: "var(--text-2)",
+          }}>
+          {t("Cancel")}
+        </button>
         <button
           type="button"
           disabled={!canSave}
@@ -393,16 +404,6 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
             fontSize: 12, fontWeight: 600,
           }}>
           {busy ? `${t("Saving")}…` : t("Save")}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          style={{
-            flex: 1, height: 28, borderRadius: 5, fontSize: 12,
-            border: "1px solid var(--border-hi)", background: "transparent",
-            color: "var(--text-2)",
-          }}>
-          {t("Cancel")}
         </button>
       </div>
     </div>

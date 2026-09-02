@@ -144,7 +144,18 @@ export function FtpImportHosts({ open, onClose }: Props) {
           display: "flex", flexDirection: "column", gap: 8,
         }}>
           {err && <div style={{ fontSize: 11, color: "var(--error)" }}>{err}</div>}
+          {/* House rule for dialogs: Cancel left, the primary action right. */}
           <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                flex: 1, height: 28, borderRadius: 5, fontSize: 12,
+                border: "1px solid var(--border-hi)", background: "transparent",
+                color: "var(--text-2)",
+              }}>
+              {t("Cancel")}
+            </button>
             <button
               type="button"
               disabled={busy || selected.length === 0}
@@ -156,16 +167,6 @@ export function FtpImportHosts({ open, onClose }: Props) {
                 color: selected.length ? "var(--text-on-accent)" : "var(--text-3)",
               }}>
               {busy ? `${t("Importing")}…` : `${t("Import")} ${selected.length || ""}`.trim()}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                flex: 1, height: 28, borderRadius: 5, fontSize: 12,
-                border: "1px solid var(--border-hi)", background: "transparent",
-                color: "var(--text-2)",
-              }}>
-              {t("Cancel")}
             </button>
           </div>
         </div>

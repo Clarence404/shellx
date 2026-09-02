@@ -114,21 +114,30 @@ export function ConfirmDeleteHosts({ hosts, onCancel, onConfirm }: Props) {
           </div>
         )}
 
-        <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 14, lineHeight: 1.6 }}>
-          {(() => {
-            const parts: string[] = [];
-            if (openCount > 0) parts.push(`${openCount} ${t("open sessions will close")}`);
-            if (ruleCount !== null && ruleCount > 0) {
-              parts.push(`${ruleCount} ${t("tunnel rules go with it")}`);
-            }
-            if (parts.length > 0) return parts.join(" · ");
-            // Counts still loading: stay quiet rather than guessing.
-            if (ruleCount === null) return "";
-            return t("No open sessions, no tunnel rules.");
-          })()}
-        </div>
+        {/* Consequences only when there ARE any — a clean delete needs
+            no reassuring paragraph, just the two buttons. */}
+        {(openCount > 0 || (ruleCount !== null && ruleCount > 0)) && (
+          <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 14, lineHeight: 1.6 }}>
+            {[
+              openCount > 0 ? `${openCount} ${t("open sessions will close")}` : null,
+              ruleCount !== null && ruleCount > 0
+                ? `${ruleCount} ${t("tunnel rules go with it")}`
+                : null,
+            ].filter(Boolean).join(" · ")}
+          </div>
+        )}
 
+        {/* House rule for dialogs: Cancel left, the primary action right. */}
         <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1, padding: "6px 10px", borderRadius: 5,
+              background: "transparent", color: "var(--text-2)",
+              border: "1px solid var(--border-hi)", fontSize: 12, cursor: "pointer",
+            }}>
+            {t("Cancel")}
+          </button>
           <button
             autoFocus
             onClick={onConfirm}
@@ -138,15 +147,6 @@ export function ConfirmDeleteHosts({ hosts, onCancel, onConfirm }: Props) {
               border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
             }}>
             {t("Delete")}
-          </button>
-          <button
-            onClick={onCancel}
-            style={{
-              flex: 1, padding: "6px 10px", borderRadius: 5,
-              background: "transparent", color: "var(--text-2)",
-              border: "1px solid var(--border-hi)", fontSize: 12, cursor: "pointer",
-            }}>
-            {t("Cancel")}
           </button>
         </div>
       </div>
