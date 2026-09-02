@@ -16,6 +16,7 @@ import { SessionSurfaces } from "./components/SessionSurfaces";
 import { ConnectDialog } from "./components/ConnectDialog";
 import { SshConfigImport } from "./components/SshConfigImport";
 import { FtpView } from "./components/FtpView";
+import { SerialView } from "./components/SerialView";
 import { CommandPalette } from "./components/CommandPalette";
 import { SnippetPalette } from "./components/SnippetPalette";
 import { SettingsView } from "./components/settings/SettingsView";
@@ -536,14 +537,7 @@ export function App() {
         <GlobalTunnelsView hidden={railView !== "tunnels"} />
         {railView === "ftp" && <FtpView />}
         {railView === "settings" && <SettingsView />}
-        {railView === "serial" && (
-          <div style={{
-            height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--text-3)", fontSize: 13, fontStyle: "italic",
-          }}>
-            Serial · coming soon
-          </div>
-        )}
+        {railView === "serial" && <SerialView />}
       </AppShell>
       {/* One portal per session, rendered once and never relocated by
           React — PaneLayout moves the host node instead. Lives outside

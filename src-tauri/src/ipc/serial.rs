@@ -1,0 +1,155 @@
+//! IPC commands for the Serial view: port discovery, saved profiles, and
+//! opening serial sessions. Closing goes through the generic
+//! `close_connection` — `SessionManager::close` knows the serial map.
+
+use crate::error::Result;
+use crate::protocol::serial::SerialSpec;
+use crate::session::manager::SessionManager;
+use crate::session::ConnectionInfo;
+use crate::store::{NewSerialProfile, SerialProfile, SerialProfileStore, SerialProfileUpdate};
+use events::{ClosedEvent, DataEvent, EV_CLOSED, EV_DATA};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, State};
+use uuid::Uuid;
+
+use super::events;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SerialPortInfo {
+    /// OS name the open call takes: "COM3", "/dev/ttyUSB0".
+    pub name: String,
+    /// "usb" | "bluetooth" | "pci" | "unknown" — lets the UI sort real
+    /// adapters above legacy motherboard ports.
+    pub kind: String,
+    /// Human hint for USB adapters ("CH340", "FT232R USB UART"), empty
+    /// otherwise.
+    pub product: String,
+}
+
+/// Enumerate the serial ports present right now. Cheap enough to call on
+/// every drawer open / refresh click.
+#[tauri::command]
+pub fn serial_list_ports() -> Vec<SerialPortInfo> {
+    let mut out: Vec<SerialPortInfo> = serialport::available_ports()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|p| {
+            let (kind, product) = match p.port_type {
+                serialport::SerialPortType::UsbPort(u) => {
+                    ("usb".to_string(), u.product.unwrap_or_default())
+                }
+                serialport::SerialPortType::BluetoothPort => ("bluetooth".into(), String::new()),
+                serialport::SerialPortType::PciPort => ("pci".into(), String::new()),
+                serialport::SerialPortType::Unknown => ("unknown".into(), String::new()),
+            };
+            SerialPortInfo { name: p.port_name, kind, product }
+        })
+        .collect();
+    // USB adapters first (that's almost always the cable the user just
+    // plugged in), then natural name order.
+    out.sort_by(|a, b| {
+        let rank = |k: &str| if k == "usb" { 0 } else { 1 };
+        rank(&a.kind).cmp(&rank(&b.kind)).then(a.name.cmp(&b.name))
+    });
+    out
+}
+
+#[derive(Deserialize)]
+pub struct OpenSerialArgs {
+    pub label: String,
+    #[serde(flatten)]
+    pub spec: SerialSpec,
+}
+
+#[tauri::command]
+pub async fn open_serial_session(
+    app: AppHandle,
+    args: OpenSerialArgs,
+    mgr: State<'_, SessionManager>,
+) -> Result<ConnectionInfo> {
+    let info = match mgr.open_serial_session(&args.spec, args.label).await {
+        Ok(info) => {
+            crate::log_info!(
+                crate::logs::categories::SESSION, "serial session opened",
+                "session": info.id.to_string(), "port": args.spec.port,
+                "baud": args.spec.baud,
+            );
+            info
+        }
+        Err(e) => {
+            crate::log_error!(
+                crate::logs::categories::SESSION, "serial session failed to open",
+                "port": args.spec.port, "error": e.to_string(),
+            );
+            return Err(e);
+        }
+    };
+
+    let id = info.id;
+    let mut rx = mgr.subscribe(id).await?;
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        while let Some(chunk) = rx.recv().await {
+            let _ = app_clone.emit(EV_DATA, DataEvent { id, data: chunk });
+        }
+        crate::log_info!(
+            crate::logs::categories::SESSION, "serial session closed",
+            "session": id.to_string(),
+        );
+        let _ = app_clone.emit(EV_CLOSED, ClosedEvent { id, reason: "eof".into() });
+    });
+
+    Ok(info)
+}
+
+// --- saved profiles ------------------------------------------------------
+
+#[tauri::command]
+pub async fn serial_profile_list(
+    store: State<'_, SerialProfileStore>,
+) -> Result<Vec<SerialProfile>> {
+    store.list().await
+}
+
+#[derive(Deserialize)]
+pub struct SaveSerialProfileArgs {
+    #[serde(flatten)]
+    pub profile: NewSerialProfile,
+}
+
+#[tauri::command]
+pub async fn serial_profile_save(
+    args: SaveSerialProfileArgs,
+    store: State<'_, SerialProfileStore>,
+) -> Result<SerialProfile> {
+    store.insert(args.profile).await
+}
+
+#[derive(Deserialize)]
+pub struct UpdateSerialProfileArgs {
+    pub id: Uuid,
+    #[serde(flatten)]
+    pub patch: SerialProfileUpdate,
+}
+
+#[tauri::command]
+pub async fn serial_profile_update(
+    args: UpdateSerialProfileArgs,
+    store: State<'_, SerialProfileStore>,
+) -> Result<SerialProfile> {
+    store.update(args.id, args.patch).await
+}
+
+#[derive(Deserialize)]
+pub struct SerialIdArgs {
+    pub id: Uuid,
+}
+
+#[tauri::command]
+pub async fn serial_profile_delete(
+    args: SerialIdArgs,
+    store: State<'_, SerialProfileStore>,
+) -> Result<()> {
+    store.delete(args.id).await
+}

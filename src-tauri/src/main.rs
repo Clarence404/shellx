@@ -7,7 +7,7 @@ use shellx::monitor::manager::MonitorManager;
 use shellx::session::manager::SessionManager;
 use shellx::settings::SettingsStore;
 use shellx::ftp::manager::FtpManager;
-use shellx::store::{FtpHostStore, HostStore, KeychainStore, TunnelStore};
+use shellx::store::{FtpHostStore, HostStore, KeychainStore, SerialProfileStore, TunnelStore};
 use shellx::transfer::TransferManager;
 
 fn main() {
@@ -20,6 +20,8 @@ fn main() {
     let tunnel_store = TunnelStore::new(host_store.conn_arc());
     let ftp_host_store = FtpHostStore::new(host_store.conn_arc())
         .expect("failed to prepare ftp_hosts");
+    let serial_profile_store = SerialProfileStore::new(host_store.conn_arc())
+        .expect("failed to prepare serial_profiles");
     let snippet_store = shellx::store::snippets::SnippetStore::new(host_store.conn_arc())
         .expect("failed to prepare snippets");
     let command_history = shellx::store::command_history::CommandHistoryStore::new(host_store.conn_arc())
@@ -87,6 +89,7 @@ fn main() {
         .manage(host_store)
         .manage(tunnel_store)
         .manage(ftp_host_store)
+        .manage(serial_profile_store)
         .manage(snippet_store)
         .manage(command_history)
         .manage(FtpManager::new())
@@ -104,6 +107,12 @@ fn main() {
             ipc::list_sessions,
             ipc::local_pty::list_available_shells,
             ipc::local_pty::open_local_terminal,
+            ipc::serial::serial_list_ports,
+            ipc::serial::open_serial_session,
+            ipc::serial::serial_profile_list,
+            ipc::serial::serial_profile_save,
+            ipc::serial::serial_profile_update,
+            ipc::serial::serial_profile_delete,
             ipc::local_pty::close_local_terminal,
             ipc::hosts::list_hosts,
             ipc::hosts::save_host,
