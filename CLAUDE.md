@@ -72,6 +72,19 @@ Behaviour:
 
 **Rule for future releases:** ship this file in the commit that precedes the tag.
 
+## Build cache hygiene
+
+Cargo never garbage-collects `src-tauri/target/`; at this repo's pace of Rust changes it grows ~20 GB a week. `cargo-sweep` is installed for this (`cargo install cargo-sweep` if missing).
+
+**After each release: check the size, sweep if it's past 20 GB.**
+
+```
+du -sh src-tauri/target        # or: powershell "(gci src-tauri/target -Recurse | measure Length -Sum).Sum / 1GB"
+cd src-tauri && cargo sweep --time 7
+```
+
+`cargo sweep --time 7` deletes only artifacts unused for 7 days and keeps the live cache — no full rebuild afterwards, unlike `cargo clean`. Reach for `cargo clean` only when the user asks or the directory is pathological; the dev app and any cargo/rustc processes must be stopped first either way.
+
 ## Version fields
 
 Version lives in three files, keep them in lockstep:
