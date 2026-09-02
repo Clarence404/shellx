@@ -4,7 +4,7 @@
 
 一个小巧、精致的终端 + 文件传输客户端 —— 跨平台（Windows / macOS / Linux），开源，基于 Tauri + Rust + React。
 
-当前版本：**v0.28.1** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
+当前版本：**v0.28.2** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
 
 ---
 

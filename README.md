@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.28.1** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.28.2** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
