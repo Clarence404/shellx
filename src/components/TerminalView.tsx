@@ -107,6 +107,10 @@ export function TerminalView({ sessionId, serialIo }: { sessionId: SessionId; se
     const normalized = text.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
     void writeSessionInput(sessionId, Array.from(new TextEncoder().encode(normalized)));
     setPastePending(null);
+    // A paste is user input: jump to the live prompt so the pasted line
+    // (and the response it triggers) is in view, the same way typing does.
+    // Bypassing xterm's own input path means we have to scroll ourselves.
+    termRef.current?.scrollToBottom();
     termRef.current?.focus();
   }
 
