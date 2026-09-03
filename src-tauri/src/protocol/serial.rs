@@ -159,11 +159,23 @@ async fn serial_driver_loop(
 ) {
     // Blocking reader thread. A read timeout is normal (line idle) and just
     // re-polls; any other error means the device went away (USB unplugged).
+    //
+    // The `stop` flag is load-bearing: on a read timeout the thread would
+    // otherwise loop straight back into a blocking read and never notice
+    // that the session closed — leaving the OS port handle open, so the
+    // next open of the same port fails with "access denied". Checking the
+    // flag on every iteration lets the handle drop within one timeout
+    // (100 ms) of Close.
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stop_reader = stop.clone();
     let (read_tx, mut read_rx) = mpsc::channel::<Vec<u8>>(64);
     tokio::task::spawn_blocking(move || {
         let mut buf = [0u8; 4096];
         let mut reader = reader;
         loop {
+            if stop_reader.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
@@ -208,6 +220,11 @@ async fn serial_driver_loop(
             },
         }
     }
+
+    // Tell the reader thread to stop before we return, so it drops its
+    // cloned port handle (within one read timeout) instead of spinning on
+    // a closed session and holding the OS port open against reconnects.
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
 
     // Same teardown contract as local_pty: dropping the subs sender makes
     // the IPC subscriber emit connection:closed.
