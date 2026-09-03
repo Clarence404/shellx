@@ -160,6 +160,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          # linuxdeploy's strip pass chokes on some system libraries
+          # (libudev among them, linked since serialport landed). The
+          # documented fix is to skip stripping during AppImage assembly.
+          NO_STRIP: "true"
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
