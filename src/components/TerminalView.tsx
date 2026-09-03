@@ -21,9 +21,21 @@ import { FONT_MAP } from "../types/settings";
 import { TERMINAL_PALETTES } from "../types/terminal-palette";
 import { useT } from "../i18n";
 
-export function TerminalView({ sessionId }: { sessionId: SessionId }) {
+/** Serial-only input shaping. `localEcho` prints typed keys locally (raw
+ *  serial rarely echoes); `lineEnding` is what the Enter key sends on the
+ *  wire. Absent for SSH/local sessions, whose remote handles both. */
+export interface SerialIo {
+  localEcho: boolean;
+  lineEnding: "cr" | "lf" | "crlf" | "none";
+}
+
+export function TerminalView({ sessionId, serialIo }: { sessionId: SessionId; serialIo?: SerialIo }) {
   const t = useT();
   const hostRef = useRef<HTMLDivElement | null>(null);
+  // Live handle so toggling echo / line-ending takes effect without
+  // tearing down the xterm instance.
+  const serialIoRef = useRef<SerialIo | undefined>(serialIo);
+  serialIoRef.current = serialIo;
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   // The overflow-guarded fit from the mount effect, so the live-settings
@@ -243,8 +255,26 @@ export function TerminalView({ sessionId }: { sessionId: SessionId }) {
     // "Cannot read properties of undefined (read 'dimensions')".
     requestAnimationFrame(tryInitialFit);
 
-    // Send user input to backend as bytes.
+    // Send user input to backend as bytes. Serial sessions optionally
+    // echo locally and rewrite the Enter key's carriage return to the
+    // device's expected line ending; SSH/local sessions pass through
+    // untouched (serialIoRef.current is undefined for them).
     const dataDisp = term.onData((s) => {
+      const io = serialIoRef.current;
+      if (io) {
+        if (io.localEcho) {
+          // Display discipline: Enter advances a line, Backspace erases.
+          for (const ch of s) {
+            if (ch === "\r") term.write("\r\n");
+            else if (ch === "\x7f" || ch === "\b") term.write("\b \b");
+            else term.write(ch);
+          }
+        }
+        const ending = io.lineEnding === "lf" ? "\n"
+          : io.lineEnding === "crlf" ? "\r\n"
+          : io.lineEnding === "none" ? "" : "\r";
+        s = s.replace(/\r/g, ending);
+      }
       const bytes = Array.from(new TextEncoder().encode(s));
       void writeSessionInput(sessionId, bytes);
     });

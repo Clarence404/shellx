@@ -43,6 +43,15 @@ input { font: inherit; color: inherit; }
   to   { opacity: 1; }
 }
 
+/* A brief pop for "just happened" pills (e.g. serial port rescan result):
+   it scales in from the accent so an unchanged value still visibly reacts. */
+@keyframes shellx-flash-in {
+  0%   { opacity: 0; transform: scale(0.9); }
+  40%  { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.shellx-flash-in { animation: shellx-flash-in 320ms ease-out; }
+
 /* Indeterminate progress bar sweep — used by the updater when the server
    omits Content-Length so we can't show a real percentage. */
 @keyframes shellx-progress-sweep {

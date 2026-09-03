@@ -2,7 +2,7 @@ import { create } from "zustand";
 import * as ipc from "../ipc/serial";
 import { closeSession } from "../ipc/commands";
 import { onConnectionClosed } from "../ipc/events";
-import { lineSummary, type SerialLineSettings, type SerialPortInfo, type SerialProfile } from "../types/serial";
+import { lineSummary, type LineEnding, type SerialLineSettings, type SerialPortInfo, type SerialProfile } from "../types/serial";
 
 /** A live (or recently closed) serial terminal inside the Serial view.
     Deliberately NOT a row in useSessions: serial sessions render embedded
@@ -16,6 +16,10 @@ export interface SerialSession {
   /** Kept so a closed session can reconnect with one click. */
   spec: SerialLineSettings & { port: string; label: string };
   state: "active" | "closed";
+  /** Print typed keys locally — raw serial rarely echoes. */
+  localEcho: boolean;
+  /** What the Enter key sends on the wire. */
+  lineEnding: LineEnding;
 }
 
 interface SerialStore {
@@ -42,6 +46,8 @@ interface SerialStore {
   /** Open the port (or focus the session that already has it). */
   connect: (spec: SerialLineSettings & { port: string; label: string }) => Promise<void>;
   select: (id: string | null) => void;
+  /** Live-toggle a session's echo / line-ending from its terminal header. */
+  setIo: (id: string, patch: Partial<Pick<SerialSession, "localEcho" | "lineEnding">>) => void;
   /** Close the OS port; the entry stays as "closed" until dismissed. */
   disconnect: (id: string) => Promise<void>;
   /** Drop the entry (and close the port first if still open). */
@@ -106,6 +112,9 @@ export const useSerialStore = create<SerialStore>((set, get) => ({
       get().select(existing.id);
       return;
     }
+    // Carry the echo / line-ending you'd tuned on a prior (now closed)
+    // session for this port, so reconnect doesn't reset your choices.
+    const prior = get().open.find((s) => s.port === spec.port);
     const info = await ipc.openSerialSession(spec);
     const session: SerialSession = {
       id: info.id,
@@ -114,6 +123,8 @@ export const useSerialStore = create<SerialStore>((set, get) => ({
       line: lineSummary(spec),
       spec,
       state: "active",
+      localEcho: prior?.localEcho ?? false,
+      lineEnding: prior?.lineEnding ?? "cr",
     };
     set((st) => ({
       // A dismissed-on-reconnect: replace any stale closed entry for the
@@ -124,6 +135,12 @@ export const useSerialStore = create<SerialStore>((set, get) => ({
     queueMicrotask(() => {
       window.dispatchEvent(new CustomEvent("shellx:refit", { detail: session.id }));
     });
+  },
+
+  setIo: (id, patch) => {
+    set((st) => ({
+      open: st.open.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    }));
   },
 
   select: (id) => {

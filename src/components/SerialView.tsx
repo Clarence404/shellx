@@ -9,7 +9,7 @@ import { TerminalView } from "./TerminalView";
 import { useSessions } from "../state/sessions";
 import { useSerialStore, loadSerialOnce } from "../state/serial";
 import type { NewSerialProfile } from "../ipc/serial";
-import { DEFAULT_LINE, lineSummary, type SerialLineSettings, type SerialProfile } from "../types/serial";
+import { DEFAULT_LINE, LINE_ENDING_LABELS, lineSummary, type LineEnding, type SerialLineSettings, type SerialProfile } from "../types/serial";
 import { useT } from "../i18n";
 
 const BAUD_RATES = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
@@ -220,6 +220,31 @@ export function SerialView() {
               {active.port} · {active.line}{active.state === "closed" ? ` · ${t("closed")}` : ""}
             </span>
             <span style={{ flex: 1 }} />
+            {/* Input shaping — flip these live until the device answers. */}
+            <label style={{
+              display: "flex", alignItems: "center", gap: 4, fontSize: 11,
+              color: "var(--text-2)", cursor: "pointer", userSelect: "none",
+            }} title={t("Show what you type (raw serial usually doesn't echo)")}>
+              <input
+                type="checkbox"
+                checked={active.localEcho}
+                onChange={(e) => useSerialStore.getState().setIo(active.id, { localEcho: e.target.checked })}
+              />
+              {t("Local echo")}
+            </label>
+            <select
+              value={active.lineEnding}
+              onChange={(e) => useSerialStore.getState().setIo(active.id, { lineEnding: e.target.value as LineEnding })}
+              title={t("What the Enter key sends")}
+              aria-label={t("Line ending")}
+              style={{
+                fontSize: 11, color: "var(--text-2)", background: "var(--panel-2)",
+                border: "1px solid var(--border)", borderRadius: 5, padding: "2px 4px",
+              }}>
+              {(Object.keys(LINE_ENDING_LABELS) as LineEnding[]).map((k) => (
+                <option key={k} value={k}>{t("Enter")}: {LINE_ENDING_LABELS[k]}</option>
+              ))}
+            </select>
             {active.state === "active" ? (
               <button
                 onClick={() => void useSerialStore.getState().disconnect(active.id)}
@@ -261,7 +286,10 @@ export function SerialView() {
             flex: 1, minHeight: 0,
             display: s.id === activeId ? "block" : "none",
           }}>
-            <TerminalView sessionId={s.id} />
+            <TerminalView
+              sessionId={s.id}
+              serialIo={{ localEcho: s.localEcho, lineEnding: s.lineEnding }}
+            />
           </div>
         ))}
 
@@ -274,13 +302,25 @@ export function SerialView() {
             <span style={{ fontSize: "calc(var(--font-ui-size) + 1px)", fontWeight: 600, color: "var(--text-1)" }}>
               {t("Detected ports")}
             </span>
-            {lastScan > 0 && !scanning && (
-              <span style={{ fontSize: 11, color: "var(--text-3)" }}>
-                {ports.length} · {new Date(lastScan).toLocaleTimeString()}
+            {scanning ? (
+              <span style={{
+                fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 999,
+                background: "var(--accent-fade)", color: "var(--accent)",
+                display: "inline-flex", alignItems: "center", gap: 5,
+              }}>
+                <RefreshCw size={11} strokeWidth={2.2} className="shellx-spin" />
+                {t("Scanning…")}
               </span>
-            )}
-            {scanning && (
-              <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("Scanning…")}</span>
+            ) : lastScan > 0 && (
+              <span
+                key={lastScan}
+                className="shellx-flash-in"
+                style={{
+                  fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 999,
+                  background: "var(--success-fade)", color: "var(--success)",
+                }}>
+                {t("Found")} {ports.length} · {new Date(lastScan).toLocaleTimeString()}
+              </span>
             )}
             <span style={{ flex: 1 }} />
             <button
