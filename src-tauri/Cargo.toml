@@ -108,6 +108,11 @@ required-features = ["test-fixtures"]
 
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
+# Port discovery fallback: serialport-rs only enumerates the standard
+# COMPORT device class, which misses virtual-port drivers registered
+# under their own class (com0com among them). SERIALCOMM in the registry
+# lists every live serial port regardless of class.
+winreg = "0.52"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }

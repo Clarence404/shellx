@@ -374,6 +374,9 @@ function SerialProfileForm({
   const t = useT();
   const [label, setLabel] = useState(initial?.label ?? "");
   const [port, setPort] = useState(initial?.port ?? presetPort ?? knownPorts[0] ?? "");
+  // Manual entry: for ports the scan can't see (odd virtual-port drivers,
+  // a device that will be plugged in later).
+  const [manualPort, setManualPort] = useState(false);
   const [baud, setBaud] = useState(initial?.baud ?? DEFAULT_LINE.baud);
   const [dataBits, setDataBits] = useState(initial?.data_bits ?? DEFAULT_LINE.data_bits);
   const [stopBits, setStopBits] = useState(initial?.stop_bits ?? DEFAULT_LINE.stop_bits);
@@ -438,10 +441,30 @@ function SerialProfileForm({
         <div style={{ display: "flex", gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <label style={labelStyle}>{t("Port")}</label>
-            <select value={port} onChange={(e) => setPort(e.target.value)} style={fieldStyle} aria-label={t("Port")}>
-              {portOptions.length === 0 && <option value="">—</option>}
-              {portOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
+            {manualPort ? (
+              <input
+                autoFocus
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                placeholder="COM9"
+                style={fieldStyle}
+                aria-label={t("Port")}
+              />
+            ) : (
+              <select
+                value={port}
+                onChange={(e) => {
+                  if (e.target.value === "__manual__") { setManualPort(true); setPort(""); }
+                  else setPort(e.target.value);
+                }}
+                style={fieldStyle}
+                aria-label={t("Port")}
+              >
+                {portOptions.length === 0 && <option value="">—</option>}
+                {portOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+                <option value="__manual__">{t("Type manually…")}</option>
+              </select>
+            )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <label style={labelStyle}>{t("Baud rate")}</label>

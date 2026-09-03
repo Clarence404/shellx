@@ -27,6 +27,30 @@ pub struct SerialPortInfo {
     pub product: String,
 }
 
+/// Windows keeps every live serial port — whatever device class its
+/// driver registered — under HKLM\HARDWARE\DEVICEMAP\SERIALCOMM. This
+/// catches virtual ports (com0com pairs, some vendor drivers) that
+/// serialport-rs's COMPORT-class enumeration misses.
+#[cfg(windows)]
+fn serialcomm_ports() -> Vec<String> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+    RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey("HARDWARE\\DEVICEMAP\\SERIALCOMM")
+        .map(|k| {
+            k.enum_values()
+                .filter_map(|v| v.ok())
+                .map(|(_, val)| val.to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(not(windows))]
+fn serialcomm_ports() -> Vec<String> {
+    Vec::new()
+}
+
 /// Enumerate the serial ports present right now. Cheap enough to call on
 /// every drawer open / refresh click.
 #[tauri::command]
@@ -46,6 +70,13 @@ pub fn serial_list_ports() -> Vec<SerialPortInfo> {
             SerialPortInfo { name: p.port_name, kind, product }
         })
         .collect();
+    // Registry fallback: anything SERIALCOMM knows that the class scan
+    // missed joins the list as a plain port.
+    for name in serialcomm_ports() {
+        if !out.iter().any(|p| p.name.eq_ignore_ascii_case(&name)) {
+            out.push(SerialPortInfo { name, kind: "unknown".into(), product: String::new() });
+        }
+    }
     // USB adapters first (that's almost always the cable the user just
     // plugged in), then natural name order.
     out.sort_by(|a, b| {

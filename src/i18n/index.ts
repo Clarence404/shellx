@@ -33,6 +33,7 @@ const zh: Record<string, string> = {
   "Even": "偶校验",
   "Odd": "奇校验",
   "Optional": "可选",
+  "Type manually…": "手动输入…",
 
   // FTP view
   "FTP": "FTP",
