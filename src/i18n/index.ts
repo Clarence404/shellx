@@ -12,7 +12,27 @@ const zh: Record<string, string> = {
   "Files": "文件",
   "Serial": "串口",
   "Settings": "设置",
-  "Serial · coming soon": "串口 · 即将推出",
+  // Serial view
+  "New serial connection": "新建串口连接",
+  "Edit serial connection": "编辑串口连接",
+  "No serial connections yet": "还没有串口连接",
+  "Detected ports": "检测到的端口",
+  "No serial ports detected — plug in a USB-serial adapter and refresh.":
+    "未检测到串口——插入 USB 转串口适配器后点刷新。",
+  "Save as connection": "存为连接",
+  "Open tab": "打开标签",
+  "connected": "已连接",
+  "Quick connect uses 115200 · 8N1. Save a connection to pick another line setting.":
+    "快速连接使用 115200 · 8N1。需要其他线路参数时，请先存为连接再修改。",
+  "Baud rate": "波特率",
+  "Data bits": "数据位",
+  "Stop bits": "停止位",
+  "Parity": "校验",
+  "Flow control": "流控",
+  "None": "无",
+  "Even": "偶校验",
+  "Odd": "奇校验",
+  "Optional": "可选",
 
   // FTP view
   "FTP": "FTP",

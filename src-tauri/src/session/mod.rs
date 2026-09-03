@@ -19,6 +19,7 @@ pub type SessionId = ConnectionId;
 pub enum ConnectionKind {
     Ssh,
     Local,
+    Serial,
 }
 /// Backwards-compat alias.
 pub type SessionKind = ConnectionKind;

@@ -14,7 +14,7 @@ export type Tab = {
   id: string;
   title: string;
   state?: "active" | "closed";
-  kind?: "ssh" | "local";
+  kind?: "ssh" | "local" | "serial";
   /** Saved-host id, when the session came from one. Lets the context menu
    *  offer "duplicate" and "copy address" without asking the parent. */
   hostId?: string | null;
@@ -160,6 +160,8 @@ export function TabBar({
     if (tab.kind === "local") {
       return onNewLocalTerminal ? () => onNewLocalTerminal() : null;
     }
+    // A serial port is exclusive — a second session on it can't open.
+    if (tab.kind === "serial") return null;
     const host = savedHosts.find((h) => h.id === tab.hostId);
     if (!host || !onConnectHost) return null;
     return () => onConnectHost(host, true);

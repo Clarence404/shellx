@@ -15,6 +15,7 @@
 
 use crate::error::{Error, Result};
 use crate::protocol::local_pty::LocalPtyHandle;
+use crate::protocol::serial::{SerialHandle, SerialSpec};
 use crate::protocol::sftp_types::{Entry, EntryKind};
 use crate::protocol::{AuthConfig, Connection, HostKeyPolicy, RusshHandle, ShellHandle, SftpHandle, SshProtocol};
 use crate::session::tunnel::TunnelHandle;
@@ -82,6 +83,8 @@ pub struct SessionManager {
     /// `open_local_session` removes its own entry on exit, so callers should
     /// not assume a handle is still present after `close()` returns.
     pub(crate) local_sessions: Arc<Mutex<HashMap<Uuid, LocalPtyHandle>>>,
+    /// Serial-port sessions. Same lifetime contract as `local_sessions`.
+    pub(crate) serial_sessions: Arc<Mutex<HashMap<Uuid, SerialHandle>>>,
 }
 
 impl SessionManager {
@@ -90,6 +93,7 @@ impl SessionManager {
             inner: Arc::new(Mutex::new(HashMap::new())),
             subs: Arc::new(Mutex::new(HashMap::new())),
             local_sessions: Arc::new(Mutex::new(HashMap::new())),
+            serial_sessions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -191,6 +195,28 @@ impl SessionManager {
         Ok(info)
     }
 
+    /// Opens the serial port described by `spec`, registers the handle in
+    /// `serial_sessions`, and returns the session's `ConnectionInfo`. The IPC
+    /// layer subscribes and pumps events, same as SSH/local sessions.
+    pub async fn open_serial_session(
+        &self,
+        spec: &SerialSpec,
+        label: String,
+    ) -> Result<ConnectionInfo> {
+        let session_id = Uuid::new_v4();
+        let handle = crate::protocol::serial::spawn_serial(
+            spec,
+            session_id,
+            label,
+            self.subs.clone(),
+            self.serial_sessions.clone(),
+        )
+        .await?;
+        let info = handle.info.clone();
+        self.serial_sessions.lock().await.insert(session_id, handle);
+        Ok(info)
+    }
+
     pub async fn write(&self, id: ConnectionId, data: &[u8]) -> Result<()> {
         // SSH path: check presence without holding the lock across the send.
         if self.inner.lock().await.contains_key(&id) {
@@ -201,9 +227,17 @@ impl SessionManager {
                 .map_err(|_| Error::Closed);
         }
         // Local PTY path: clone the writer so the lock is released before send.
-        let writer = {
+        let maybe_local = {
             let local = self.local_sessions.lock().await;
-            local.get(&id).ok_or(Error::Closed)?.writer_clone()
+            local.get(&id).map(|h| h.writer_clone())
+        };
+        if let Some(writer) = maybe_local {
+            return writer.send_bytes(data).await;
+        }
+        // Serial path.
+        let writer = {
+            let serial = self.serial_sessions.lock().await;
+            serial.get(&id).ok_or(Error::Closed)?.writer_clone()
         };
         writer.send_bytes(data).await
     }
@@ -216,6 +250,11 @@ impl SessionManager {
                 .send(ShellCmd::Resize(cols, rows))
                 .await
                 .map_err(|_| Error::Closed);
+        }
+        // Serial lines have no window size — accept and ignore, so the
+        // frontend can call resizeSession unconditionally.
+        if self.serial_sessions.lock().await.contains_key(&id) {
+            return Ok(());
         }
         // Local PTY path.
         let writer = {
@@ -237,7 +276,8 @@ impl SessionManager {
         {
             let ssh = self.inner.lock().await;
             let local = self.local_sessions.lock().await;
-            if !ssh.contains_key(&id) && !local.contains_key(&id) {
+            let serial = self.serial_sessions.lock().await;
+            if !ssh.contains_key(&id) && !local.contains_key(&id) && !serial.contains_key(&id) {
                 return Err(Error::Closed);
             }
         }
@@ -269,6 +309,16 @@ impl SessionManager {
             local.remove(&id).map(|h| h.writer_clone())
         };
         if let Some(w) = maybe_writer {
+            w.send_close().await;
+            self.subs.lock().await.remove(&id);
+            return Ok(());
+        }
+        // Serial path: same idempotent remove-then-close.
+        let maybe_serial = {
+            let mut serial = self.serial_sessions.lock().await;
+            serial.remove(&id).map(|h| h.writer_clone())
+        };
+        if let Some(w) = maybe_serial {
             w.send_close().await;
         }
         self.subs.lock().await.remove(&id);
@@ -381,6 +431,9 @@ impl SessionManager {
             result.push(a.lock().await.info.clone());
         }
         for handle in self.local_sessions.lock().await.values() {
+            result.push(handle.info.clone());
+        }
+        for handle in self.serial_sessions.lock().await.values() {
             result.push(handle.info.clone());
         }
         result

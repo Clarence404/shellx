@@ -23,8 +23,8 @@ export function activitiesFor(
   session: Pick<ConnectionInfo, "kind"> | null | undefined,
   connectionMode: string,
 ): ActivityOption[] {
-  // A local shell has no SSH subsystems to offer.
-  if (session?.kind === "local") return [TERMINAL];
+  // A local shell or a serial line has no SSH subsystems to offer.
+  if (session?.kind === "local" || session?.kind === "serial") return [TERMINAL];
   if (connectionMode === "tunnels_only") return [TUNNEL];
   if (connectionMode === "term_tunnels") return [TERMINAL, FILES, TUNNEL, MONITOR];
   return [TERMINAL, FILES, MONITOR];

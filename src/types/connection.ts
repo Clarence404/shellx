@@ -5,7 +5,7 @@ export type ActivityKind = "terminal" | "files" | "tunnel" | "monitor";
 export interface ConnectionInfo {
   id: ConnectionId;
   label: string;
-  kind: "ssh" | "local";
+  kind: "ssh" | "local" | "serial";
   host_id: string | null;
   state: "active" | "closed";
 }

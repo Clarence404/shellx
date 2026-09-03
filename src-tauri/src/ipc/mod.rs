@@ -14,6 +14,7 @@ pub mod local;
 pub mod local_pty;
 pub mod logs;
 pub mod monitor;
+pub mod serial;
 pub mod settings;
 pub mod sftp;
 pub mod snippets;
