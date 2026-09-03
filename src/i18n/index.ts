@@ -34,6 +34,9 @@ const zh: Record<string, string> = {
   "Odd": "奇校验",
   "Optional": "可选",
   "Type manually…": "手动输入…",
+  "Reconnect": "重新连接",
+  "closed": "已关闭",
+  "Open": "打开",
 
   // FTP view
   "FTP": "FTP",

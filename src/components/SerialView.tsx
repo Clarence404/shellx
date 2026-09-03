@@ -1,31 +1,33 @@
 import { useEffect, useState } from "react";
-import { Plus, ChevronsLeft, RefreshCw, Usb, Cable, Plug, Unplug } from "lucide-react";
+import {
+  Plus, ChevronsLeft, RefreshCw, Usb, Cable, Plug, Unplug, X, RotateCw, List,
+} from "lucide-react";
 import { SectionHeader } from "./SectionHeader";
 import { HostContextMenu } from "./HostContextMenu";
 import { ErrorDialog } from "./ErrorDialog";
+import { TerminalView } from "./TerminalView";
 import { useSessions } from "../state/sessions";
 import { useSerialStore, loadSerialOnce } from "../state/serial";
-import { openSerialSession, type NewSerialProfile } from "../ipc/serial";
-import { closeSession } from "../ipc/commands";
-import { DEFAULT_LINE, lineSummary, type SerialProfile } from "../types/serial";
+import type { NewSerialProfile } from "../ipc/serial";
+import { DEFAULT_LINE, lineSummary, type SerialLineSettings, type SerialProfile } from "../types/serial";
 import { useT } from "../i18n";
 
 const BAUD_RATES = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
 
 /**
- * The Serial rail view: saved profiles in the sidebar, live COM-port
- * discovery in the main pane. Opening a session lands it as a normal
- * terminal tab in the Hosts workspace (kind "serial", terminal-only),
- * so scrollback, clipboard, and split panes all come for free.
+ * The Serial rail view, self-contained like the FTP view: saved profiles
+ * in the sidebar, and the main pane is either the live COM-port scan or
+ * the embedded terminal of the selected serial session. Serial sessions
+ * never join the global tab strip — they live and die here.
  */
 export function SerialView() {
   const t = useT();
   const profiles = useSerialStore((s) => s.profiles);
   const ports = useSerialStore((s) => s.ports);
-  const openBySession = useSerialStore((s) => s.openBySession);
+  const open = useSerialStore((s) => s.open);
+  const activeId = useSerialStore((s) => s.activeId);
   const drawerCollapsed = useSessions((s) => s.drawerCollapsed);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
-  const sessions = useSessions((s) => s.sessions);
 
   const [form, setForm] = useState<{ initial: SerialProfile | null; presetPort?: string } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; profile: SerialProfile } | null>(null);
@@ -35,39 +37,13 @@ export function SerialView() {
 
   useEffect(() => { loadSerialOnce(); }, []);
 
-  // Ports with a live serial session — join the noted session→port map
-  // against sessions that are still active.
-  const livePorts = new Set(
-    sessions
-      .filter((s) => s.kind === "serial" && s.state === "active")
-      .map((s) => openBySession[s.id])
-      .filter(Boolean),
-  );
+  const livePorts = new Set(open.filter((s) => s.state === "active").map((s) => s.port));
+  const active = open.find((s) => s.id === activeId) ?? null;
 
-  function liveSessionFor(port: string) {
-    return sessions.find(
-      (s) => s.kind === "serial" && s.state === "active" && openBySession[s.id] === port,
-    );
-  }
-
-  async function connect(spec: { label: string; port: string } & typeof DEFAULT_LINE) {
-    // One session per port: focus the existing tab instead of fighting
-    // the OS for a port that is already exclusively open.
-    const existing = liveSessionFor(spec.port);
-    const st = useSessions.getState();
-    if (existing) {
-      st.setActive(existing.id);
-      st.setRailView("hosts");
-      return;
-    }
+  async function connect(spec: SerialLineSettings & { label: string; port: string }) {
     setBusyPort(spec.port);
     try {
-      const info = await openSerialSession(spec);
-      useSerialStore.getState().noteSession(info.id, spec.port);
-      st.addSession(info);
-      st.setActivity(info.id, "terminal");
-      // Terminal tabs render in the Hosts workspace.
-      st.setRailView("hosts");
+      await useSerialStore.getState().connect(spec);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -122,7 +98,50 @@ export function SerialView() {
           }
         />
         <div style={{ flex: 1, overflow: "auto", marginBottom: 8 }}>
-          {profiles.length === 0 && (
+          {/* Open terminals first — the working set. */}
+          {open.map((s) => (
+            <button
+              key={s.id}
+              aria-label={s.label}
+              onClick={() => useSerialStore.getState().select(s.id)}
+              style={{
+                width: "100%", textAlign: "left", padding: "6px 8px",
+                borderRadius: 4, border: "none", marginBottom: 1,
+                background: s.id === activeId ? "var(--accent-fade)" : "transparent",
+                color: s.id === activeId ? "var(--accent)" : "var(--text-1)",
+                fontSize: "var(--font-ui-size)",
+              }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
+                  background: s.state === "active" ? "var(--success)" : "var(--text-3)",
+                }} />
+                <span style={{
+                  flex: 1, minWidth: 0, overflow: "hidden",
+                  textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>{s.label}</span>
+              </span>
+              <span style={{
+                display: "block", marginLeft: 11, marginTop: 1,
+                fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)",
+              }}>{s.port} · {s.line}{s.state === "closed" ? ` · ${t("closed")}` : ""}</span>
+            </button>
+          ))}
+          {open.length > 0 && (
+            <button
+              onClick={() => useSerialStore.getState().select(null)}
+              style={{
+                width: "100%", textAlign: "left", padding: "6px 8px",
+                borderRadius: 4, border: "none", margin: "2px 0 8px",
+                background: activeId === null ? "var(--accent-fade)" : "transparent",
+                color: "var(--text-2)", fontSize: 11,
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+              <List size={12} /> {t("Detected ports")}
+            </button>
+          )}
+
+          {profiles.length === 0 && open.length === 0 && (
             <div style={{ fontSize: 11, color: "var(--text-3)", padding: "8px 4px", lineHeight: 1.7 }}>
               {t("No serial connections yet")}
             </div>
@@ -179,99 +198,168 @@ export function SerialView() {
       </aside>
       )}
 
-      <div style={{ flex: 1, minWidth: 0, overflow: "auto", padding: 16 }}>
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
-        }}>
-          <span style={{ fontSize: "calc(var(--font-ui-size) + 1px)", fontWeight: 600, color: "var(--text-1)" }}>
-            {t("Detected ports")}
-          </span>
-          <span style={{ flex: 1 }} />
-          <button
-            onClick={() => void useSerialStore.getState().refreshPorts()}
-            style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "5px 12px",
-              borderRadius: 6, background: "var(--panel-1)", color: "var(--text-2)",
-              border: "1px solid var(--border)", fontSize: "var(--font-ui-size)",
-            }}>
-            <RefreshCw size={13} strokeWidth={2} />
-            {t("Refresh")}
-          </button>
-        </div>
-
-        {ports.length === 0 ? (
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        {/* Terminal panel: every open session stays mounted so scrollback
+            survives switching; only the active one is displayed. */}
+        {active && (
           <div style={{
-            padding: "28px 16px", textAlign: "center", color: "var(--text-3)",
-            fontSize: "var(--font-ui-size)", lineHeight: 1.8,
-            border: "1px dashed var(--border)", borderRadius: 8,
+            height: 34, flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
+            padding: "0 10px", borderBottom: "1px solid var(--border)",
+            background: "var(--panel-1)",
           }}>
-            {t("No serial ports detected — plug in a USB-serial adapter and refresh.")}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {ports.map((port) => {
-              const live = livePorts.has(port.name);
-              const busy = busyPort === port.name;
-              return (
-                <div key={port.name} style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "10px 14px", borderRadius: 8,
-                  background: "var(--panel-1)", border: "1px solid var(--border)",
+            <span style={{
+              width: 7, height: 7, borderRadius: "50%",
+              background: active.state === "active" ? "var(--success)" : "var(--text-3)",
+            }} />
+            <span style={{ fontSize: "var(--font-ui-size)", fontWeight: 600, color: "var(--text-1)" }}>
+              {active.label}
+            </span>
+            <span style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>
+              {active.port} · {active.line}{active.state === "closed" ? ` · ${t("closed")}` : ""}
+            </span>
+            <span style={{ flex: 1 }} />
+            {active.state === "active" ? (
+              <button
+                onClick={() => void useSerialStore.getState().disconnect(active.id)}
+                title={t("Disconnect")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5, padding: "3px 10px",
+                  borderRadius: 5, fontSize: 11, background: "transparent",
+                  color: "var(--text-2)", border: "1px solid var(--border)",
                 }}>
-                  {port.kind === "usb"
-                    ? <Usb size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
-                    : <Cable size={16} style={{ color: "var(--text-3)", flexShrink: 0 }} />}
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{
-                      fontSize: "var(--font-ui-size)", fontWeight: 600, color: "var(--text-1)",
-                      fontFamily: "var(--font-mono)",
-                      display: "flex", alignItems: "center", gap: 8,
-                    }}>
-                      {port.name}
-                      {live && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 500, padding: "1px 6px", borderRadius: 999,
-                          background: "var(--success-fade)", color: "var(--success)",
-                          border: "1px solid var(--success)",
-                        }}>{t("connected")}</span>
-                      )}
-                    </div>
-                    {port.product && (
-                      <div style={{
-                        fontSize: 11, color: "var(--text-3)", marginTop: 1,
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      }}>{port.product}</div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => setForm({ initial: null, presetPort: port.name })}
-                    style={{
-                      padding: "5px 12px", borderRadius: 6, fontSize: "var(--font-ui-size)",
-                      background: "var(--panel-2)", color: "var(--text-2)",
-                      border: "1px solid var(--border)",
-                    }}>
-                    {t("Save as connection")}
-                  </button>
-                  <button
-                    onClick={() => void connect({ label: port.name, port: port.name, ...DEFAULT_LINE })}
-                    disabled={busy}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6,
-                      padding: "5px 14px", borderRadius: 6, fontSize: "var(--font-ui-size)",
-                      background: "var(--accent-fade)", color: "var(--text-1)",
-                      border: "1px solid var(--accent)", opacity: busy ? 0.6 : 1,
-                    }}>
-                    <Plug size={13} strokeWidth={2} />
-                    {live ? t("Open tab") : `${t("Connect")} · ${DEFAULT_LINE.baud}`}
-                  </button>
-                </div>
-              );
-            })}
+                <Unplug size={12} /> {t("Disconnect")}
+              </button>
+            ) : (
+              <button
+                onClick={() => void connect(active.spec)}
+                title={t("Reconnect")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5, padding: "3px 10px",
+                  borderRadius: 5, fontSize: 11, background: "var(--accent-fade)",
+                  color: "var(--text-1)", border: "1px solid var(--accent)",
+                }}>
+                <RotateCw size={12} /> {t("Reconnect")}
+              </button>
+            )}
+            <button
+              onClick={() => void useSerialStore.getState().dismiss(active.id)}
+              aria-label={t("Close")}
+              title={t("Close")}
+              style={{
+                width: 24, height: 24, display: "flex", alignItems: "center",
+                justifyContent: "center", borderRadius: 5,
+                color: "var(--text-3)", background: "transparent", border: "none",
+              }}>
+              <X size={14} />
+            </button>
           </div>
         )}
-        <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 12, lineHeight: 1.7 }}>
-          {t("Quick connect uses 115200 · 8N1. Save a connection to pick another line setting.")}
+        {open.map((s) => (
+          <div key={s.id} style={{
+            flex: 1, minHeight: 0,
+            display: s.id === activeId ? "block" : "none",
+          }}>
+            <TerminalView sessionId={s.id} />
+          </div>
+        ))}
+
+        {/* Ports page when no terminal is selected. */}
+        {!active && (
+        <div style={{ flex: 1, minWidth: 0, overflow: "auto", padding: 16 }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+          }}>
+            <span style={{ fontSize: "calc(var(--font-ui-size) + 1px)", fontWeight: 600, color: "var(--text-1)" }}>
+              {t("Detected ports")}
+            </span>
+            <span style={{ flex: 1 }} />
+            <button
+              onClick={() => void useSerialStore.getState().refreshPorts()}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "5px 12px",
+                borderRadius: 6, background: "var(--panel-1)", color: "var(--text-2)",
+                border: "1px solid var(--border)", fontSize: "var(--font-ui-size)",
+              }}>
+              <RefreshCw size={13} strokeWidth={2} />
+              {t("Refresh")}
+            </button>
+          </div>
+
+          {ports.length === 0 ? (
+            <div style={{
+              padding: "28px 16px", textAlign: "center", color: "var(--text-3)",
+              fontSize: "var(--font-ui-size)", lineHeight: 1.8,
+              border: "1px dashed var(--border)", borderRadius: 8,
+            }}>
+              {t("No serial ports detected — plug in a USB-serial adapter and refresh.")}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {ports.map((port) => {
+                const live = livePorts.has(port.name);
+                const busy = busyPort === port.name;
+                return (
+                  <div key={port.name} style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "10px 14px", borderRadius: 8,
+                    background: "var(--panel-1)", border: "1px solid var(--border)",
+                  }}>
+                    {port.kind === "usb"
+                      ? <Usb size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
+                      : <Cable size={16} style={{ color: "var(--text-3)", flexShrink: 0 }} />}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        fontSize: "var(--font-ui-size)", fontWeight: 600, color: "var(--text-1)",
+                        fontFamily: "var(--font-mono)",
+                        display: "flex", alignItems: "center", gap: 8,
+                      }}>
+                        {port.name}
+                        {live && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 500, padding: "1px 6px", borderRadius: 999,
+                            background: "var(--success-fade)", color: "var(--success)",
+                            border: "1px solid var(--success)",
+                          }}>{t("connected")}</span>
+                        )}
+                      </div>
+                      {port.product && (
+                        <div style={{
+                          fontSize: 11, color: "var(--text-3)", marginTop: 1,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>{port.product}</div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setForm({ initial: null, presetPort: port.name })}
+                      style={{
+                        padding: "5px 12px", borderRadius: 6, fontSize: "var(--font-ui-size)",
+                        background: "var(--panel-2)", color: "var(--text-2)",
+                        border: "1px solid var(--border)",
+                      }}>
+                      {t("Save as connection")}
+                    </button>
+                    <button
+                      onClick={() => void connect({ label: port.name, port: port.name, ...DEFAULT_LINE })}
+                      disabled={busy}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6,
+                        padding: "5px 14px", borderRadius: 6, fontSize: "var(--font-ui-size)",
+                        background: "var(--accent-fade)", color: "var(--text-1)",
+                        border: "1px solid var(--accent)", opacity: busy ? 0.6 : 1,
+                      }}>
+                      <Plug size={13} strokeWidth={2} />
+                      {live ? t("Open") : `${t("Connect")} · ${DEFAULT_LINE.baud}`}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 12, lineHeight: 1.7 }}>
+            {t("Quick connect uses 115200 · 8N1. Save a connection to pick another line setting.")}
+          </div>
         </div>
+        )}
       </div>
 
       {menu && (
@@ -283,8 +371,9 @@ export function SerialView() {
               ? {
                   label: t("Disconnect"),
                   onClick: () => {
-                    const s = liveSessionFor(menu.profile.port);
-                    if (s) { void closeSession(s.id); useSessions.getState().removeSession(s.id); }
+                    const s = useSerialStore.getState().open
+                      .find((x) => x.port === menu.profile.port && x.state === "active");
+                    if (s) void useSerialStore.getState().disconnect(s.id);
                   },
                   icon: <Unplug size={12} />,
                 }

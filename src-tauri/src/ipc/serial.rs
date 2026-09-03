@@ -51,6 +51,51 @@ fn serialcomm_ports() -> Vec<String> {
     Vec::new()
 }
 
+/// The strongest Windows fallback: enumerate the global DOS device names.
+/// A port name like COM20 IS a DOS-device symlink — that is what
+/// `CreateFile("\\.\COM20")` resolves through — so anything openable is
+/// listed here, whatever its driver registered (or didn't). This is what
+/// catches com0com on machines where even SERIALCOMM is absent.
+#[cfg(windows)]
+fn dos_device_ports() -> Vec<String> {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn QueryDosDeviceW(device: *const u16, target: *mut u16, ucch_max: u32) -> u32;
+    }
+    // All DOS device names on a typical system fit well inside 256K chars;
+    // grow once on ERROR_INSUFFICIENT_BUFFER just in case.
+    let mut cap = 1usize << 16;
+    loop {
+        let mut buf: Vec<u16> = vec![0; cap];
+        let n = unsafe { QueryDosDeviceW(std::ptr::null(), buf.as_mut_ptr(), buf.len() as u32) };
+        if n == 0 {
+            if cap < (1 << 20) {
+                cap <<= 2;
+                continue;
+            }
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for chunk in buf[..n as usize].split(|&c| c == 0) {
+            if chunk.len() < 4 || chunk.len() > 8 {
+                continue;
+            }
+            let s = String::from_utf16_lossy(chunk);
+            if let Some(digits) = s.strip_prefix("COM") {
+                if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+                    out.push(s);
+                }
+            }
+        }
+        return out;
+    }
+}
+
+#[cfg(not(windows))]
+fn dos_device_ports() -> Vec<String> {
+    Vec::new()
+}
+
 /// Enumerate the serial ports present right now. Cheap enough to call on
 /// every drawer open / refresh click.
 #[tauri::command]
@@ -70,9 +115,9 @@ pub fn serial_list_ports() -> Vec<SerialPortInfo> {
             SerialPortInfo { name: p.port_name, kind, product }
         })
         .collect();
-    // Registry fallback: anything SERIALCOMM knows that the class scan
-    // missed joins the list as a plain port.
-    for name in serialcomm_ports() {
+    // Fallbacks for ports the class scan misses (com0com and friends):
+    // SERIALCOMM registry entries, then the raw DOS device namespace.
+    for name in serialcomm_ports().into_iter().chain(dos_device_ports()) {
         if !out.iter().any(|p| p.name.eq_ignore_ascii_case(&name)) {
             out.push(SerialPortInfo { name, kind: "unknown".into(), product: String::new() });
         }
