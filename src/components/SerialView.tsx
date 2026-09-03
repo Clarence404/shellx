@@ -26,6 +26,8 @@ export function SerialView() {
   const ports = useSerialStore((s) => s.ports);
   const open = useSerialStore((s) => s.open);
   const activeId = useSerialStore((s) => s.activeId);
+  const scanning = useSerialStore((s) => s.scanning);
+  const lastScan = useSerialStore((s) => s.lastScan);
   const drawerCollapsed = useSessions((s) => s.drawerCollapsed);
   const toggleDrawer = useSessions((s) => s.toggleDrawer);
 
@@ -272,15 +274,25 @@ export function SerialView() {
             <span style={{ fontSize: "calc(var(--font-ui-size) + 1px)", fontWeight: 600, color: "var(--text-1)" }}>
               {t("Detected ports")}
             </span>
+            {lastScan > 0 && !scanning && (
+              <span style={{ fontSize: 11, color: "var(--text-3)" }}>
+                {ports.length} · {new Date(lastScan).toLocaleTimeString()}
+              </span>
+            )}
+            {scanning && (
+              <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("Scanning…")}</span>
+            )}
             <span style={{ flex: 1 }} />
             <button
               onClick={() => void useSerialStore.getState().refreshPorts()}
+              disabled={scanning}
               style={{
                 display: "flex", alignItems: "center", gap: 6, padding: "5px 12px",
                 borderRadius: 6, background: "var(--panel-1)", color: "var(--text-2)",
                 border: "1px solid var(--border)", fontSize: "var(--font-ui-size)",
+                opacity: scanning ? 0.7 : 1,
               }}>
-              <RefreshCw size={13} strokeWidth={2} />
+              <RefreshCw size={13} strokeWidth={2} className={scanning ? "shellx-spin" : undefined} />
               {t("Refresh")}
             </button>
           </div>

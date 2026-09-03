@@ -37,6 +37,7 @@ const zh: Record<string, string> = {
   "Reconnect": "重新连接",
   "closed": "已关闭",
   "Open": "打开",
+  "Scanning…": "扫描中…",
 
   // FTP view
   "FTP": "FTP",

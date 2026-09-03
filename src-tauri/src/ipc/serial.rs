@@ -115,6 +115,7 @@ pub fn serial_list_ports() -> Vec<SerialPortInfo> {
             SerialPortInfo { name: p.port_name, kind, product }
         })
         .collect();
+    let class_count = out.len();
     // Fallbacks for ports the class scan misses (com0com and friends):
     // SERIALCOMM registry entries, then the raw DOS device namespace.
     for name in serialcomm_ports().into_iter().chain(dos_device_ports()) {
@@ -122,6 +123,14 @@ pub fn serial_list_ports() -> Vec<SerialPortInfo> {
             out.push(SerialPortInfo { name, kind: "unknown".into(), product: String::new() });
         }
     }
+    // Every scan is logged: "did Refresh actually do anything" should be
+    // answerable from Settings → Logs without a debugger.
+    crate::log_info!(
+        crate::logs::categories::SESSION, "serial ports scanned",
+        "class_scan": class_count,
+        "with_fallbacks": out.len(),
+        "ports": out.iter().map(|p| p.name.clone()).collect::<Vec<_>>().join(","),
+    );
     // USB adapters first (that's almost always the cable the user just
     // plugged in), then natural name order.
     out.sort_by(|a, b| {

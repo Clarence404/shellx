@@ -22,6 +22,11 @@ interface SerialStore {
   profiles: SerialProfile[];
   ports: SerialPortInfo[];
   loaded: boolean;
+  /** A scan is in flight — the refresh button spins on this. */
+  scanning: boolean;
+  /** When the last scan finished (ms epoch); 0 = never. Proof to the eye
+      that the click did something even when the list didn't change. */
+  lastScan: number;
   /** Open serial terminals, in open order. Entries stay after the port
       closes (state "closed") so scrollback survives until dismissed. */
   open: SerialSession[];
@@ -47,20 +52,32 @@ export const useSerialStore = create<SerialStore>((set, get) => ({
   profiles: [],
   ports: [],
   loaded: false,
+  scanning: false,
+  lastScan: 0,
   open: [],
   activeId: null,
 
   load: async () => {
-    const [profiles, ports] = await Promise.all([
-      ipc.serialProfileList(),
-      ipc.serialListPorts(),
-    ]);
-    set({ profiles, ports, loaded: true });
+    set({ scanning: true });
+    try {
+      const [profiles, ports] = await Promise.all([
+        ipc.serialProfileList(),
+        ipc.serialListPorts(),
+      ]);
+      set({ profiles, ports, loaded: true, lastScan: Date.now() });
+    } finally {
+      set({ scanning: false });
+    }
   },
 
   refreshPorts: async () => {
-    const ports = await ipc.serialListPorts();
-    set({ ports });
+    set({ scanning: true });
+    try {
+      const ports = await ipc.serialListPorts();
+      set({ ports, lastScan: Date.now() });
+    } finally {
+      set({ scanning: false });
+    }
   },
 
   add: async (p) => {
