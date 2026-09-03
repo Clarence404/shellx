@@ -148,7 +148,8 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
-            libssl-dev
+            libssl-dev \
+            libudev-dev
 
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
