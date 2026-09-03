@@ -38,6 +38,12 @@ const zh: Record<string, string> = {
   "closed": "已关闭",
   "Open": "打开",
   "Scanning…": "扫描中…",
+  "Found": "找到",
+  "Local echo": "本地回显",
+  "Line ending": "行结束符",
+  "Enter": "回车",
+  "Show what you type (raw serial usually doesn't echo)": "显示你输入的内容（裸串口通常不回显）",
+  "What the Enter key sends": "回车键发送的内容",
 
   // FTP view
   "FTP": "FTP",

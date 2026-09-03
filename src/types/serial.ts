@@ -35,6 +35,16 @@ export const DEFAULT_LINE: SerialLineSettings = {
   flow: "none",
 };
 
+/** What the Enter key sends on the wire. */
+export type LineEnding = "cr" | "lf" | "crlf" | "none";
+
+export const LINE_ENDING_LABELS: Record<LineEnding, string> = {
+  cr: "CR (\\r)",
+  lf: "LF (\\n)",
+  crlf: "CRLF (\\r\\n)",
+  none: "None",
+};
+
 /** "115200 · 8N1" — the standard shorthand electricians read at a glance. */
 export function lineSummary(s: SerialLineSettings): string {
   const parity = s.parity === "even" ? "E" : s.parity === "odd" ? "O" : "N";
