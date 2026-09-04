@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.29.4** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.30.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -21,7 +21,7 @@ ShellX is a desktop app that gives you:
 - **FTP view** — a dedicated view for SFTP / FTP / FTPS connections with the same dual-pane, queue and drag. Made for old machines: filename encoding (auto / UTF-8 / GBK), passive or active mode, explicit or implicit TLS — and plain FTP is clearly tagged as plaintext. Saved SSH hosts import as SFTP connections in one click. Directory listings are cached and the tree warms in the background over dedicated connections, so browsing a far-away server feels instant after connect
 - **Command completion** — type at any prompt and a dropdown offers your own per-host command history (`h`) plus a built-in dictionary of common commands (`c`). ↑/↓ and Tab to accept; a plain Enter always runs what you typed. Local only — nothing installed on the server, and lines that look like they carry secrets are never recorded
 - **Command snippets** — save the commands worth not retyping and call them anywhere with Ctrl+Shift+K: filter, Enter, and the command lands on the terminal's input line (opt-in run-on-pick per snippet). `${name}` blanks ask for their values with a live preview, and the library travels in your config bundle
-- **Session monitor** — live CPU / memory / network / disk / process view for any Linux host over the same SSH connection; adjustable 1–30 s poll interval
+- **Session monitor** — an at-a-glance dashboard for any Linux host over the same SSH connection: an always-visible KPI strip (CPU / memory / swap / network / disk I/O) with trends, 1/5/15-minute load averages and since-boot totals, a per-core heatmap, a process table with inline bars, filesystem usage coloured by fullness, and — when present — a Docker containers tab (per-container CPU / memory / net / block) and a red Alerts tab listing failed systemd units with copy-ready journalctl / restart commands. Adjustable 1–30 s poll interval
 - **Saved hosts + keychain** — store your servers once, quick-connect from the sidebar or the `+` menu; passwords live in the OS keychain, not a plaintext config. Ctrl-click / Shift-click to pick several rows and delete them in one confirmation
 - **Import & export** — pull machines straight out of `~/.ssh/config` (wildcards, `Match` blocks and `Include` lines are reported as skipped rather than dropped), or carry a whole setup to another computer as one JSON file: hosts, tunnel rules, and optionally your settings. Passwords and key passphrases stay in the OS keychain and are never written to the file — the file only records which hosts had one, so the import can tell you what will ask again
 - **Light or dark theme** — Light is default; toggle to Dark in Settings and the whole app (including the terminal palette) follows
