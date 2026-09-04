@@ -560,6 +560,12 @@ const zh: Record<string, string> = {
   "Container": "容器",
   "Block I/O": "块设备",
   "service(s) down": "服务异常",
+  "Alerts": "异常",
+  "failed unit(s)": "个失败单元",
+  "Result": "失败原因",
+  "Exit status": "退出码",
+  "Buttons copy the command — paste it in the terminal to investigate or restart. shellx never runs sudo for you.":
+    "按钮把命令复制到剪贴板 —— 粘到终端里执行(排查或重启)。shellx 不会替你 sudo。",
   // Host info card
   "Hostname": "主机名",
   "System": "系统",

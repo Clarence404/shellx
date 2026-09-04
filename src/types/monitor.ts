@@ -63,7 +63,9 @@ export interface ContainerRow {
 
 export interface FailedUnit {
   unit: string;
-  sub: string;
+  result: string;
+  exitStatus: string;
+  since: string;
   description: string;
 }
 

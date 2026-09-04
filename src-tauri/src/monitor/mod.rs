@@ -26,7 +26,10 @@ const POLL_CMD: &str = concat!(
     // without them spend nothing and emit an empty section.
     "echo '---DOCKERPS---'; command -v docker >/dev/null 2>&1 && docker ps --no-trunc --format '{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}' 2>/dev/null; ",
     "echo '---DOCKERSTATS---'; command -v docker >/dev/null 2>&1 && docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}' 2>/dev/null; ",
-    "echo '---FAILED---'; command -v systemctl >/dev/null 2>&1 && systemctl --failed --no-legend --plain 2>/dev/null"
+    // For each failed unit, one tab-separated line: unit, Result,
+    // ExecMainStatus, ActiveEnterTimestamp, Description. Only runs when
+    // systemctl exists and something actually failed, so it's ~free.
+    "echo '---FAILED---'; command -v systemctl >/dev/null 2>&1 && systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | while read u; do printf '%s\\t' \"$u\"; systemctl show \"$u\" -p Result,ExecMainStatus,ActiveEnterTimestamp,Description --value 2>/dev/null | paste -sd '\\t' -; done"
 );
 
 /// Static data — fetched once at session start. Doubles as the Linux
@@ -175,8 +178,12 @@ pub struct ContainerRow {
 #[serde(rename_all = "camelCase")]
 pub struct FailedUnit {
     pub unit: String,
-    /// "failed", plus the sub-state ("exit-code", "signal", …) when known.
-    pub sub: String,
+    /// systemd Result: "exit-code" | "signal" | "timeout" | "core-dump" | …
+    pub result: String,
+    /// ExecMainStatus — the process's exit code (or signal number).
+    pub exit_status: String,
+    /// ActiveEnterTimestamp text, e.g. "Thu 2026-09-03 09:51:53 UTC".
+    pub since: String,
     pub description: String,
 }
 
@@ -509,17 +516,20 @@ fn parse_containers(ps: &str, stats: &str) -> Vec<ContainerRow> {
     out
 }
 
-/// `systemctl --failed --no-legend --plain`:
-/// "spring_ruoyi_admin_jar.service loaded failed failed  <description>"
+/// One tab-separated line per failed unit:
+/// unit \t Result \t ExecMainStatus \t ActiveEnterTimestamp \t Description
 fn parse_failed_units(section: &str) -> Vec<FailedUnit> {
     section.lines().filter_map(|line| {
-        let f: Vec<&str> = line.split_whitespace().collect();
-        if f.len() < 4 { return None; }
-        let unit = f[0].to_string();
-        if !unit.contains('.') { return None; }
-        let sub = f[3].to_string();
-        let description = f[4..].join(" ");
-        Some(FailedUnit { unit, sub, description })
+        let f: Vec<&str> = line.split('\t').collect();
+        let unit = f.first()?.trim();
+        if unit.is_empty() || !unit.contains('.') { return None; }
+        Some(FailedUnit {
+            unit: unit.to_string(),
+            result: f.get(1).map(|s| s.trim()).unwrap_or("").to_string(),
+            exit_status: f.get(2).map(|s| s.trim()).unwrap_or("").to_string(),
+            since: f.get(3).map(|s| s.trim()).unwrap_or("").to_string(),
+            description: f.get(4).map(|s| s.trim()).unwrap_or("").to_string(),
+        })
     }).collect()
 }
 

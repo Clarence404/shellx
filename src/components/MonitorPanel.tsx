@@ -9,24 +9,23 @@ import { PerformanceTab } from "./monitor/PerformanceTab";
 import { ProcessTab } from "./monitor/ProcessTab";
 import { DiskTab } from "./monitor/DiskTab";
 import { ContainerTab } from "./monitor/ContainerTab";
+import { FailedTab } from "./monitor/FailedTab";
 import { fmtKb, fmtUptime } from "./monitor/format";
 import { useWidthTier, type WidthTier } from "./monitor/useWidth";
-import type { FailedUnit } from "../types/monitor";
 import { TriangleAlert } from "lucide-react";
 import { useT } from "../i18n";
 
-type SubTab = "performance" | "process" | "disk" | "container";
+type SubTab = "performance" | "process" | "disk" | "container" | "failed";
 
 const INTERVALS = [1, 2, 5, 10, 30] as const;
 type IntervalSecs = typeof INTERVALS[number];
 
 
-function HostStrip({ system, memory, tier, switcher, failedBadge }: {
+function HostStrip({ system, memory, tier, switcher }: {
   system?: { hostname: string; os: string; kernel: string; arch: string; uptimeSecs: number; cpuModel: string; virt: string };
   memory?: { totalKb: number };
   tier: WidthTier;
   switcher: React.ReactNode;
-  failedBadge: React.ReactNode;
 }) {
   const t = useT();
   // Progressive reveal: CPU model (static, longest) only when wide; the
@@ -55,14 +54,13 @@ function HostStrip({ system, memory, tier, switcher, failedBadge }: {
       <div style={{ display: "flex", gap: 12, marginLeft: "auto", alignItems: "center", flexShrink: 0 }}>
         {system && showCpu && system.cpuModel && <Fact k="CPU" v={system.cpuModel} />}
         {system && showMem && memory && <Fact k={t("Memory")} v={fmtKb(memory.totalKb)} />}
-        {failedBadge}
-        {switcher}
         {system && (
           <span style={{
             fontSize: 11, color: "var(--success)", background: "var(--success-fade)",
             padding: "3px 9px", borderRadius: 999, fontWeight: 500, whiteSpace: "nowrap",
           }}>● {t("up")} {fmtUptime(system.uptimeSecs)}</span>
         )}
+        {switcher}
       </div>
     </div>
   );
@@ -75,53 +73,6 @@ function Fact({ k, v }: { k: string; v: string }) {
         display: "block", fontSize: 12, color: "var(--text-1)", fontWeight: 600,
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>{v}</b>
-    </div>
-  );
-}
-
-/** Red chip in the host strip, only when systemctl reports failed units.
- *  Clicking it lists them — no dedicated tab needed, and it's visible from
- *  whatever sub-tab you're on. */
-function FailedUnitsBadge({ units }: { units: FailedUnit[] }) {
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  if (units.length === 0) return null;
-  return (
-    <div style={{ position: "relative" }}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
-          color: "var(--error)", background: "var(--error-fade)", border: "1px solid var(--error)",
-          padding: "3px 9px", borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap",
-        }}
-      >
-        <TriangleAlert size={12} /> {units.length} {t("service(s) down")}
-      </button>
-      {open && (
-        <>
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
-          <div style={{
-            position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 41,
-            minWidth: 260, maxWidth: 380, background: "var(--panel-1)",
-            border: "1px solid var(--border)", borderRadius: 8,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.25)", padding: 6,
-          }}>
-            <div style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, padding: "4px 8px", textTransform: "uppercase", letterSpacing: 0.4 }}>
-              systemctl --failed
-            </div>
-            {units.map((u) => (
-              <div key={u.unit} style={{ padding: "6px 8px", borderTop: "1px solid var(--border-2, var(--border))" }}>
-                <div style={{ fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--text-1)" }}>{u.unit}</div>
-                <div style={{ fontSize: 10, color: "var(--text-3)" }}>
-                  <span style={{ color: "var(--error)", fontWeight: 600 }}>{u.sub}</span>
-                  {u.description ? ` · ${u.description}` : ""}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -192,6 +143,13 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
   const waiting = unsupported || snapshots.length === 0;
   const [widthRef, tier] = useWidthTier<HTMLDivElement>();
 
+  // A conditional sub-tab (containers, alerts) can disappear — fall back to
+  // Performance so the pane never shows an orphaned empty view.
+  useEffect(() => {
+    if (subTab === "failed" && (latest?.failedUnits.length ?? 0) === 0) setSubTab("performance");
+    if (subTab === "container" && !latest?.system.hasDocker) setSubTab("performance");
+  }, [subTab, latest]);
+
   return (
     // The whole panel is a fixed-height flex column: identity, controls,
     // load and KPIs stay pinned; only the content region below scrolls.
@@ -204,7 +162,6 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
         memory={latest?.memory}
         tier={tier}
         switcher={<ActivitySwitcher sessionId={connectionId} />}
-        failedBadge={<FailedUnitsBadge units={latest?.failedUnits ?? []} />}
       />
 
       {!waiting && (
@@ -237,6 +194,17 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
               }}>{latest.containers.length}</span>
             </button>
           )}
+          {(latest?.failedUnits.length ?? 0) > 0 && (
+            <button onClick={() => setSubTab("failed")} style={{
+              padding: "5px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600,
+              background: subTab === "failed" ? "var(--error)" : "var(--error-fade)",
+              color: subTab === "failed" ? "#fff" : "var(--error)",
+              border: `1px solid var(--error)`,
+            }}>
+              <TriangleAlert size={12} /> {t("Alerts")} {latest?.failedUnits.length}
+            </button>
+          )}
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("Refresh")}</span>
           <select value={intervalSecs} onChange={(e) => setIntervalSecs(Number(e.target.value) as IntervalSecs)} style={{
@@ -249,15 +217,17 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
       )}
 
       {!waiting && latest && <LoadBand latest={latest} showSinceBoot={tier === "wide"} />}
-      {!waiting && <KpiRow snapshots={snapshots} onJump={setSubTab} />}
 
-      {/* Scroll region — the only thing that scrolls. */}
+      {/* Scroll region: the KPI strip scrolls together with the content
+          below it — everything under the load band moves as one. */}
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         {waiting && <MonitorWaiting unsupported={unsupported} intervalSecs={intervalSecs} />}
+        {!waiting && <KpiRow snapshots={snapshots} onJump={setSubTab} />}
         {!waiting && subTab === "performance" && <PerformanceTab snapshots={snapshots} intervalSecs={intervalSecs} />}
         {!waiting && subTab === "process" && <ProcessTab processes={latest?.processes ?? []} />}
         {!waiting && subTab === "disk" && <DiskTab snapshots={snapshots} intervalSecs={intervalSecs} />}
         {!waiting && subTab === "container" && <ContainerTab containers={latest?.containers ?? []} />}
+        {!waiting && subTab === "failed" && <FailedTab units={latest?.failedUnits ?? []} />}
       </div>
     </div>
   );
