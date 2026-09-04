@@ -11,10 +11,32 @@ function stateColor(state: string, healthy: boolean | null): string {
   return "var(--text-3)"; // exited / created / paused
 }
 
-export function ContainerTab({ containers }: { containers: ContainerRow[] }) {
+export function ContainerTab({ containers, loaded }: { containers: ContainerRow[]; loaded: boolean }) {
   const t = useT();
   const [ref, tier] = useWidthTier<HTMLDivElement>();
   const narrow = tier === "narrow";
+
+  // Docker runs on its own loop, so the first time this tab opens the cache
+  // may not have filled yet — show a loading state rather than a premature
+  // "no containers".
+  if (!loaded) {
+    return (
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 10, padding: "56px 24px", color: "var(--text-2)",
+      }}>
+        <span style={{ display: "inline-flex", gap: 4, fontSize: 20, lineHeight: 1, color: "var(--accent)", letterSpacing: 1 }}>
+          <span style={{ animation: "shellx-dot-pulse 1.4s ease-in-out infinite" }}>·</span>
+          <span style={{ animation: "shellx-dot-pulse 1.4s ease-in-out 0.2s infinite" }}>·</span>
+          <span style={{ animation: "shellx-dot-pulse 1.4s ease-in-out 0.4s infinite" }}>·</span>
+        </span>
+        <div style={{ fontSize: "var(--font-ui-size)", color: "var(--text-1)" }}>{t("Loading containers…")}</div>
+        <div style={{ fontSize: "calc(var(--font-ui-size) - 2px)", color: "var(--text-3)" }}>
+          {t("Reading docker stats")}
+        </div>
+      </div>
+    );
+  }
 
   const totalCpu = containers.reduce((a, c) => a + c.cpuPct, 0);
   const totalMem = containers.reduce((a, c) => a + c.memUsedBytes, 0);

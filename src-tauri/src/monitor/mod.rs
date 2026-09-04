@@ -63,6 +63,9 @@ pub struct MonitorSnapshot {
     pub system: SystemInfo,
     /// Docker containers (empty when docker is absent or not reachable).
     pub containers: Vec<ContainerRow>,
+    /// True once the docker loop has fetched at least once — lets the UI
+    /// show a loading state instead of a premature "no containers".
+    pub containers_loaded: bool,
     /// systemd units in the failed state (empty on non-systemd hosts).
     pub failed_units: Vec<FailedUnit>,
     /// 1 / 5 / 15-minute load averages — a real look back over the 15 min
@@ -552,6 +555,7 @@ impl Drop for AbortOnDrop {
 async fn docker_loop(
     handle: RusshHandle,
     cache: std::sync::Arc<tokio::sync::Mutex<Vec<ContainerRow>>>,
+    ready: std::sync::Arc<std::sync::atomic::AtomicBool>,
     interval: Duration,
 ) {
     loop {
@@ -561,6 +565,9 @@ async fn docker_loop(
                 extract_section(&out, "DOCKERSTATS"),
             );
             *cache.lock().await = rows;
+            // Flip after the first fetch so the UI can show a loading state
+            // until real container data (even zero containers) has landed.
+            ready.store(true, std::sync::atomic::Ordering::Relaxed);
         }
         sleep(interval).await;
     }
@@ -610,11 +617,13 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
     // `docker stats` sample never delays CPU/mem/net. The guard aborts the
     // sub-loop when this task is dropped (monitor stopped).
     let container_cache = std::sync::Arc::new(tokio::sync::Mutex::new(Vec::<ContainerRow>::new()));
+    let docker_ready = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let _docker_guard = if has_docker {
         let dh = handle.clone();
         let cache = container_cache.clone();
+        let ready = docker_ready.clone();
         let di = interval.max(Duration::from_secs(5));
-        Some(AbortOnDrop(tokio::spawn(docker_loop(dh, cache, di)).abort_handle()))
+        Some(AbortOnDrop(tokio::spawn(docker_loop(dh, cache, ready, di)).abort_handle()))
     } else {
         None
     };
@@ -703,6 +712,7 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
             containers: if has_docker {
                 container_cache.lock().await.clone()
             } else { Vec::new() },
+            containers_loaded: !has_docker || docker_ready.load(std::sync::atomic::Ordering::Relaxed),
             failed_units: parse_failed_units(extract_section(&output, "FAILED")),
             load,
             since_boot,

@@ -234,17 +234,11 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
           {latest?.system.hasDocker && (
             <button onClick={() => setSubTab("container")} style={{
               padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "none",
-              display: "inline-flex", alignItems: "center", gap: 5,
               background: subTab === "container" ? "var(--accent)" : "transparent",
               color: subTab === "container" ? "var(--text-on-accent)" : "var(--text-2)",
               fontWeight: subTab === "container" ? 600 : 400,
             }}>
               {t("Containers")}
-              <span style={{
-                fontSize: 10, minWidth: 15, textAlign: "center", borderRadius: 999, padding: "0 4px",
-                background: subTab === "container" ? "rgba(255,255,255,0.25)" : "var(--panel-2)",
-                color: subTab === "container" ? "#fff" : "var(--text-3)",
-              }}>{latest.containers.length}</span>
             </button>
           )}
           {(latest?.failedUnits.length ?? 0) > 0 && (
@@ -279,7 +273,7 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
         {!waiting && subTab === "performance" && <PerformanceTab snapshots={snapshots} intervalSecs={intervalSecs} />}
         {!waiting && subTab === "process" && <ProcessTab processes={latest?.processes ?? []} />}
         {!waiting && subTab === "disk" && <DiskTab snapshots={snapshots} intervalSecs={intervalSecs} />}
-        {!waiting && subTab === "container" && <ContainerTab containers={latest?.containers ?? []} />}
+        {!waiting && subTab === "container" && <ContainerTab containers={latest?.containers ?? []} loaded={latest?.containersLoaded ?? false} />}
         {!waiting && subTab === "failed" && <FailedTab units={latest?.failedUnits ?? []} />}
       </div>
     </div>

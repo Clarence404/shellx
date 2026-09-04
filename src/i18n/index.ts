@@ -557,6 +557,8 @@ const zh: Record<string, string> = {
   "Containers": "容器",
   "Running containers": "运行中的容器",
   "No running containers.": "没有运行中的容器。",
+  "Loading containers…": "正在加载容器…",
+  "Reading docker stats": "正在读取 docker stats",
   "Container": "容器",
   "Block I/O": "块设备",
   "service(s) down": "服务异常",

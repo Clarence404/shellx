@@ -94,6 +94,7 @@ export interface MonitorSnapshot {
   diskIo: DiskIo;
   system: SystemInfo;
   containers: ContainerRow[];
+  containersLoaded: boolean;
   failedUnits: FailedUnit[];
   load: LoadAvg | null;
   sinceBoot: SinceBoot;
