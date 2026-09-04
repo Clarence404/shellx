@@ -20,7 +20,8 @@ const POLL_CMD: &str = concat!(
     "echo '---PS---'; ps -eo pid,pcpu,pmem,comm --sort=-%cpu --no-headers 2>/dev/null | head -50; ",
     "echo '---DF---'; df -Pl 2>/dev/null; ",
     "echo '---DISKIO---'; cat /proc/diskstats; ",
-    "echo '---UPTIME---'; cat /proc/uptime"
+    "echo '---UPTIME---'; cat /proc/uptime; ",
+    "echo '---LOADAVG---'; cat /proc/loadavg"
 );
 
 /// Static data — fetched once at session start. Doubles as the Linux
@@ -47,6 +48,33 @@ pub struct MonitorSnapshot {
     pub disks: Vec<DiskMount>,
     pub disk_io: DiskIo,
     pub system: SystemInfo,
+    /// 1 / 5 / 15-minute load averages — a real look back over the 15 min
+    /// before the panel was opened, at no extra cost.
+    pub load: Option<LoadAvg>,
+    /// Cumulative-since-boot figures, derived from the same /proc counters
+    /// we already read for the per-second deltas.
+    pub since_boot: SinceBoot,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadAvg {
+    pub one: f64,
+    pub five: f64,
+    pub fifteen: f64,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SinceBoot {
+    /// Total bytes received / sent across all non-loopback interfaces.
+    pub net_rx_total: u64,
+    pub net_tx_total: u64,
+    /// Total bytes read / written across whole disks.
+    pub disk_read_total: u64,
+    pub disk_write_total: u64,
+    /// Average CPU busy % since boot (from cumulative /proc/stat ticks).
+    pub cpu_avg_pct: f64,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -374,6 +402,16 @@ fn parse_uptime_secs(section: &str) -> u64 {
         .unwrap_or(0)
 }
 
+/// /proc/loadavg: "0.14 0.22 0.31 1/234 5678" — first three are the
+/// 1/5/15-minute averages. Returns None if the line is missing or malformed.
+fn parse_loadavg(section: &str) -> Option<LoadAvg> {
+    let mut p = section.split_whitespace();
+    let one = p.next()?.parse().ok()?;
+    let five = p.next()?.parse().ok()?;
+    let fifteen = p.next()?.parse().ok()?;
+    Some(LoadAvg { one, five, fifteen })
+}
+
 // ── Poll loop ────────────────────────────────────────────────────────────────
 
 pub fn start_poll_loop(
@@ -446,6 +484,26 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
         let curr_net   = parse_netdev_raw(extract_section(&output, "NET"));
         let curr_disk  = parse_diskstats_raw(extract_section(&output, "DISKIO"));
 
+        // Since-boot figures from the same cumulative counters. Net excludes
+        // loopback; disk sectors are the conventional 512 bytes.
+        let (net_rx_total, net_tx_total) = curr_net.iter()
+            .filter(|(iface, _)| iface.as_str() != "lo")
+            .fold((0u64, 0u64), |(rx, tx), (_, n)| (rx + n.rx, tx + n.tx));
+        let cpu_avg_pct = curr_cpu.first().map(|c| {
+            let total = c.total();
+            if total == 0 { 0.0 } else {
+                (total.saturating_sub(c.idle_total()) as f64 / total as f64) * 100.0
+            }
+        }).unwrap_or(0.0);
+        let since_boot = SinceBoot {
+            net_rx_total,
+            net_tx_total,
+            disk_read_total: curr_disk.read_sectors * 512,
+            disk_write_total: curr_disk.write_sectors * 512,
+            cpu_avg_pct,
+        };
+        let load = parse_loadavg(extract_section(&output, "LOADAVG"));
+
         let (cpu, network, disk_io) = if let Some(ref p) = prev {
             let elapsed = now.duration_since(p.ts).as_secs_f64().max(0.001);
             (
@@ -475,6 +533,8 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
                 cpu_model:   cpu_model.clone(),
                 virt:        virt.clone(),
             },
+            load,
+            since_boot,
         };
 
         prev = Some(PrevState {

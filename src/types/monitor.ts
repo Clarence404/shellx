@@ -48,6 +48,20 @@ export interface SystemInfo {
   virt: string;
 }
 
+export interface LoadAvg {
+  one: number;
+  five: number;
+  fifteen: number;
+}
+
+export interface SinceBoot {
+  netRxTotal: number;
+  netTxTotal: number;
+  diskReadTotal: number;
+  diskWriteTotal: number;
+  cpuAvgPct: number;
+}
+
 export interface MonitorSnapshot {
   connectionId: string;
   ts: number;
@@ -58,4 +72,6 @@ export interface MonitorSnapshot {
   disks: DiskMount[];
   diskIo: DiskIo;
   system: SystemInfo;
+  load: LoadAvg | null;
+  sinceBoot: SinceBoot;
 }
