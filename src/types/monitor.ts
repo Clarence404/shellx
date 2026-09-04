@@ -46,6 +46,41 @@ export interface SystemInfo {
   uptimeSecs: number;
   cpuModel: string;
   virt: string;
+  hasDocker: boolean;
+}
+
+export interface ContainerRow {
+  name: string;
+  image: string;
+  state: string;
+  healthy: boolean | null;
+  cpuPct: number;
+  memUsedBytes: number;
+  memLimitBytes: number;
+  netIo: string;
+  blockIo: string;
+}
+
+export interface FailedUnit {
+  unit: string;
+  result: string;
+  exitStatus: string;
+  since: string;
+  description: string;
+}
+
+export interface LoadAvg {
+  one: number;
+  five: number;
+  fifteen: number;
+}
+
+export interface SinceBoot {
+  netRxTotal: number;
+  netTxTotal: number;
+  diskReadTotal: number;
+  diskWriteTotal: number;
+  cpuAvgPct: number;
 }
 
 export interface MonitorSnapshot {
@@ -58,4 +93,9 @@ export interface MonitorSnapshot {
   disks: DiskMount[];
   diskIo: DiskIo;
   system: SystemInfo;
+  containers: ContainerRow[];
+  containersLoaded: boolean;
+  failedUnits: FailedUnit[];
+  load: LoadAvg | null;
+  sinceBoot: SinceBoot;
 }

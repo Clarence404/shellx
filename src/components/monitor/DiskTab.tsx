@@ -1,261 +1,114 @@
-import { HardDrive, Activity } from "lucide-react";
 import type { MonitorSnapshot, DiskMount } from "../../types/monitor";
-import { Sparkline } from "./Sparkline";
+import { MetricChart } from "./MetricChart";
+import { fmtRate, healthOf, healthColor, series } from "./format";
 import { useT } from "../../i18n";
 
-function fmtMb(mb: number): string {
+const sectStyle: React.CSSProperties = {
+  fontSize: 10, letterSpacing: 0.4, textTransform: "uppercase",
+  color: "var(--text-3)", fontWeight: 700, margin: "2px 2px 8px",
+};
+const cardStyle: React.CSSProperties = {
+  background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 12,
+};
+
+function gb(mb: number): string {
   if (mb >= 1_048_576) return `${(mb / 1_048_576).toFixed(1)} TB`;
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+  if (mb >= 1024) return `${(mb / 1024).toFixed(0)} GB`;
   return `${mb} MB`;
 }
 
-function fmtBytes(n: number): string {
-  if (n >= 1_073_741_824) return `${(n / 1_073_741_824).toFixed(1)} GB/s`;
-  if (n >= 1_048_576) return `${(n / 1_048_576).toFixed(1)} MB/s`;
-  if (n >= 1024) return `${(n / 1024).toFixed(0)} KB/s`;
-  return `${n} B/s`;
-}
-
-function diskColor(pct: number): string {
-  if (pct >= 85) return "var(--error)";
-  if (pct >= 60) return "var(--warn)";
-  return "var(--success)";
-}
-
-interface Props {
-  disks: DiskMount[];
-  diskIo: MonitorSnapshot["diskIo"];
-  snapshots: MonitorSnapshot[];
-}
-
-export function DiskTab({ disks, diskIo, snapshots }: Props) {
+function FsRow({ d }: { d: DiskMount }) {
   const t = useT();
-  const readHistory = snapshots.map((s) => s.diskIo.readBytesPerSec);
-  const writeHistory = snapshots.map((s) => s.diskIo.writeBytesPerSec);
-  const ioMax = Math.max(...readHistory, ...writeHistory, 1);
+  const health = healthOf(d.usePct);
+  const color = healthColor[health];
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 12, padding: "11px 16px",
+      borderBottom: "1px solid var(--border)",
+    }}>
+      <div style={{ minWidth: 140, flexShrink: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)" }}>{d.target}</div>
+      </div>
+      <div style={{ flex: 1, minWidth: 60, height: 12, background: "var(--panel-2)", borderRadius: 6, overflow: "hidden" }}>
+        <div style={{ width: `${d.usePct}%`, height: "100%", background: color, borderRadius: 6 }} />
+      </div>
+      <div style={{
+        minWidth: 44, textAlign: "right", fontSize: 14, fontWeight: 700,
+        fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", color,
+      }}>{d.usePct}%</div>
+      <div style={{ minWidth: 170, textAlign: "right", fontSize: 11, color: "var(--text-2)" }}>
+        <b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{gb(d.usedMb)}</b> / {gb(d.sizeMb)}
+        · {t("free")} {gb(d.availMb)}
+      </div>
+    </div>
+  );
+}
 
-  const totalMb = disks.reduce((a, d) => a + d.sizeMb, 0);
-  const usedMb  = disks.reduce((a, d) => a + d.usedMb, 0);
-  const overallPct = totalMb > 0 ? Math.round((usedMb / totalMb) * 100) : 0;
+export function DiskTab({
+  snapshots, intervalSecs,
+}: {
+  snapshots: MonitorSnapshot[];
+  intervalSecs: number;
+}) {
+  const t = useT();
+  const latest = snapshots[snapshots.length - 1];
+  if (!latest) return null;
+  const io = latest.diskIo;
 
   return (
-    <div
-      style={{
-        // No scrolling here — MonitorPanel is the one scroll container.
-        padding: 12,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-      }}
-    >
-      {/* Partitions — natural height; outer DiskTab scrolls when needed */}
-      <div
-        style={{
-          flexShrink: 0,
-          background: "var(--panel-1)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div
-          style={{
-            padding: "12px 16px",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            borderBottom: "1px solid var(--border)",
-            flexShrink: 0,
-          }}
-        >
-          <HardDrive size={14} style={{ color: "var(--text-2)" }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)" }}>
-            {t("Partitions")}
-          </span>
-          <div style={{ flex: 1 }} />
-          {disks.length > 0 && (
-            <span
-              style={{
-                fontSize: 11,
-                color: "var(--text-3)",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {fmtMb(usedMb)} / {fmtMb(totalMb)} · {overallPct}%
-            </span>
-          )}
-        </div>
-
-        <div>
-          {disks.length === 0 ? (
-            <div style={{ padding: 24, color: "var(--text-3)", fontSize: 13 }}>
-              {t("Collecting data…")}
-            </div>
-          ) : (
-            disks.map((d) => (
-              <div
-                key={d.target}
-                style={{
-                  padding: "10px 16px",
-                  borderBottom: "0.5px solid var(--border)",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 6,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-                  <span
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      fontSize: "var(--font-ui-size)",
-                      color: "var(--text-1)",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                    title={d.target}
-                  >
-                    {d.target}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: "var(--text-3)",
-                      fontVariantNumeric: "tabular-nums",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {fmtMb(d.usedMb)} / {fmtMb(d.sizeMb)} · {t("Avail")} {fmtMb(d.availMb)}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: diskColor(d.usePct),
-                      fontVariantNumeric: "tabular-nums",
-                      width: 42,
-                      textAlign: "right",
-                    }}
-                  >
-                    {d.usePct}%
-                  </span>
-                </div>
-                <div
-                  style={{
-                    height: 6,
-                    background: "var(--border)",
-                    borderRadius: 3,
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${d.usePct}%`,
-                      height: "100%",
-                      background: diskColor(d.usePct),
-                      transition: "width 0.5s ease",
-                    }}
-                  />
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+    <div style={{ padding: "12px 16px 16px" }}>
+      <div style={sectStyle}>{t("Filesystem usage")}</div>
+      <div style={{ ...cardStyle, marginBottom: 12, overflow: "hidden" }}>
+        {latest.disks.length === 0 ? (
+          <div style={{ padding: "18px", textAlign: "center", color: "var(--text-3)", fontSize: 12 }}>
+            {t("No mounted filesystems reported.")}
+          </div>
+        ) : latest.disks.map((d, i) => (
+          <div key={d.target} style={i === latest.disks.length - 1 ? { } : {}}>
+            <FsRow d={d} />
+          </div>
+        ))}
       </div>
 
-      {/* Disk I/O — fixed height at bottom */}
-      <div
-        style={{
-          background: "var(--panel-1)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          padding: "12px 16px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Activity size={14} style={{ color: "var(--text-2)" }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)" }}>
-            {t("Disk I/O")}
+      <div style={sectStyle}>{t("Disk I/O")}</div>
+      <div style={{ ...cardStyle, padding: "14px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{t("Throughput")}</span>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-2)" }}>
+            {t("total")} <b style={{ color: "var(--text-1)" }}>{fmtRate(io.readBytesPerSec + io.writeBytesPerSec)}</b>
           </span>
         </div>
-
-        <div style={{ display: "flex", gap: 32 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 3 }}>
-              {t("Read")}
-            </div>
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 300,
-                color: "var(--text-1)",
-                fontVariantNumeric: "tabular-nums",
-                lineHeight: 1,
-              }}
-            >
-              {fmtBytes(diskIo.readBytesPerSec)}
-            </div>
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 3 }}>
-              {t("Write")}
-            </div>
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 300,
-                color: "var(--text-1)",
-                fontVariantNumeric: "tabular-nums",
-                lineHeight: 1,
-              }}
-            >
-              {fmtBytes(diskIo.writeBytesPerSec)}
-            </div>
-          </div>
-        </div>
-
-        <div style={{ position: "relative", height: 48 }}>
-          <div style={{ position: "absolute", inset: 0 }}>
-            <Sparkline
-              data={readHistory}
-              color="var(--accent)"
-              fill="var(--accent-fade)"
-              fillContainer
-              max={ioMax}
-            />
-          </div>
-          <div style={{ position: "absolute", inset: 0 }}>
-            <Sparkline data={writeHistory} color="var(--error)" fillContainer max={ioMax} />
-          </div>
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 14,
-            fontSize: 10,
-            color: "var(--text-3)",
-            alignItems: "center",
-          }}
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 2, background: "var(--accent)", borderRadius: 1 }} />
-            {t("Read")}
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 2, background: "var(--error)", borderRadius: 1 }} />
-            {t("Write")}
-          </span>
+        <MetricChart
+          height={74}
+          intervalSecs={intervalSecs}
+          format={(v) => fmtRate(v)}
+          series={[
+            { values: series(snapshots, (s) => s.diskIo.readBytesPerSec), color: "var(--warn)", label: "read" },
+            { values: series(snapshots, (s) => s.diskIo.writeBytesPerSec), color: "#a06be0", label: "write" },
+          ]}
+        />
+        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+          <Rate k={t("Read")} v={fmtRate(io.readBytesPerSec)} c="var(--warn)" tot={`${t("total")} ${gbBytes(latest.sinceBoot.diskReadTotal)}`} />
+          <Rate k={t("Write")} v={fmtRate(io.writeBytesPerSec)} c="#a06be0" tot={`${t("total")} ${gbBytes(latest.sinceBoot.diskWriteTotal)}`} />
         </div>
       </div>
     </div>
   );
+}
+
+function Rate({ k, v, c, tot }: { k: string; v: string; c: string; tot: string }) {
+  return (
+    <div style={{ flex: 1 }}>
+      <div style={{ fontSize: 10, color: "var(--text-3)" }}>
+        <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: c, marginRight: 4 }} />{k}
+      </div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: c, fontVariantNumeric: "tabular-nums" }}>{v}</div>
+      <div style={{ fontSize: 9, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>{tot}</div>
+    </div>
+  );
+}
+function gbBytes(b: number): string {
+  if (b >= 1_099_511_627_776) return `${(b / 1_099_511_627_776).toFixed(1)} TB`;
+  if (b >= 1_073_741_824) return `${(b / 1_073_741_824).toFixed(1)} GB`;
+  return `${(b / 1_048_576).toFixed(0)} MB`;
 }

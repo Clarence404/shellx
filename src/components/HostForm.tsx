@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useT } from "../i18n";
 import { useHostsStore } from "../state/hosts";
 import { openConnection } from "../ipc/commands";
@@ -48,13 +48,10 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   const [passphrase, setPassphrase] = useState("");
   const [forgetPassphrase, setForgetPassphrase] = useState(false);
 
-  // Auto-fill label from username@host in create mode when both are entered
-  useEffect(() => {
-    if (mode === "create" && !label && username && host) {
-      setLabel(`${username}@${host}`);
-    }
-  }, [mode, username, host, label]);
-
+  // No live auto-fill: it used to write the label on the first username
+  // keystroke (`r@host`) and then lock, because its own write made `label`
+  // non-empty. The name is shown as a placeholder instead and resolved to
+  // user@host at save time (see finalLabel below).
   const canRememberPw = keychainAvailable && password.length > 0;
 
   async function handleSubmit(e: React.FormEvent) {
@@ -191,7 +188,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
 
       {/* Basic body */}
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Field label={t("Label")} value={label} onChange={setLabel} placeholder={t("auto-fills as user@host")} maxLength={60} />
+          <Field label={t("Label")} value={label} onChange={setLabel} placeholder={username.trim() && host.trim() ? `${username.trim()}@${host.trim()}` : t("auto-fills as user@host")} maxLength={60} />
           <Field label={t("Host")} value={host} onChange={setHost} placeholder="192.168.1.10 / example.com" required />
           <Field label={t("Port")} value={port} onChange={setPort} placeholder="22" required
             errorText={portInvalid ? t("Port must be 1–65535") : undefined} />

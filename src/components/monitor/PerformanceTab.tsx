@@ -1,473 +1,197 @@
-import { useState } from "react";
-import { Cpu, MemoryStick, Network, HardDrive, ChevronUp, ChevronDown } from "lucide-react";
-import type { MonitorSnapshot, DiskIo } from "../../types/monitor";
-import { Sparkline } from "./Sparkline";
+import { Cpu, MemoryStick, Network, HardDrive } from "lucide-react";
+import type { MonitorSnapshot } from "../../types/monitor";
+import { MetricChart } from "./MetricChart";
+import { fmtKb, fmtRate, netRate, series } from "./format";
 import { useT } from "../../i18n";
 
-function fmt(n: number, decimals = 1): string {
-  return n.toFixed(decimals);
-}
-
-function fmtBytes(n: number): string {
-  if (n >= 1_073_741_824) return `${(n / 1_073_741_824).toFixed(1)} GB/s`;
-  if (n >= 1_048_576) return `${(n / 1_048_576).toFixed(1)} MB/s`;
-  if (n >= 1024) return `${(n / 1024).toFixed(0)} KB/s`;
-  return `${n} B/s`;
-}
-
-function fmtKb(kb: number): string {
-  if (kb >= 1_073_741_824) return `${(kb / 1_073_741_824).toFixed(1)} TB`;
-  if (kb >= 1_048_576) return `${(kb / 1_048_576).toFixed(1)} GB`;
-  if (kb >= 1024) return `${(kb / 1024).toFixed(1)} MB`;
-  return `${kb} KB`;
-}
-
-type Status = "ok" | "warn" | "bad";
-
-function statusFor(pct: number): Status {
-  if (pct >= 85) return "bad";
-  if (pct >= 60) return "warn";
-  return "ok";
-}
-
-const STATUS_META: Record<Status, { key: string; color: string; bg: string }> = {
-  ok:   { key: "Healthy",  color: "var(--success)", bg: "rgba(166, 227, 161, 0.14)" },
-  warn: { key: "Warning",  color: "var(--warn)",    bg: "rgba(242, 200, 162, 0.16)" },
-  bad:  { key: "Critical", color: "var(--error)",   bg: "rgba(242, 135, 121, 0.16)" },
+const cardStyle: React.CSSProperties = {
+  background: "var(--panel-1)", border: "1px solid var(--border)",
+  borderRadius: 12, padding: "14px 16px",
+};
+const headStyle: React.CSSProperties = {
+  display: "flex", alignItems: "center", gap: 7, marginBottom: 10,
 };
 
-function StatusBadge({ status }: { status: Status }) {
+/** Per-core load as a colour-graded grid — compact enough for 8 or 64 cores. */
+function CoreHeatmap({ cores }: { cores: number[] }) {
   const t = useT();
-  const m = STATUS_META[status];
+  const cols = cores.length <= 8 ? cores.length : cores.length <= 16 ? 8 : 16;
   return (
-    <span
-      style={{
-        fontSize: 11,
-        fontWeight: 500,
-        color: m.color,
-        background: m.bg,
-        padding: "2px 10px",
-        borderRadius: 10,
-        flexShrink: 0,
-        lineHeight: 1.5,
-      }}
-    >
-      {t(m.key)}
-    </span>
-  );
-}
-
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        background: "var(--panel-1)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        padding: "14px 16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        minWidth: 0,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function CardHead({
-  icon,
-  title,
-  right,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  right?: React.ReactNode;
-}) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-      <span style={{ color: "var(--text-2)", display: "inline-flex" }}>{icon}</span>
-      <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-1)", letterSpacing: 0.2 }}>
-        {title}
-      </span>
-      <div style={{ flex: 1 }} />
-      {right}
-    </div>
-  );
-}
-
-function BigPercent({ value, meta }: { value: string; meta?: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: 4, flexShrink: 0 }}>
-      <span
-        style={{
-          fontSize: 36,
-          fontWeight: 300,
-          letterSpacing: -0.5,
-          color: "var(--text-1)",
-          fontVariantNumeric: "tabular-nums",
-          lineHeight: 1,
-        }}
-      >
-        {value}
-      </span>
-      <span style={{ fontSize: 13, color: "var(--text-2)", marginLeft: 2 }}>%</span>
-      {meta && (
-        <>
-          <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 11, color: "var(--text-3)", whiteSpace: "nowrap" }}>{meta}</span>
-        </>
-      )}
-    </div>
-  );
-}
-
-function DualRate({
-  aLabel,
-  aValue,
-  bLabel,
-  bValue,
-}: {
-  aLabel: string;
-  aValue: string;
-  bLabel: string;
-  bValue: string;
-}) {
-  return (
-    <div style={{ display: "flex", gap: 32, flexShrink: 0 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 3 }}>{aLabel}</div>
-        <div
-          style={{
-            fontSize: 22,
-            fontWeight: 300,
-            color: "var(--text-1)",
-            fontVariantNumeric: "tabular-nums",
-            lineHeight: 1,
-          }}
-        >
-          {aValue}
-        </div>
+    <>
+      <div style={{
+        display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 4, marginTop: 10,
+      }}>
+        {cores.map((v, i) => {
+          const f = v / 100;
+          const bg = f > 0.66 ? "#3d6cf0" : f > 0.33 ? "#6f97ff" : f > 0.05 ? "#8fb0ff" : "var(--panel-2)";
+          const col = f > 0.05 ? "#fff" : "var(--text-3)";
+          return (
+            <div key={i} title={`C${i} · ${v.toFixed(0)}%`} style={{
+              aspectRatio: "1", borderRadius: 4, display: "flex", alignItems: "center",
+              justifyContent: "center", fontSize: 9, fontFamily: "var(--font-mono)",
+              fontWeight: 600, background: bg, color: col,
+            }}>{Math.round(v)}</div>
+          );
+        })}
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 3 }}>{bLabel}</div>
-        <div
-          style={{
-            fontSize: 22,
-            fontWeight: 300,
-            color: "var(--text-1)",
-            fontVariantNumeric: "tabular-nums",
-            lineHeight: 1,
-          }}
-        >
-          {bValue}
-        </div>
+      <div style={{ fontSize: 9, color: "var(--text-3)", textAlign: "center", marginTop: 3 }}>
+        C0 — C{cores.length - 1} · {t("per-core load (hover for value)")}
       </div>
-    </div>
+    </>
   );
 }
 
-function Legend({
-  aColor,
-  aLabel,
-  bColor,
-  bLabel,
+export function PerformanceTab({
+  snapshots, intervalSecs,
 }: {
-  aColor: string;
-  aLabel: string;
-  bColor: string;
-  bLabel: string;
-}) {
-  return (
-    <div style={{ display: "flex", gap: 14, fontSize: 10, color: "var(--text-3)", alignItems: "center" }}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-        <span style={{ width: 10, height: 2, background: aColor, borderRadius: 1 }} />
-        {aLabel}
-      </span>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-        <span style={{ width: 10, height: 2, background: bColor, borderRadius: 1 }} />
-        {bLabel}
-      </span>
-    </div>
-  );
-}
-
-interface Props {
   snapshots: MonitorSnapshot[];
-  diskIo: DiskIo;
-}
-
-export function PerformanceTab({ snapshots, diskIo }: Props) {
+  intervalSecs: number;
+}) {
   const t = useT();
-  const [coreExpanded, setCoreExpanded] = useState(true);
-
   const latest = snapshots[snapshots.length - 1];
-  if (!latest) {
-    return (
-      <div style={{ padding: 24, color: "var(--text-3)", fontSize: 13 }}>{t("Collecting data…")}</div>
-    );
-  }
+  if (!latest) return null;
+  const mem = latest.memory;
+  const net = netRate(latest);
+  const io = latest.diskIo;
 
-  // CPU
-  const cpuPct = latest.cpu?.totalPct ?? 0;
-  const cpuCores = latest.cpu?.corePct ?? [];
-  const cpuAvg =
-    cpuCores.length > 0 ? cpuCores.reduce((a, v) => a + v, 0) / cpuCores.length : 0;
-  const cpuMaxIdx =
-    cpuCores.length > 0
-      ? cpuCores.reduce((mx, v, i) => (v > cpuCores[mx] ? i : mx), 0)
-      : -1;
-  const cpuMinIdx =
-    cpuCores.length > 0
-      ? cpuCores.reduce((mn, v, i) => (v < cpuCores[mn] ? i : mn), 0)
-      : -1;
-  const cpuHistory = snapshots.map((s) => s.cpu?.totalPct ?? 0);
-
-  // Memory
-  const memPct =
-    latest.memory.totalKb > 0 ? (latest.memory.usedKb / latest.memory.totalKb) * 100 : 0;
-  const memHistory = snapshots.map((s) =>
-    s.memory.totalKb > 0 ? (s.memory.usedKb / s.memory.totalKb) * 100 : 0
-  );
-
-  // Network — aggregated across all interfaces
-  const rxTotal = latest.network.reduce((a, n) => a + n.rxBytesPerSec, 0);
-  const txTotal = latest.network.reduce((a, n) => a + n.txBytesPerSec, 0);
-  const rxHistory = snapshots.map((s) => s.network.reduce((a, n) => a + n.rxBytesPerSec, 0));
-  const txHistory = snapshots.map((s) => s.network.reduce((a, n) => a + n.txBytesPerSec, 0));
-  const netMax = Math.max(...rxHistory, ...txHistory, 1);
-
-  // Disk I/O
-  const ioReadHistory = snapshots.map((s) => s.diskIo.readBytesPerSec);
-  const ioWriteHistory = snapshots.map((s) => s.diskIo.writeBytesPerSec);
-  const ioMax = Math.max(...ioReadHistory, ...ioWriteHistory, 1);
+  const usedKb = mem.usedKb;
+  const cachedKb = mem.cachedKb;
+  const freeKb = Math.max(0, mem.totalKb - usedKb - cachedKb);
+  const pctOf = (kb: number) => mem.totalKb ? (kb / mem.totalKb) * 100 : 0;
+  const swapPct = mem.swapTotalKb ? (mem.swapUsedKb / mem.swapTotalKb) * 100 : 0;
 
   return (
-    <div
-      style={{
-        // No scrolling here — MonitorPanel is the one scroll container.
-        padding: 12,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-      }}
-    >
+    <div style={{
+      display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+      gap: 12, padding: "12px 16px 16px",
+    }}>
       {/* CPU */}
-      <Card>
-        <CardHead
-          icon={<Cpu size={14} />}
-          title={t("CPU usage (overall)")}
-          right={<StatusBadge status={statusFor(cpuPct)} />}
-        />
-        <BigPercent
-          value={fmt(cpuPct)}
-          meta={cpuCores.length > 0 ? `${cpuCores.length} ${t("cores · avg")} ${fmt(cpuAvg)}%` : undefined}
-        />
-        <div style={{ height: 72 }}>
-          <Sparkline
-            data={cpuHistory}
-            color="var(--accent)"
-            fill="var(--accent-fade)"
-            fillContainer
-          />
+      <div style={cardStyle}>
+        <div style={headStyle}>
+          <Cpu size={14} style={{ color: "var(--text-2)" }} />
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{t("CPU usage")}</span>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-2)" }}>
+            <b style={{ fontSize: 15, color: "var(--text-1)", fontVariantNumeric: "tabular-nums" }}>
+              {(latest.cpu?.totalPct ?? 0).toFixed(1)}</b>%
+          </span>
         </div>
-
-        {cpuCores.length > 0 && (
-          <>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                fontSize: 11,
-                color: "var(--text-3)",
-                marginTop: 2,
-              }}
-            >
-              <span>{t("Per-core usage")}</span>
-              {cpuMaxIdx >= 0 && cpuMinIdx >= 0 && (
-                <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                  max C{cpuMaxIdx} {fmt(cpuCores[cpuMaxIdx])}% · min C{cpuMinIdx}{" "}
-                  {fmt(cpuCores[cpuMinIdx])}%
-                </span>
-              )}
-            </div>
-            {coreExpanded && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                {cpuCores.map((pct, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        color: "var(--text-3)",
-                        width: 22,
-                        flexShrink: 0,
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      C{i}
-                    </span>
-                    <div
-                      style={{
-                        flex: 1,
-                        height: 4,
-                        background: "var(--border)",
-                        borderRadius: 2,
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${pct.toFixed(1)}%`,
-                          height: "100%",
-                          background: "var(--accent)",
-                          transition: "width 0.5s ease",
-                        }}
-                      />
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        color: "var(--text-2)",
-                        width: 36,
-                        textAlign: "right",
-                        fontVariantNumeric: "tabular-nums",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {fmt(pct)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <button
-              onClick={() => setCoreExpanded(!coreExpanded)}
-              style={{
-                alignSelf: "center",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                color: "var(--text-3)",
-                fontSize: 11,
-                padding: "2px 10px",
-              }}
-            >
-              {coreExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              {coreExpanded ? t("Collapse") : t("Expand")}
-            </button>
-          </>
-        )}
-      </Card>
+        <MetricChart
+          height={74}
+          intervalSecs={intervalSecs}
+          max={100}
+          format={(v) => `${v.toFixed(1)} %`}
+          series={[{
+            values: series(snapshots, (s) => s.cpu?.totalPct ?? 0),
+            color: "var(--accent)", fill: "color-mix(in srgb, var(--accent) 12%, transparent)",
+            label: "CPU",
+          }]}
+        />
+        {latest.cpu && latest.cpu.corePct.length > 0 && <CoreHeatmap cores={latest.cpu.corePct} />}
+      </div>
 
       {/* Memory */}
-      <Card>
-        <CardHead
-          icon={<MemoryStick size={14} />}
-          title={t("Memory usage")}
-          right={
-            <span
-              style={{
-                fontSize: 11,
-                color: "var(--text-3)",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {fmtKb(latest.memory.usedKb)} / {fmtKb(latest.memory.totalKb)}
-            </span>
-          }
-        />
-        <BigPercent value={fmt(memPct)} />
-        <div style={{ height: 72 }}>
-          <Sparkline
-            data={memHistory}
-            color="var(--success)"
-            fill="rgba(166, 227, 161, 0.16)"
-            fillContainer
-          />
+      <div style={cardStyle}>
+        <div style={headStyle}>
+          <MemoryStick size={14} style={{ color: "var(--text-2)" }} />
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{t("Memory")}</span>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-2)" }}>
+            <b style={{ fontSize: 15, color: "var(--text-1)" }}>{fmtKb(usedKb)}</b> / {fmtKb(mem.totalKb)}
+          </span>
         </div>
-        {latest.memory.swapTotalKb > 0 && (
-          <div
-            style={{
-              fontSize: 11,
-              color: "var(--text-3)",
-              display: "flex",
-              justifyContent: "space-between",
-            }}
-          >
-            <span>Swap</span>
-            <span style={{ fontVariantNumeric: "tabular-nums" }}>
-              {fmtKb(latest.memory.swapUsedKb)} / {fmtKb(latest.memory.swapTotalKb)}
-            </span>
-          </div>
-        )}
-      </Card>
+        <div style={{
+          height: 10, borderRadius: 5, overflow: "hidden", display: "flex",
+          marginTop: 8, background: "var(--panel-2)",
+        }}>
+          <div style={{ width: `${pctOf(usedKb)}%`, background: "var(--accent)" }} />
+          <div style={{ width: `${pctOf(cachedKb)}%`, background: "color-mix(in srgb, var(--accent) 45%, var(--panel-2))" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--text-2)", marginTop: 8 }}>
+          <span><Dot c="var(--accent)" />{t("Used")} <b style={{ color: "var(--text-1)" }}>{fmtKb(usedKb)}</b></span>
+          <span><Dot c="color-mix(in srgb, var(--accent) 45%, var(--panel-2))" />{t("Cache")} <b style={{ color: "var(--text-1)" }}>{fmtKb(cachedKb)}</b></span>
+          <span>{t("Free")} <b style={{ color: "var(--text-1)" }}>{fmtKb(freeKb)}</b></span>
+        </div>
+        <div style={{ ...headStyle, margin: "14px 0 6px" }}>
+          <span style={{ fontSize: 11, color: "var(--text-2)", fontWeight: 600 }}>Swap</span>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-2)" }}>
+            <b style={{ fontSize: 12, color: "var(--text-1)" }}>{fmtKb(mem.swapUsedKb)}</b> / {fmtKb(mem.swapTotalKb)}
+          </span>
+        </div>
+        <div style={{ height: 10, borderRadius: 5, overflow: "hidden", background: "var(--panel-2)" }}>
+          <div style={{ width: `${swapPct}%`, height: "100%", background: "var(--warn)" }} />
+        </div>
+      </div>
 
       {/* Network */}
-      <Card>
-        <CardHead
-          icon={<Network size={14} />}
-          title={t("Network")}
-          right={
-            latest.network.length > 0 && (
-              <span style={{ fontSize: 11, color: "var(--text-3)" }}>
-                {latest.network.length} {t("interfaces")}
-              </span>
-            )
-          }
+      <div style={cardStyle}>
+        <div style={headStyle}>
+          <Network size={14} style={{ color: "var(--text-2)" }} />
+          <span style={{ fontSize: 12, fontWeight: 600 }}>
+            {t("Network")}{latest.network[0] ? ` · ${latest.network.map((n) => n.iface).slice(0, 2).join(", ")}` : ""}
+          </span>
+        </div>
+        <MetricChart
+          height={60}
+          intervalSecs={intervalSecs}
+          format={(v) => fmtRate(v)}
+          series={[
+            { values: series(snapshots, (s) => netRate(s).rx), color: "var(--success)", label: "rx" },
+            { values: series(snapshots, (s) => netRate(s).tx), color: "var(--accent)", label: "tx" },
+          ]}
         />
         <DualRate
-          aLabel={`↓ ${t("Down")}`}
-          aValue={fmtBytes(rxTotal)}
-          bLabel={`↑ ${t("Up")}`}
-          bValue={fmtBytes(txTotal)}
+          a={{ k: t("Download"), v: fmtRate(net.rx), c: "var(--success)", tot: `${t("total")} ↓${fmtBytesTotal(latest.sinceBoot.netRxTotal)}` }}
+          b={{ k: t("Upload"), v: fmtRate(net.tx), c: "var(--accent)", tot: `${t("total")} ↑${fmtBytesTotal(latest.sinceBoot.netTxTotal)}` }}
         />
-        <div style={{ position: "relative", height: 72 }}>
-          <div style={{ position: "absolute", inset: 0 }}>
-            <Sparkline
-              data={rxHistory}
-              color="var(--accent)"
-              fill="var(--accent-fade)"
-              fillContainer
-              max={netMax}
-            />
-          </div>
-          <div style={{ position: "absolute", inset: 0 }}>
-            <Sparkline data={txHistory} color="var(--error)" fillContainer max={netMax} />
-          </div>
-        </div>
-        <Legend aColor="var(--accent)" aLabel={t("Down")} bColor="var(--error)" bLabel={t("Up")} />
-      </Card>
+      </div>
 
       {/* Disk I/O */}
-      <Card>
-        <CardHead icon={<HardDrive size={14} />} title={t("Disk I/O")} />
-        <DualRate
-          aLabel={t("Read")}
-          aValue={fmtBytes(diskIo.readBytesPerSec)}
-          bLabel={t("Write")}
-          bValue={fmtBytes(diskIo.writeBytesPerSec)}
-        />
-        <div style={{ position: "relative", height: 72 }}>
-          <div style={{ position: "absolute", inset: 0 }}>
-            <Sparkline
-              data={ioReadHistory}
-              color="var(--accent)"
-              fill="var(--accent-fade)"
-              fillContainer
-              max={ioMax}
-            />
-          </div>
-          <div style={{ position: "absolute", inset: 0 }}>
-            <Sparkline data={ioWriteHistory} color="var(--error)" fillContainer max={ioMax} />
-          </div>
+      <div style={cardStyle}>
+        <div style={headStyle}>
+          <HardDrive size={14} style={{ color: "var(--text-2)" }} />
+          <span style={{ fontSize: 12, fontWeight: 600 }}>{t("Disk I/O")}</span>
         </div>
-        <Legend aColor="var(--accent)" aLabel={t("Read")} bColor="var(--error)" bLabel={t("Write")} />
-      </Card>
+        <MetricChart
+          height={60}
+          intervalSecs={intervalSecs}
+          format={(v) => fmtRate(v)}
+          series={[
+            { values: series(snapshots, (s) => s.diskIo.readBytesPerSec), color: "var(--warn)", label: "read" },
+            { values: series(snapshots, (s) => s.diskIo.writeBytesPerSec), color: "#a06be0", label: "write" },
+          ]}
+        />
+        <DualRate
+          a={{ k: t("Read"), v: fmtRate(io.readBytesPerSec), c: "var(--warn)", tot: `${t("total")} ${fmtBytesTotal(latest.sinceBoot.diskReadTotal)}` }}
+          b={{ k: t("Write"), v: fmtRate(io.writeBytesPerSec), c: "#a06be0", tot: `${t("total")} ${fmtBytesTotal(latest.sinceBoot.diskWriteTotal)}` }}
+        />
+      </div>
     </div>
   );
+}
+
+function Dot({ c }: { c: string }) {
+  return <i style={{ display: "inline-block", width: 8, height: 8, borderRadius: 2, background: c, marginRight: 4 }} />;
+}
+
+function DualRate({ a, b }: {
+  a: { k: string; v: string; c: string; tot: string };
+  b: { k: string; v: string; c: string; tot: string };
+}) {
+  return (
+    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+      {[a, b].map((h, i) => (
+        <div key={i} style={{ flex: 1 }}>
+          <div style={{ fontSize: 10, color: "var(--text-3)" }}><Dot c={h.c} />{h.k}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: h.c, fontVariantNumeric: "tabular-nums" }}>{h.v}</div>
+          <div style={{ fontSize: 9, color: "var(--text-3)", fontFamily: "var(--font-mono)" }}>{h.tot}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function fmtBytesTotal(b: number): string {
+  if (b >= 1_099_511_627_776) return `${(b / 1_099_511_627_776).toFixed(1)} TB`;
+  if (b >= 1_073_741_824) return `${(b / 1_073_741_824).toFixed(1)} GB`;
+  if (b >= 1_048_576) return `${(b / 1_048_576).toFixed(0)} MB`;
+  return `${(b / 1024).toFixed(0)} KB`;
 }

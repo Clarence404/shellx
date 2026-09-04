@@ -20,7 +20,20 @@ const POLL_CMD: &str = concat!(
     "echo '---PS---'; ps -eo pid,pcpu,pmem,comm --sort=-%cpu --no-headers 2>/dev/null | head -50; ",
     "echo '---DF---'; df -Pl 2>/dev/null; ",
     "echo '---DISKIO---'; cat /proc/diskstats; ",
-    "echo '---UPTIME---'; cat /proc/uptime"
+    "echo '---UPTIME---'; cat /proc/uptime; ",
+    "echo '---LOADAVG---'; cat /proc/loadavg; ",
+    // systemctl --failed is fast (loop only over the few failed units), so
+    // it stays in the main poll. Docker is NOT here — `docker stats` needs
+    // ~1.5s to sample, which would slow every snapshot; it runs on its own
+    // slower loop (see DOCKER_CMD) and the main poll reads the cache.
+    "echo '---FAILED---'; command -v systemctl >/dev/null 2>&1 && systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | while read u; do printf '%s\\t' \"$u\"; systemctl show \"$u\" -p Result,ExecMainStatus,ActiveEnterTimestamp,Description --value 2>/dev/null | paste -sd '\\t' -; done"
+);
+
+/// Docker snapshot — its own slower loop so `docker stats`'s sampling
+/// latency never delays the main metrics.
+const DOCKER_CMD: &str = concat!(
+    "echo '---DOCKERPS---'; docker ps --no-trunc --format '{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}' 2>/dev/null; ",
+    "echo '---DOCKERSTATS---'; docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}' 2>/dev/null"
 );
 
 /// Static data — fetched once at session start. Doubles as the Linux
@@ -30,6 +43,7 @@ const INIT_CMD: &str = concat!(
     "echo '---OSREL---'; cat /etc/os-release 2>/dev/null; ",
     "echo '---CPUINFO---'; grep -m1 '^model name' /proc/cpuinfo 2>/dev/null; ",
     "echo '---VIRT---'; (systemd-detect-virt 2>/dev/null || echo none); ",
+    "echo '---HASDOCKER---'; command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && echo yes; ",
     "echo '---UNAME---'; uname -snrm; hostname"
 );
 
@@ -47,6 +61,40 @@ pub struct MonitorSnapshot {
     pub disks: Vec<DiskMount>,
     pub disk_io: DiskIo,
     pub system: SystemInfo,
+    /// Docker containers (empty when docker is absent or not reachable).
+    pub containers: Vec<ContainerRow>,
+    /// True once the docker loop has fetched at least once — lets the UI
+    /// show a loading state instead of a premature "no containers".
+    pub containers_loaded: bool,
+    /// systemd units in the failed state (empty on non-systemd hosts).
+    pub failed_units: Vec<FailedUnit>,
+    /// 1 / 5 / 15-minute load averages — a real look back over the 15 min
+    /// before the panel was opened, at no extra cost.
+    pub load: Option<LoadAvg>,
+    /// Cumulative-since-boot figures, derived from the same /proc counters
+    /// we already read for the per-second deltas.
+    pub since_boot: SinceBoot,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadAvg {
+    pub one: f64,
+    pub five: f64,
+    pub fifteen: f64,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SinceBoot {
+    /// Total bytes received / sent across all non-loopback interfaces.
+    pub net_rx_total: u64,
+    pub net_tx_total: u64,
+    /// Total bytes read / written across whole disks.
+    pub disk_read_total: u64,
+    pub disk_write_total: u64,
+    /// Average CPU busy % since boot (from cumulative /proc/stat ticks).
+    pub cpu_avg_pct: f64,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -111,6 +159,39 @@ pub struct SystemInfo {
     pub uptime_secs: u64,
     pub cpu_model: String,
     pub virt: String,
+    /// Whether `docker` is on PATH and reachable — the Containers tab only
+    /// appears when true, so hosts without docker never see an empty tab.
+    pub has_docker: bool,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerRow {
+    pub name: String,
+    pub image: String,
+    /// "running" | "exited" | "restarting" | … (docker's State).
+    pub state: String,
+    /// True when a HEALTHCHECK reports healthy (parsed from Status text).
+    pub healthy: Option<bool>,
+    pub cpu_pct: f64,
+    pub mem_used_bytes: u64,
+    pub mem_limit_bytes: u64,
+    /// "1.2MB / 0.4MB" and "40MB / 6MB" — kept as docker prints them.
+    pub net_io: String,
+    pub block_io: String,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FailedUnit {
+    pub unit: String,
+    /// systemd Result: "exit-code" | "signal" | "timeout" | "core-dump" | …
+    pub result: String,
+    /// ExecMainStatus — the process's exit code (or signal number).
+    pub exit_status: String,
+    /// ActiveEnterTimestamp text, e.g. "Thu 2026-09-03 09:51:53 UTC".
+    pub since: String,
+    pub description: String,
 }
 
 // ── Internal delta-tracking types ───────────────────────────────────────────
@@ -374,7 +455,123 @@ fn parse_uptime_secs(section: &str) -> u64 {
         .unwrap_or(0)
 }
 
+/// /proc/loadavg: "0.14 0.22 0.31 1/234 5678" — first three are the
+/// 1/5/15-minute averages. Returns None if the line is missing or malformed.
+fn parse_loadavg(section: &str) -> Option<LoadAvg> {
+    let mut p = section.split_whitespace();
+    let one = p.next()?.parse().ok()?;
+    let five = p.next()?.parse().ok()?;
+    let fifteen = p.next()?.parse().ok()?;
+    Some(LoadAvg { one, five, fifteen })
+}
+
+/// Turn docker's human sizes ("712MiB", "1.5GiB", "40MB") into bytes.
+/// Docker mixes IEC (MiB) in MemUsage and SI (MB) elsewhere; handle both.
+fn parse_docker_size(s: &str) -> u64 {
+    let s = s.trim();
+    let end = s.find(|c: char| c.is_alphabetic()).unwrap_or(s.len());
+    let num: f64 = s[..end].trim().parse().unwrap_or(0.0);
+    let unit = s[end..].trim().to_ascii_lowercase();
+    let mult = match unit.as_str() {
+        "b" | "" => 1.0,
+        "kb" => 1e3, "kib" => 1024.0,
+        "mb" => 1e6, "mib" => 1_048_576.0,
+        "gb" => 1e9, "gib" => 1_073_741_824.0,
+        "tb" => 1e12, "tib" => 1_099_511_627_776.0,
+        _ => 1.0,
+    };
+    (num * mult) as u64
+}
+
+/// Merge `docker ps` (image / state / health) with `docker stats`
+/// (live CPU / mem / IO) by container name.
+fn parse_containers(ps: &str, stats: &str) -> Vec<ContainerRow> {
+    use std::collections::HashMap;
+    // stats: name \t cpu% \t "used / limit" \t netIO \t blockIO
+    let mut metrics: HashMap<String, (f64, u64, u64, String, String)> = HashMap::new();
+    for line in stats.lines() {
+        let f: Vec<&str> = line.split('\t').collect();
+        if f.len() < 5 { continue; }
+        let cpu = f[1].trim_end_matches('%').trim().parse().unwrap_or(0.0);
+        let (used, limit) = f[2].split_once('/')
+            .map(|(a, b)| (parse_docker_size(a), parse_docker_size(b)))
+            .unwrap_or((0, 0));
+        metrics.insert(f[0].to_string(), (cpu, used, limit, f[3].trim().to_string(), f[4].trim().to_string()));
+    }
+    let mut out = Vec::new();
+    for line in ps.lines() {
+        let f: Vec<&str> = line.split('\t').collect();
+        if f.len() < 4 { continue; }
+        let name = f[0].to_string();
+        let status = f[3];
+        let healthy = if status.contains("(healthy)") { Some(true) }
+            else if status.contains("(unhealthy)") { Some(false) }
+            else { None };
+        let m = metrics.remove(&name).unwrap_or((0.0, 0, 0, String::new(), String::new()));
+        out.push(ContainerRow {
+            name,
+            image: f[1].to_string(),
+            state: f[2].to_string(),
+            healthy,
+            cpu_pct: m.0,
+            mem_used_bytes: m.1,
+            mem_limit_bytes: m.2,
+            net_io: m.3,
+            block_io: m.4,
+        });
+    }
+    out
+}
+
+/// One tab-separated line per failed unit:
+/// unit \t Result \t ExecMainStatus \t ActiveEnterTimestamp \t Description
+fn parse_failed_units(section: &str) -> Vec<FailedUnit> {
+    section.lines().filter_map(|line| {
+        let f: Vec<&str> = line.split('\t').collect();
+        let unit = f.first()?.trim();
+        if unit.is_empty() || !unit.contains('.') { return None; }
+        Some(FailedUnit {
+            unit: unit.to_string(),
+            result: f.get(1).map(|s| s.trim()).unwrap_or("").to_string(),
+            exit_status: f.get(2).map(|s| s.trim()).unwrap_or("").to_string(),
+            since: f.get(3).map(|s| s.trim()).unwrap_or("").to_string(),
+            description: f.get(4).map(|s| s.trim()).unwrap_or("").to_string(),
+        })
+    }).collect()
+}
+
 // ── Poll loop ────────────────────────────────────────────────────────────────
+
+/// Aborts the wrapped task when dropped. Lets the docker sub-loop die with
+/// the monitor task (whose future is dropped on abort) instead of leaking.
+struct AbortOnDrop(tokio::task::AbortHandle);
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) { self.0.abort(); }
+}
+
+/// Poll docker on its own cadence and cache the result. Runs only when the
+/// host has docker; errors are swallowed so a transient docker hiccup just
+/// keeps the last known containers.
+async fn docker_loop(
+    handle: RusshHandle,
+    cache: std::sync::Arc<tokio::sync::Mutex<Vec<ContainerRow>>>,
+    ready: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    interval: Duration,
+) {
+    loop {
+        if let Ok(out) = exec_cmd(&handle, DOCKER_CMD).await {
+            let rows = parse_containers(
+                extract_section(&out, "DOCKERPS"),
+                extract_section(&out, "DOCKERSTATS"),
+            );
+            *cache.lock().await = rows;
+            // Flip after the first fetch so the UI can show a loading state
+            // until real container data (even zero containers) has landed.
+            ready.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        sleep(interval).await;
+    }
+}
 
 pub fn start_poll_loop(
     conn_id: String,
@@ -414,6 +611,22 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
     let os = parse_os_release(extract_section(&init, "OSREL")).unwrap_or(uname_os);
     let cpu_model = parse_cpu_model(extract_section(&init, "CPUINFO"));
     let virt = parse_virt(extract_section(&init, "VIRT"));
+    let has_docker = extract_section(&init, "HASDOCKER").trim() == "yes";
+
+    // Docker on a separate ≥5s loop; the main poll reads this cache so a
+    // `docker stats` sample never delays CPU/mem/net. The guard aborts the
+    // sub-loop when this task is dropped (monitor stopped).
+    let container_cache = std::sync::Arc::new(tokio::sync::Mutex::new(Vec::<ContainerRow>::new()));
+    let docker_ready = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let _docker_guard = if has_docker {
+        let dh = handle.clone();
+        let cache = container_cache.clone();
+        let ready = docker_ready.clone();
+        let di = interval.max(Duration::from_secs(5));
+        Some(AbortOnDrop(tokio::spawn(docker_loop(dh, cache, ready, di)).abort_handle()))
+    } else {
+        None
+    };
 
     let mut prev: Option<PrevState> = None;
     let mut err_count: u8 = 0;
@@ -446,6 +659,26 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
         let curr_net   = parse_netdev_raw(extract_section(&output, "NET"));
         let curr_disk  = parse_diskstats_raw(extract_section(&output, "DISKIO"));
 
+        // Since-boot figures from the same cumulative counters. Net excludes
+        // loopback; disk sectors are the conventional 512 bytes.
+        let (net_rx_total, net_tx_total) = curr_net.iter()
+            .filter(|(iface, _)| iface.as_str() != "lo")
+            .fold((0u64, 0u64), |(rx, tx), (_, n)| (rx + n.rx, tx + n.tx));
+        let cpu_avg_pct = curr_cpu.first().map(|c| {
+            let total = c.total();
+            if total == 0 { 0.0 } else {
+                (total.saturating_sub(c.idle_total()) as f64 / total as f64) * 100.0
+            }
+        }).unwrap_or(0.0);
+        let since_boot = SinceBoot {
+            net_rx_total,
+            net_tx_total,
+            disk_read_total: curr_disk.read_sectors * 512,
+            disk_write_total: curr_disk.write_sectors * 512,
+            cpu_avg_pct,
+        };
+        let load = parse_loadavg(extract_section(&output, "LOADAVG"));
+
         let (cpu, network, disk_io) = if let Some(ref p) = prev {
             let elapsed = now.duration_since(p.ts).as_secs_f64().max(0.001);
             (
@@ -474,7 +707,15 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
                 uptime_secs: parse_uptime_secs(extract_section(&output, "UPTIME")),
                 cpu_model:   cpu_model.clone(),
                 virt:        virt.clone(),
+                has_docker,
             },
+            containers: if has_docker {
+                container_cache.lock().await.clone()
+            } else { Vec::new() },
+            containers_loaded: !has_docker || docker_ready.load(std::sync::atomic::Ordering::Relaxed),
+            failed_units: parse_failed_units(extract_section(&output, "FAILED")),
+            load,
+            since_boot,
         };
 
         prev = Some(PrevState {
