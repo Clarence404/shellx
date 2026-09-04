@@ -22,14 +22,18 @@ const POLL_CMD: &str = concat!(
     "echo '---DISKIO---'; cat /proc/diskstats; ",
     "echo '---UPTIME---'; cat /proc/uptime; ",
     "echo '---LOADAVG---'; cat /proc/loadavg; ",
-    // Docker + systemd are optional: the `command -v` guard means hosts
-    // without them spend nothing and emit an empty section.
-    "echo '---DOCKERPS---'; command -v docker >/dev/null 2>&1 && docker ps --no-trunc --format '{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}' 2>/dev/null; ",
-    "echo '---DOCKERSTATS---'; command -v docker >/dev/null 2>&1 && docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}' 2>/dev/null; ",
-    // For each failed unit, one tab-separated line: unit, Result,
-    // ExecMainStatus, ActiveEnterTimestamp, Description. Only runs when
-    // systemctl exists and something actually failed, so it's ~free.
+    // systemctl --failed is fast (loop only over the few failed units), so
+    // it stays in the main poll. Docker is NOT here — `docker stats` needs
+    // ~1.5s to sample, which would slow every snapshot; it runs on its own
+    // slower loop (see DOCKER_CMD) and the main poll reads the cache.
     "echo '---FAILED---'; command -v systemctl >/dev/null 2>&1 && systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | while read u; do printf '%s\\t' \"$u\"; systemctl show \"$u\" -p Result,ExecMainStatus,ActiveEnterTimestamp,Description --value 2>/dev/null | paste -sd '\\t' -; done"
+);
+
+/// Docker snapshot — its own slower loop so `docker stats`'s sampling
+/// latency never delays the main metrics.
+const DOCKER_CMD: &str = concat!(
+    "echo '---DOCKERPS---'; docker ps --no-trunc --format '{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}' 2>/dev/null; ",
+    "echo '---DOCKERSTATS---'; docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}' 2>/dev/null"
 );
 
 /// Static data — fetched once at session start. Doubles as the Linux
@@ -535,6 +539,33 @@ fn parse_failed_units(section: &str) -> Vec<FailedUnit> {
 
 // ── Poll loop ────────────────────────────────────────────────────────────────
 
+/// Aborts the wrapped task when dropped. Lets the docker sub-loop die with
+/// the monitor task (whose future is dropped on abort) instead of leaking.
+struct AbortOnDrop(tokio::task::AbortHandle);
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) { self.0.abort(); }
+}
+
+/// Poll docker on its own cadence and cache the result. Runs only when the
+/// host has docker; errors are swallowed so a transient docker hiccup just
+/// keeps the last known containers.
+async fn docker_loop(
+    handle: RusshHandle,
+    cache: std::sync::Arc<tokio::sync::Mutex<Vec<ContainerRow>>>,
+    interval: Duration,
+) {
+    loop {
+        if let Ok(out) = exec_cmd(&handle, DOCKER_CMD).await {
+            let rows = parse_containers(
+                extract_section(&out, "DOCKERPS"),
+                extract_section(&out, "DOCKERSTATS"),
+            );
+            *cache.lock().await = rows;
+        }
+        sleep(interval).await;
+    }
+}
+
 pub fn start_poll_loop(
     conn_id: String,
     handle: RusshHandle,
@@ -574,6 +605,19 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
     let cpu_model = parse_cpu_model(extract_section(&init, "CPUINFO"));
     let virt = parse_virt(extract_section(&init, "VIRT"));
     let has_docker = extract_section(&init, "HASDOCKER").trim() == "yes";
+
+    // Docker on a separate ≥5s loop; the main poll reads this cache so a
+    // `docker stats` sample never delays CPU/mem/net. The guard aborts the
+    // sub-loop when this task is dropped (monitor stopped).
+    let container_cache = std::sync::Arc::new(tokio::sync::Mutex::new(Vec::<ContainerRow>::new()));
+    let _docker_guard = if has_docker {
+        let dh = handle.clone();
+        let cache = container_cache.clone();
+        let di = interval.max(Duration::from_secs(5));
+        Some(AbortOnDrop(tokio::spawn(docker_loop(dh, cache, di)).abort_handle()))
+    } else {
+        None
+    };
 
     let mut prev: Option<PrevState> = None;
     let mut err_count: u8 = 0;
@@ -657,10 +701,7 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
                 has_docker,
             },
             containers: if has_docker {
-                parse_containers(
-                    extract_section(&output, "DOCKERPS"),
-                    extract_section(&output, "DOCKERSTATS"),
-                )
+                container_cache.lock().await.clone()
             } else { Vec::new() },
             failed_units: parse_failed_units(extract_section(&output, "FAILED")),
             load,

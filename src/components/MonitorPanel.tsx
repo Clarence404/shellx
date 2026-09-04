@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { ShieldAlert, Server } from "lucide-react";
 import { useMonitorStore } from "../state/monitor";
 import { startMonitor, stopMonitor, onMonitorSnapshot, onMonitorUnsupported } from "../ipc/monitor";
+import { useSessions } from "../state/sessions";
 import { ActivitySwitcher } from "./paneChrome";
 import { KpiRow } from "./monitor/KpiRow";
 import { LoadBand } from "./monitor/LoadBand";
@@ -21,7 +22,10 @@ const INTERVALS = [1, 2, 5, 10, 30] as const;
 type IntervalSecs = typeof INTERVALS[number];
 
 
-function HostStrip({ system, memory, tier, switcher }: {
+function HostStrip({ title, system, memory, tier, switcher }: {
+  /** The connection's saved name (label), shown as the strip's title —
+   *  falls back to the reported hostname. */
+  title?: string;
   system?: { hostname: string; os: string; kernel: string; arch: string; uptimeSecs: number; cpuModel: string; virt: string };
   memory?: { totalKb: number };
   tier: WidthTier;
@@ -43,7 +47,7 @@ function HostStrip({ system, memory, tier, switcher }: {
         color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       }}><Server size={18} /></div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>{system?.hostname || "—"}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>{title || system?.hostname || "—"}</div>
         {system && (
           <div style={{
             fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)",
@@ -120,6 +124,9 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
   const [intervalSecs, setIntervalSecs] = useState<IntervalSecs>(2);
   const snapshots = useMonitorStore((s) => s.snapshots[connectionId]) ?? EMPTY;
   const latest = snapshots[snapshots.length - 1];
+  // The connection's saved name is the title the user recognizes — prefer
+  // it over the remote's own hostname.
+  const sessionLabel = useSessions((s) => s.sessions.find((x) => x.id === connectionId)?.label);
 
   const unlistenSnapRef = useRef<(() => void) | undefined>(undefined);
   const unlistenUnsupRef = useRef<(() => void) | undefined>(undefined);
@@ -158,6 +165,7 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
       {/* Host strip always renders — it holds the view switcher, so leaving
           the monitor is reachable even while the first sample loads. */}
       <HostStrip
+        title={sessionLabel}
         system={latest?.system}
         memory={latest?.memory}
         tier={tier}
