@@ -554,6 +554,12 @@ const zh: Record<string, string> = {
   "up": "运行",
   "now": "现在",
   "ago": "前",
+  "Containers": "容器",
+  "Running containers": "运行中的容器",
+  "No running containers.": "没有运行中的容器。",
+  "Container": "容器",
+  "Block I/O": "块设备",
+  "service(s) down": "服务异常",
   // Host info card
   "Hostname": "主机名",
   "System": "系统",

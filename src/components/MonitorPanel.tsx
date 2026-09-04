@@ -1,81 +1,32 @@
 import { useEffect, useState, useRef } from "react";
-import { ShieldAlert, Server, TerminalSquare, Folder, Network, Activity } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ShieldAlert, Server } from "lucide-react";
 import { useMonitorStore } from "../state/monitor";
 import { startMonitor, stopMonitor, onMonitorSnapshot, onMonitorUnsupported } from "../ipc/monitor";
-import { useSessions } from "../state/sessions";
-import { useHostsStore } from "../state/hosts";
-import { activitiesFor, clampActivity } from "../state/activities";
-import type { ActivityKind } from "../types/connection";
+import { ActivitySwitcher } from "./paneChrome";
 import { KpiRow } from "./monitor/KpiRow";
 import { LoadBand } from "./monitor/LoadBand";
 import { PerformanceTab } from "./monitor/PerformanceTab";
 import { ProcessTab } from "./monitor/ProcessTab";
 import { DiskTab } from "./monitor/DiskTab";
+import { ContainerTab } from "./monitor/ContainerTab";
 import { fmtKb, fmtUptime } from "./monitor/format";
 import { useWidthTier, type WidthTier } from "./monitor/useWidth";
+import type { FailedUnit } from "../types/monitor";
+import { TriangleAlert } from "lucide-react";
 import { useT } from "../i18n";
 
-type SubTab = "performance" | "process" | "disk";
+type SubTab = "performance" | "process" | "disk" | "container";
 
 const INTERVALS = [1, 2, 5, 10, 30] as const;
 type IntervalSecs = typeof INTERVALS[number];
 
-const ACT_ICON: Record<ActivityKind, LucideIcon> = {
-  terminal: TerminalSquare,
-  files: Folder,
-  tunnel: Network,
-  monitor: Activity,
-};
 
-/** The view switcher, docked at the host strip's right. Labels collapse to
- *  icons when `compact` (narrow width). The terminal glyph is a real
- *  terminal, not the display icon it read as before. Always rendered so
- *  leaving the monitor stays reachable while the first sample loads. */
-function ActivityTabs({ connectionId, compact }: { connectionId: string; compact: boolean }) {
-  const t = useT();
-  const session = useSessions((s) => s.sessions.find((x) => x.id === connectionId));
-  const wanted = useSessions((s) => s.activeActivity[connectionId]);
-  const hosts = useHostsStore((s) => s.hosts);
-  const mode = hosts.find((h) => h.id === (session?.host_id ?? ""))?.connection_mode ?? "terminal_only";
-  const options = activitiesFor(session, mode);
-  const current = clampActivity(wanted, options);
-  if (options.length < 2) return null;
-  return (
-    <div style={{ display: "inline-flex", gap: 2, background: "var(--panel-2)", borderRadius: 8, padding: 3 }}>
-      {options.map((o) => {
-        const Icon = ACT_ICON[o.id];
-        const on = o.id === current;
-        return (
-          <button
-            key={o.id}
-            title={compact ? t(o.label) : undefined}
-            onClick={() => {
-              useSessions.getState().setActive(connectionId);
-              useSessions.getState().setActivity(connectionId, o.id);
-            }}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
-              padding: compact ? "5px 7px" : "5px 11px", borderRadius: 6, cursor: "pointer", border: "none",
-              background: on ? "var(--panel-1)" : "transparent",
-              color: on ? "var(--text-1)" : "var(--text-2)",
-              fontWeight: on ? 600 : 400,
-              boxShadow: on ? "0 1px 3px rgba(20,24,40,0.12)" : "none",
-            }}
-          >
-            <Icon size={13} />{compact ? null : <> {t(o.label)}</>}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function HostStrip({ system, memory, tier, switcher }: {
+function HostStrip({ system, memory, tier, switcher, failedBadge }: {
   system?: { hostname: string; os: string; kernel: string; arch: string; uptimeSecs: number; cpuModel: string; virt: string };
   memory?: { totalKb: number };
   tier: WidthTier;
   switcher: React.ReactNode;
+  failedBadge: React.ReactNode;
 }) {
   const t = useT();
   // Progressive reveal: CPU model (static, longest) only when wide; the
@@ -104,6 +55,7 @@ function HostStrip({ system, memory, tier, switcher }: {
       <div style={{ display: "flex", gap: 12, marginLeft: "auto", alignItems: "center", flexShrink: 0 }}>
         {system && showCpu && system.cpuModel && <Fact k="CPU" v={system.cpuModel} />}
         {system && showMem && memory && <Fact k={t("Memory")} v={fmtKb(memory.totalKb)} />}
+        {failedBadge}
         {switcher}
         {system && (
           <span style={{
@@ -123,6 +75,53 @@ function Fact({ k, v }: { k: string; v: string }) {
         display: "block", fontSize: 12, color: "var(--text-1)", fontWeight: 600,
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>{v}</b>
+    </div>
+  );
+}
+
+/** Red chip in the host strip, only when systemctl reports failed units.
+ *  Clicking it lists them — no dedicated tab needed, and it's visible from
+ *  whatever sub-tab you're on. */
+function FailedUnitsBadge({ units }: { units: FailedUnit[] }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  if (units.length === 0) return null;
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
+          color: "var(--error)", background: "var(--error-fade)", border: "1px solid var(--error)",
+          padding: "3px 9px", borderRadius: 999, cursor: "pointer", whiteSpace: "nowrap",
+        }}
+      >
+        <TriangleAlert size={12} /> {units.length} {t("service(s) down")}
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 41,
+            minWidth: 260, maxWidth: 380, background: "var(--panel-1)",
+            border: "1px solid var(--border)", borderRadius: 8,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.25)", padding: 6,
+          }}>
+            <div style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, padding: "4px 8px", textTransform: "uppercase", letterSpacing: 0.4 }}>
+              systemctl --failed
+            </div>
+            {units.map((u) => (
+              <div key={u.unit} style={{ padding: "6px 8px", borderTop: "1px solid var(--border-2, var(--border))" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, fontFamily: "var(--font-mono)", color: "var(--text-1)" }}>{u.unit}</div>
+                <div style={{ fontSize: 10, color: "var(--text-3)" }}>
+                  <span style={{ color: "var(--error)", fontWeight: 600 }}>{u.sub}</span>
+                  {u.description ? ` · ${u.description}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -204,7 +203,8 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
         system={latest?.system}
         memory={latest?.memory}
         tier={tier}
-        switcher={<ActivityTabs connectionId={connectionId} compact={tier === "narrow"} />}
+        switcher={<ActivitySwitcher sessionId={connectionId} />}
+        failedBadge={<FailedUnitsBadge units={latest?.failedUnits ?? []} />}
       />
 
       {!waiting && (
@@ -221,6 +221,22 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
               fontWeight: subTab === id ? 600 : 400,
             }}>{label}</button>
           ))}
+          {latest?.system.hasDocker && (
+            <button onClick={() => setSubTab("container")} style={{
+              padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "none",
+              display: "inline-flex", alignItems: "center", gap: 5,
+              background: subTab === "container" ? "var(--accent)" : "transparent",
+              color: subTab === "container" ? "var(--text-on-accent)" : "var(--text-2)",
+              fontWeight: subTab === "container" ? 600 : 400,
+            }}>
+              {t("Containers")}
+              <span style={{
+                fontSize: 10, minWidth: 15, textAlign: "center", borderRadius: 999, padding: "0 4px",
+                background: subTab === "container" ? "rgba(255,255,255,0.25)" : "var(--panel-2)",
+                color: subTab === "container" ? "#fff" : "var(--text-3)",
+              }}>{latest.containers.length}</span>
+            </button>
+          )}
           <div style={{ flex: 1 }} />
           <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("Refresh")}</span>
           <select value={intervalSecs} onChange={(e) => setIntervalSecs(Number(e.target.value) as IntervalSecs)} style={{
@@ -241,6 +257,7 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
         {!waiting && subTab === "performance" && <PerformanceTab snapshots={snapshots} intervalSecs={intervalSecs} />}
         {!waiting && subTab === "process" && <ProcessTab processes={latest?.processes ?? []} />}
         {!waiting && subTab === "disk" && <DiskTab snapshots={snapshots} intervalSecs={intervalSecs} />}
+        {!waiting && subTab === "container" && <ContainerTab containers={latest?.containers ?? []} />}
       </div>
     </div>
   );

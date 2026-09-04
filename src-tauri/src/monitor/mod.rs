@@ -21,7 +21,12 @@ const POLL_CMD: &str = concat!(
     "echo '---DF---'; df -Pl 2>/dev/null; ",
     "echo '---DISKIO---'; cat /proc/diskstats; ",
     "echo '---UPTIME---'; cat /proc/uptime; ",
-    "echo '---LOADAVG---'; cat /proc/loadavg"
+    "echo '---LOADAVG---'; cat /proc/loadavg; ",
+    // Docker + systemd are optional: the `command -v` guard means hosts
+    // without them spend nothing and emit an empty section.
+    "echo '---DOCKERPS---'; command -v docker >/dev/null 2>&1 && docker ps --no-trunc --format '{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}' 2>/dev/null; ",
+    "echo '---DOCKERSTATS---'; command -v docker >/dev/null 2>&1 && docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}' 2>/dev/null; ",
+    "echo '---FAILED---'; command -v systemctl >/dev/null 2>&1 && systemctl --failed --no-legend --plain 2>/dev/null"
 );
 
 /// Static data — fetched once at session start. Doubles as the Linux
@@ -31,6 +36,7 @@ const INIT_CMD: &str = concat!(
     "echo '---OSREL---'; cat /etc/os-release 2>/dev/null; ",
     "echo '---CPUINFO---'; grep -m1 '^model name' /proc/cpuinfo 2>/dev/null; ",
     "echo '---VIRT---'; (systemd-detect-virt 2>/dev/null || echo none); ",
+    "echo '---HASDOCKER---'; command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && echo yes; ",
     "echo '---UNAME---'; uname -snrm; hostname"
 );
 
@@ -48,6 +54,10 @@ pub struct MonitorSnapshot {
     pub disks: Vec<DiskMount>,
     pub disk_io: DiskIo,
     pub system: SystemInfo,
+    /// Docker containers (empty when docker is absent or not reachable).
+    pub containers: Vec<ContainerRow>,
+    /// systemd units in the failed state (empty on non-systemd hosts).
+    pub failed_units: Vec<FailedUnit>,
     /// 1 / 5 / 15-minute load averages — a real look back over the 15 min
     /// before the panel was opened, at no extra cost.
     pub load: Option<LoadAvg>,
@@ -139,6 +149,35 @@ pub struct SystemInfo {
     pub uptime_secs: u64,
     pub cpu_model: String,
     pub virt: String,
+    /// Whether `docker` is on PATH and reachable — the Containers tab only
+    /// appears when true, so hosts without docker never see an empty tab.
+    pub has_docker: bool,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerRow {
+    pub name: String,
+    pub image: String,
+    /// "running" | "exited" | "restarting" | … (docker's State).
+    pub state: String,
+    /// True when a HEALTHCHECK reports healthy (parsed from Status text).
+    pub healthy: Option<bool>,
+    pub cpu_pct: f64,
+    pub mem_used_bytes: u64,
+    pub mem_limit_bytes: u64,
+    /// "1.2MB / 0.4MB" and "40MB / 6MB" — kept as docker prints them.
+    pub net_io: String,
+    pub block_io: String,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct FailedUnit {
+    pub unit: String,
+    /// "failed", plus the sub-state ("exit-code", "signal", …) when known.
+    pub sub: String,
+    pub description: String,
 }
 
 // ── Internal delta-tracking types ───────────────────────────────────────────
@@ -412,6 +451,78 @@ fn parse_loadavg(section: &str) -> Option<LoadAvg> {
     Some(LoadAvg { one, five, fifteen })
 }
 
+/// Turn docker's human sizes ("712MiB", "1.5GiB", "40MB") into bytes.
+/// Docker mixes IEC (MiB) in MemUsage and SI (MB) elsewhere; handle both.
+fn parse_docker_size(s: &str) -> u64 {
+    let s = s.trim();
+    let end = s.find(|c: char| c.is_alphabetic()).unwrap_or(s.len());
+    let num: f64 = s[..end].trim().parse().unwrap_or(0.0);
+    let unit = s[end..].trim().to_ascii_lowercase();
+    let mult = match unit.as_str() {
+        "b" | "" => 1.0,
+        "kb" => 1e3, "kib" => 1024.0,
+        "mb" => 1e6, "mib" => 1_048_576.0,
+        "gb" => 1e9, "gib" => 1_073_741_824.0,
+        "tb" => 1e12, "tib" => 1_099_511_627_776.0,
+        _ => 1.0,
+    };
+    (num * mult) as u64
+}
+
+/// Merge `docker ps` (image / state / health) with `docker stats`
+/// (live CPU / mem / IO) by container name.
+fn parse_containers(ps: &str, stats: &str) -> Vec<ContainerRow> {
+    use std::collections::HashMap;
+    // stats: name \t cpu% \t "used / limit" \t netIO \t blockIO
+    let mut metrics: HashMap<String, (f64, u64, u64, String, String)> = HashMap::new();
+    for line in stats.lines() {
+        let f: Vec<&str> = line.split('\t').collect();
+        if f.len() < 5 { continue; }
+        let cpu = f[1].trim_end_matches('%').trim().parse().unwrap_or(0.0);
+        let (used, limit) = f[2].split_once('/')
+            .map(|(a, b)| (parse_docker_size(a), parse_docker_size(b)))
+            .unwrap_or((0, 0));
+        metrics.insert(f[0].to_string(), (cpu, used, limit, f[3].trim().to_string(), f[4].trim().to_string()));
+    }
+    let mut out = Vec::new();
+    for line in ps.lines() {
+        let f: Vec<&str> = line.split('\t').collect();
+        if f.len() < 4 { continue; }
+        let name = f[0].to_string();
+        let status = f[3];
+        let healthy = if status.contains("(healthy)") { Some(true) }
+            else if status.contains("(unhealthy)") { Some(false) }
+            else { None };
+        let m = metrics.remove(&name).unwrap_or((0.0, 0, 0, String::new(), String::new()));
+        out.push(ContainerRow {
+            name,
+            image: f[1].to_string(),
+            state: f[2].to_string(),
+            healthy,
+            cpu_pct: m.0,
+            mem_used_bytes: m.1,
+            mem_limit_bytes: m.2,
+            net_io: m.3,
+            block_io: m.4,
+        });
+    }
+    out
+}
+
+/// `systemctl --failed --no-legend --plain`:
+/// "spring_ruoyi_admin_jar.service loaded failed failed  <description>"
+fn parse_failed_units(section: &str) -> Vec<FailedUnit> {
+    section.lines().filter_map(|line| {
+        let f: Vec<&str> = line.split_whitespace().collect();
+        if f.len() < 4 { return None; }
+        let unit = f[0].to_string();
+        if !unit.contains('.') { return None; }
+        let sub = f[3].to_string();
+        let description = f[4..].join(" ");
+        Some(FailedUnit { unit, sub, description })
+    }).collect()
+}
+
 // ── Poll loop ────────────────────────────────────────────────────────────────
 
 pub fn start_poll_loop(
@@ -452,6 +563,7 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
     let os = parse_os_release(extract_section(&init, "OSREL")).unwrap_or(uname_os);
     let cpu_model = parse_cpu_model(extract_section(&init, "CPUINFO"));
     let virt = parse_virt(extract_section(&init, "VIRT"));
+    let has_docker = extract_section(&init, "HASDOCKER").trim() == "yes";
 
     let mut prev: Option<PrevState> = None;
     let mut err_count: u8 = 0;
@@ -532,7 +644,15 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
                 uptime_secs: parse_uptime_secs(extract_section(&output, "UPTIME")),
                 cpu_model:   cpu_model.clone(),
                 virt:        virt.clone(),
+                has_docker,
             },
+            containers: if has_docker {
+                parse_containers(
+                    extract_section(&output, "DOCKERPS"),
+                    extract_section(&output, "DOCKERSTATS"),
+                )
+            } else { Vec::new() },
+            failed_units: parse_failed_units(extract_section(&output, "FAILED")),
             load,
             since_boot,
         };
