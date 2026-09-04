@@ -567,6 +567,7 @@ const zh: Record<string, string> = {
   "Buttons copy the command — paste it in the terminal to investigate or restart. shellx never runs sudo for you.":
     "按钮把命令复制到剪贴板 —— 粘到终端里执行(排查或重启)。shellx 不会替你 sudo。",
   // Host info card
+  "System info": "系统信息",
   "Hostname": "主机名",
   "System": "系统",
   "Kernel": "内核",

@@ -32,15 +32,17 @@ function HostStrip({ title, system, memory, tier, switcher }: {
   switcher: React.ReactNode;
 }) {
   const t = useT();
-  // Progressive reveal: CPU model (static, longest) only when wide; the
-  // memory fact only from medium up (it's also a KPI tile). Name, switcher
-  // and uptime never hide.
-  const showCpu = tier === "wide";
+  const [infoOpen, setInfoOpen] = useState(false);
+  // The memory fact hides on narrow (it's also a KPI tile). Name, OS chip,
+  // switcher and uptime stay; the static specs live behind the ⓘ.
   const showMem = tier !== "narrow";
+  // Short OS name for the chip: drop the "LTS" suffix, keep the rest.
+  const shortOs = system?.os.replace(/\s+LTS$/i, "") || "";
   return (
     <div style={{
       display: "flex", alignItems: "center", gap: 12, padding: "12px 16px",
       background: "var(--panel-1)", borderBottom: "1px solid var(--border)", flexShrink: 0,
+      position: "relative",
     }}>
       <div style={{
         width: 34, height: 34, borderRadius: 8, background: "var(--accent-fade)",
@@ -49,14 +51,49 @@ function HostStrip({ title, system, memory, tier, switcher }: {
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>{title || system?.hostname || "—"}</div>
         {system && (
-          <div style={{
-            fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)",
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>{[system.os, system.kernel, tier === "wide" ? system.arch : null, tier === "wide" ? system.virt : null].filter(Boolean).join(" · ")}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+            {shortOs && (
+              <span style={{ fontSize: 10, color: "var(--text-2)", background: "var(--panel-2)", borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>{shortOs}</span>
+            )}
+            <button
+              onClick={() => setInfoOpen((o) => !o)}
+              aria-label={t("System info")}
+              title={t("System info")}
+              style={{
+                width: 18, height: 18, borderRadius: "50%", border: "1px solid var(--border)",
+                color: infoOpen ? "var(--accent)" : "var(--text-3)",
+                background: infoOpen ? "var(--accent-fade)" : "transparent",
+                borderColor: infoOpen ? "var(--accent)" : "var(--border)",
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                fontSize: 11, fontWeight: 700, cursor: "pointer", fontStyle: "italic",
+              }}
+            >i</button>
+          </div>
         )}
       </div>
+
+      {infoOpen && system && (
+        <>
+          <div onClick={() => setInfoOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+          <div style={{
+            position: "absolute", top: 54, left: 52, zIndex: 41, minWidth: 280,
+            background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 8,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.22)", padding: 8,
+          }}>
+            <div style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, padding: "2px 6px 6px" }}>
+              {t("System info")}
+            </div>
+            <InfoRow k={t("System")} v={system.os} />
+            <InfoRow k={t("Kernel")} v={system.kernel} />
+            <InfoRow k={t("Architecture")} v={system.arch} />
+            {system.virt && <InfoRow k={t("Virtualization")} v={system.virt} />}
+            {system.cpuModel && <InfoRow k="CPU" v={system.cpuModel} />}
+            <InfoRow k={t("Hostname")} v={system.hostname} />
+          </div>
+        </>
+      )}
+
       <div style={{ display: "flex", gap: 12, marginLeft: "auto", alignItems: "center", flexShrink: 0 }}>
-        {system && showCpu && system.cpuModel && <Fact k="CPU" v={system.cpuModel} />}
         {system && showMem && memory && <Fact k={t("Memory")} v={fmtKb(memory.totalKb)} />}
         {system && (
           <span style={{
@@ -66,6 +103,14 @@ function HostStrip({ title, system, memory, tier, switcher }: {
         )}
         {switcher}
       </div>
+    </div>
+  );
+}
+function InfoRow({ k, v }: { k: string; v: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 16, padding: "4px 6px", fontSize: 11 }}>
+      <span style={{ color: "var(--text-3)" }}>{k}</span>
+      <span style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)", textAlign: "right" }}>{v}</span>
     </div>
   );
 }
