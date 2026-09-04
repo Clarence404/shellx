@@ -301,7 +301,7 @@ export function FtpHostForm({ initial, onCancel, onDone }: Props) {
       {showAdv && (
         <>
           <Field label={t("Name")}>
-            <Input value={label} onChange={setLabel} placeholder={t("auto-fills as user@host")} />
+            <Input value={label} onChange={setLabel} placeholder={username.trim() && host.trim() ? `${username.trim()}@${host.trim()}` : t("auto-fills as user@host")} />
           </Field>
 
           {family === "ftp" && (
