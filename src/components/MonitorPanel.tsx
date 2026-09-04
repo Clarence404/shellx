@@ -13,6 +13,7 @@ import { PerformanceTab } from "./monitor/PerformanceTab";
 import { ProcessTab } from "./monitor/ProcessTab";
 import { DiskTab } from "./monitor/DiskTab";
 import { fmtKb, fmtUptime } from "./monitor/format";
+import { useWidthTier, type WidthTier } from "./monitor/useWidth";
 import { useT } from "../i18n";
 
 type SubTab = "performance" | "process" | "disk";
@@ -27,10 +28,11 @@ const ACT_ICON: Record<ActivityKind, LucideIcon> = {
   monitor: Activity,
 };
 
-/** Labeled activity switcher, docked at the LEFT of the bar. Same store
- *  actions as the shared icon-only one, but with text so "how do I get back
- *  to the terminal" is answerable at a glance. */
-function ActivityTabs({ connectionId }: { connectionId: string }) {
+/** The view switcher, docked at the host strip's right. Labels collapse to
+ *  icons when `compact` (narrow width). The terminal glyph is a real
+ *  terminal, not the display icon it read as before. Always rendered so
+ *  leaving the monitor stays reachable while the first sample loads. */
+function ActivityTabs({ connectionId, compact }: { connectionId: string; compact: boolean }) {
   const t = useT();
   const session = useSessions((s) => s.sessions.find((x) => x.id === connectionId));
   const wanted = useSessions((s) => s.activeActivity[connectionId]);
@@ -47,20 +49,21 @@ function ActivityTabs({ connectionId }: { connectionId: string }) {
         return (
           <button
             key={o.id}
+            title={compact ? t(o.label) : undefined}
             onClick={() => {
               useSessions.getState().setActive(connectionId);
               useSessions.getState().setActivity(connectionId, o.id);
             }}
             style={{
               display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12,
-              padding: "5px 11px", borderRadius: 6, cursor: "pointer", border: "none",
+              padding: compact ? "5px 7px" : "5px 11px", borderRadius: 6, cursor: "pointer", border: "none",
               background: on ? "var(--panel-1)" : "transparent",
               color: on ? "var(--text-1)" : "var(--text-2)",
               fontWeight: on ? 600 : 400,
               boxShadow: on ? "0 1px 3px rgba(20,24,40,0.12)" : "none",
             }}
           >
-            <Icon size={13} /> {t(o.label)}
+            <Icon size={13} />{compact ? null : <> {t(o.label)}</>}
           </button>
         );
       })}
@@ -68,14 +71,21 @@ function ActivityTabs({ connectionId }: { connectionId: string }) {
   );
 }
 
-function HostStrip({ system, memory }: {
-  system: { hostname: string; os: string; kernel: string; arch: string; uptimeSecs: number; cpuModel: string; virt: string };
-  memory: { totalKb: number };
+function HostStrip({ system, memory, tier, switcher }: {
+  system?: { hostname: string; os: string; kernel: string; arch: string; uptimeSecs: number; cpuModel: string; virt: string };
+  memory?: { totalKb: number };
+  tier: WidthTier;
+  switcher: React.ReactNode;
 }) {
   const t = useT();
+  // Progressive reveal: CPU model (static, longest) only when wide; the
+  // memory fact only from medium up (it's also a KPI tile). Name, switcher
+  // and uptime never hide.
+  const showCpu = tier === "wide";
+  const showMem = tier !== "narrow";
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 14, padding: "12px 16px",
+      display: "flex", alignItems: "center", gap: 12, padding: "12px 16px",
       background: "var(--panel-1)", borderBottom: "1px solid var(--border)", flexShrink: 0,
     }}>
       <div style={{
@@ -83,21 +93,24 @@ function HostStrip({ system, memory }: {
         color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
       }}><Server size={18} /></div>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>{system.hostname || "—"}</div>
-        <div style={{
-          fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>{[system.os, system.kernel, system.arch, system.virt].filter(Boolean).join(" · ")}</div>
-      </div>
-      <div style={{ display: "flex", gap: 16, marginLeft: "auto", alignItems: "center", flexWrap: "wrap" }}>
-        {system.cpuModel && (
-          <Fact k="CPU" v={system.cpuModel} />
+        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-1)" }}>{system?.hostname || "—"}</div>
+        {system && (
+          <div style={{
+            fontSize: 11, color: "var(--text-3)", fontFamily: "var(--font-mono)",
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{[system.os, system.kernel, tier === "wide" ? system.arch : null, tier === "wide" ? system.virt : null].filter(Boolean).join(" · ")}</div>
         )}
-        <Fact k={t("Memory")} v={fmtKb(memory.totalKb)} />
-        <span style={{
-          fontSize: 11, color: "var(--success)", background: "var(--success-fade)",
-          padding: "3px 9px", borderRadius: 999, fontWeight: 500,
-        }}>● {t("up")} {fmtUptime(system.uptimeSecs)}</span>
+      </div>
+      <div style={{ display: "flex", gap: 12, marginLeft: "auto", alignItems: "center", flexShrink: 0 }}>
+        {system && showCpu && system.cpuModel && <Fact k="CPU" v={system.cpuModel} />}
+        {system && showMem && memory && <Fact k={t("Memory")} v={fmtKb(memory.totalKb)} />}
+        {switcher}
+        {system && (
+          <span style={{
+            fontSize: 11, color: "var(--success)", background: "var(--success-fade)",
+            padding: "3px 9px", borderRadius: 999, fontWeight: 500, whiteSpace: "nowrap",
+          }}>● {t("up")} {fmtUptime(system.uptimeSecs)}</span>
+        )}
       </div>
     </div>
   );
@@ -178,40 +191,48 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
   }, [connectionId, intervalSecs]);
 
   const waiting = unsupported || snapshots.length === 0;
+  const [widthRef, tier] = useWidthTier<HTMLDivElement>();
 
   return (
     // The whole panel is a fixed-height flex column: identity, controls,
     // load and KPIs stay pinned; only the content region below scrolls.
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--panel-2)", minHeight: 0 }}>
-      {!waiting && latest && <HostStrip system={latest.system} memory={latest.memory} />}
+    // Width is measured here (not the window) — the drawer changes it.
+    <div ref={widthRef} style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--panel-2)", minHeight: 0 }}>
+      {/* Host strip always renders — it holds the view switcher, so leaving
+          the monitor is reachable even while the first sample loads. */}
+      <HostStrip
+        system={latest?.system}
+        memory={latest?.memory}
+        tier={tier}
+        switcher={<ActivityTabs connectionId={connectionId} compact={tier === "narrow"} />}
+      />
 
-      {/* Bar: activity switcher (left) · sub-tabs · refresh */}
-      <div style={{
-        padding: "9px 16px", display: "flex", alignItems: "center", gap: 6,
-        background: "var(--panel-1)", borderBottom: "1px solid var(--border)",
-        flexShrink: 0, flexWrap: "wrap",
-      }}>
-        <ActivityTabs connectionId={connectionId} />
-        <span style={{ width: 1, height: 20, background: "var(--border)", margin: "0 4px" }} />
-        {([["performance", t("Performance")], ["process", t("Process")], ["disk", t("Disk")]] as [SubTab, string][]).map(([id, label]) => (
-          <button key={id} onClick={() => setSubTab(id)} style={{
-            padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "none",
-            background: subTab === id ? "var(--accent)" : "transparent",
-            color: subTab === id ? "var(--text-on-accent)" : "var(--text-2)",
-            fontWeight: subTab === id ? 600 : 400,
-          }}>{label}</button>
-        ))}
-        <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("Refresh")}</span>
-        <select value={intervalSecs} onChange={(e) => setIntervalSecs(Number(e.target.value) as IntervalSecs)} style={{
-          fontSize: 11, background: "var(--panel-2)", color: "var(--text-2)",
-          border: "1px solid var(--border)", borderRadius: 6, padding: "3px 6px", cursor: "pointer",
+      {!waiting && (
+        <div style={{
+          padding: "9px 16px", display: "flex", alignItems: "center", gap: 6,
+          background: "var(--panel-1)", borderBottom: "1px solid var(--border)",
+          flexShrink: 0, flexWrap: "wrap",
         }}>
-          {INTERVALS.map((s) => <option key={s} value={s}>{s}s</option>)}
-        </select>
-      </div>
+          {([["performance", t("Performance")], ["process", t("Process")], ["disk", t("Disk")]] as [SubTab, string][]).map(([id, label]) => (
+            <button key={id} onClick={() => setSubTab(id)} style={{
+              padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", border: "none",
+              background: subTab === id ? "var(--accent)" : "transparent",
+              color: subTab === id ? "var(--text-on-accent)" : "var(--text-2)",
+              fontWeight: subTab === id ? 600 : 400,
+            }}>{label}</button>
+          ))}
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 11, color: "var(--text-3)" }}>{t("Refresh")}</span>
+          <select value={intervalSecs} onChange={(e) => setIntervalSecs(Number(e.target.value) as IntervalSecs)} style={{
+            fontSize: 11, background: "var(--panel-2)", color: "var(--text-2)",
+            border: "1px solid var(--border)", borderRadius: 6, padding: "3px 6px", cursor: "pointer",
+          }}>
+            {INTERVALS.map((s) => <option key={s} value={s}>{s}s</option>)}
+          </select>
+        </div>
+      )}
 
-      {!waiting && latest && <LoadBand latest={latest} />}
+      {!waiting && latest && <LoadBand latest={latest} showSinceBoot={tier === "wide"} />}
       {!waiting && <KpiRow snapshots={snapshots} onJump={setSubTab} />}
 
       {/* Scroll region — the only thing that scrolls. */}

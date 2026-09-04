@@ -13,7 +13,7 @@ function gb(b: number): string {
  * (a real look back over the 15 min before the panel opened), plus the
  * since-boot totals. No server-side collector needed.
  */
-export function LoadBand({ latest }: { latest: MonitorSnapshot }) {
+export function LoadBand({ latest, showSinceBoot = true }: { latest: MonitorSnapshot; showSinceBoot?: boolean }) {
   const t = useT();
   const cores = latest.cpu?.corePct.length ?? 1;
   const load = latest.load;
@@ -42,6 +42,7 @@ export function LoadBand({ latest }: { latest: MonitorSnapshot }) {
           <span style={{ fontSize: 10, color: "var(--text-3)" }}>· {cores} {t("cores")}</span>
         </>
       )}
+      {showSinceBoot && (
       <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-2)" }}>
         {t("Since boot")} ↓<b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{gb(sb.netRxTotal)}</b>
         {" "}↑<b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{gb(sb.netTxTotal)}</b>
@@ -49,6 +50,7 @@ export function LoadBand({ latest }: { latest: MonitorSnapshot }) {
         {" "}{t("write")} <b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{gb(sb.diskWriteTotal)}</b>
         {" · "}{t("avg CPU")} <b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{sb.cpuAvgPct.toFixed(1)}%</b>
       </span>
+      )}
     </div>
   );
 }
