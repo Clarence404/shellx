@@ -33,9 +33,8 @@ function HostStrip({ title, system, memory, tier, switcher }: {
 }) {
   const t = useT();
   const [infoOpen, setInfoOpen] = useState(false);
-  // The memory fact hides on narrow (it's also a KPI tile). Name, OS chip,
-  // switcher and uptime stay; the static specs live behind the ⓘ.
-  const showMem = tier !== "narrow";
+  // Name, OS chip, switcher and uptime stay; the static specs (and the RAM
+  // total, which the KPI tile already shows live) live behind the ⓘ.
   // Short OS name for the chip: drop the "LTS" suffix, keep the rest.
   const shortOs = system?.os.replace(/\s+LTS$/i, "") || "";
   return (
@@ -88,13 +87,13 @@ function HostStrip({ title, system, memory, tier, switcher }: {
             <InfoRow k={t("Architecture")} v={system.arch} />
             {system.virt && <InfoRow k={t("Virtualization")} v={system.virt} />}
             {system.cpuModel && <InfoRow k="CPU" v={system.cpuModel} />}
+            {memory && <InfoRow k={t("Memory")} v={fmtKb(memory.totalKb)} />}
             <InfoRow k={t("Hostname")} v={system.hostname} />
           </div>
         </>
       )}
 
       <div style={{ display: "flex", gap: 12, marginLeft: "auto", alignItems: "center", flexShrink: 0 }}>
-        {system && showMem && memory && <Fact k={t("Memory")} v={fmtKb(memory.totalKb)} />}
         {system && (
           <span style={{
             fontSize: 11, color: "var(--success)", background: "var(--success-fade)",
@@ -114,18 +113,6 @@ function InfoRow({ k, v }: { k: string; v: string }) {
     </div>
   );
 }
-function Fact({ k, v }: { k: string; v: string }) {
-  return (
-    <div style={{ fontSize: 11, color: "var(--text-2)", minWidth: 0, maxWidth: 220 }}>
-      {k}
-      <b style={{
-        display: "block", fontSize: 12, color: "var(--text-1)", fontWeight: 600,
-        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-      }}>{v}</b>
-    </div>
-  );
-}
-
 function MonitorWaiting({ unsupported, intervalSecs }: { unsupported: boolean; intervalSecs: number }) {
   const t = useT();
   return (

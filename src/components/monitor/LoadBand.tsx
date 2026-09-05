@@ -28,29 +28,41 @@ export function LoadBand({ latest, showSinceBoot = true }: { latest: MonitorSnap
       {load && (
         <>
           <span style={{ fontSize: 10, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700 }}>
-            {t("Load")}
+            {t("System load")}
           </span>
-          {([["1m", load.one], ["5m", load.five], ["15m", load.fifteen]] as [string, number][]).map(([w, v]) => (
-            <span key={w} style={{ display: "inline-flex", alignItems: "baseline", gap: 5 }}>
-              <span style={{ fontSize: 10, color: "var(--text-3)" }}>{w}</span>
+          {([load.one, load.five, load.fifteen]).map((v, i) => (
+            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              {i > 0 && <span style={{ color: "var(--border)" }}>·</span>}
               <span style={{
                 fontSize: 15, fontWeight: 700, fontFamily: "var(--font-mono)",
                 color: healthColor[loadHealth(v, cores)],
               }}>{v.toFixed(2)}</span>
             </span>
           ))}
-          <span style={{ fontSize: 10, color: "var(--text-3)" }}>· {cores} {t("cores")}</span>
+          <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+            {t("1 / 5 / 15 min")} · {cores} {t("cores")}（&lt;{cores} {t("not overloaded")}）
+          </span>
         </>
       )}
       {showSinceBoot && (
-      <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-2)" }}>
-        {t("Since boot")} ↓<b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{gb(sb.netRxTotal)}</b>
-        {" "}↑<b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{gb(sb.netTxTotal)}</b>
-        {" · "}{t("read")} <b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{gb(sb.diskReadTotal)}</b>
-        {" "}{t("write")} <b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{gb(sb.diskWriteTotal)}</b>
-        {" · "}{t("avg CPU")} <b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{sb.cpuAvgPct.toFixed(1)}%</b>
+      <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 10, color: "var(--text-2)" }}>
+        <span style={{ fontSize: 10, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700 }}>{t("Total since boot")}</span>
+        <span><Cat>{t("Network")}</Cat> ↓<B>{gb(sb.netRxTotal)}</B> ↑<B>{gb(sb.netTxTotal)}</B></span>
+        <span style={{ color: "var(--border)" }}>·</span>
+        <span><Cat>{t("Disk")}</Cat> {t("read")}<B>{gb(sb.diskReadTotal)}</B> {t("write")}<B>{gb(sb.diskWriteTotal)}</B></span>
+        <span style={{ color: "var(--border)" }}>·</span>
+        <span><Cat>CPU</Cat> {t("avg")}<B>{sb.cpuAvgPct.toFixed(1)}%</B></span>
       </span>
       )}
     </div>
   );
+}
+
+/** A dim category label ("网络" / "磁盘" / "CPU") before a group of totals. */
+function Cat({ children }: { children: React.ReactNode }) {
+  return <span style={{ color: "var(--text-3)", fontWeight: 600, marginRight: 3 }}>{children}</span>;
+}
+/** A monospace, emphasized value inside the since-boot totals. */
+function B({ children }: { children: React.ReactNode }) {
+  return <b style={{ color: "var(--text-1)", fontFamily: "var(--font-mono)" }}>{children}</b>;
 }
