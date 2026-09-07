@@ -134,6 +134,42 @@ impl SessionManager {
         Ok(info)
     }
 
+    /// Re-dial an SSH connection under an EXISTING session id, so the
+    /// frontend's terminal (xterm + scrollback) can keep the same id across
+    /// a drop. Same as `open_connection` but the caller supplies the id; any
+    /// stale entry for that id is replaced.
+    pub async fn reconnect_connection(
+        &self,
+        id: Uuid,
+        host: &str,
+        port: u16,
+        auth: AuthConfig,
+        label: String,
+        host_id: Option<Uuid>,
+        policy: Arc<dyn HostKeyPolicy>,
+        advanced: &crate::settings::AdvancedSettings,
+    ) -> Result<ConnectionInfo> {
+        let ssh_conn = SshProtocol::connect(host, port, auth, policy, advanced).await?;
+        let ssh_handle = Some(ssh_conn.handle_clone());
+        let info = ConnectionInfo {
+            id,
+            label,
+            kind: ConnectionKind::Ssh,
+            host_id,
+            state: ConnectionState::Active,
+        };
+        let live = LiveConnection {
+            info: info.clone(),
+            conn: Box::new(ssh_conn),
+            shell: None,
+            sftp: None,
+            ssh_handle,
+            tunnels: HashMap::new(),
+        };
+        self.inner.lock().await.insert(id, Arc::new(Mutex::new(live)));
+        Ok(info)
+    }
+
     /// Cheap Arc-clone lookup. Callers get an owned handle to the live
     /// entry's per-connection mutex and can `.await` on it without holding
     /// the outer map lock.

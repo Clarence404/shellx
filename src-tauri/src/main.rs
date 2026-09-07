@@ -100,6 +100,7 @@ fn main() {
         .manage(shellx::ipc::hostkeys::ChallengeRegistry::default())
         .invoke_handler(tauri::generate_handler![
             ipc::open_connection,
+            ipc::reconnect_connection,
             ipc::open_shell,
             ipc::write_session_input,
             ipc::resize_session,

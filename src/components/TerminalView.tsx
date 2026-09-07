@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
-import { ChevronUp, ChevronDown, X, Copy, ClipboardPaste, TextSelect } from "lucide-react";
+import { ChevronUp, ChevronDown, X, Copy, ClipboardPaste, TextSelect, RefreshCw, Unplug } from "lucide-react";
 import { HostContextMenu } from "./HostContextMenu";
 import { needsPasteConfirm } from "../terminal/pasteGuard";
 import {
@@ -29,8 +29,16 @@ export interface SerialIo {
   lineEnding: "cr" | "lf" | "crlf" | "none";
 }
 
-export function TerminalView({ sessionId, serialIo }: { sessionId: SessionId; serialIo?: SerialIo }) {
+export function TerminalView({ sessionId, serialIo, onReconnect }: {
+  sessionId: SessionId;
+  serialIo?: SerialIo;
+  /** Present for reconnectable (saved-host SSH) sessions — drives the
+   *  "reconnect" button on the disconnected overlay. */
+  onReconnect?: () => void;
+}) {
   const t = useT();
+  const sessionClosed = useSessions((s) => s.sessions.find((x) => x.id === sessionId)?.state === "closed");
+  const reconnecting = useSessions((s) => !!s.reconnecting[sessionId]);
   const hostRef = useRef<HTMLDivElement | null>(null);
   // Live handle so toggling echo / line-ending takes effect without
   // tearing down the xterm instance.
@@ -362,6 +370,14 @@ export function TerminalView({ sessionId, serialIo }: { sessionId: SessionId; se
       unlistenClosed = u;
     });
 
+    // A successful reconnect re-dials under the same id; drop a marker so the
+    // scrollback shows a clean break between the old shell and the new one.
+    const onReconnected = (e: Event) => {
+      if ((e as CustomEvent).detail !== sessionId) return;
+      term.write("\r\n\x1b[2m\x1b[32m[reconnected]\x1b[0m\r\n");
+    };
+    window.addEventListener("shellx:reconnected", onReconnected);
+
     return () => {
       cancelled = true;
       suggest.dispose();
@@ -370,6 +386,7 @@ export function TerminalView({ sessionId, serialIo }: { sessionId: SessionId; se
       document.fonts?.removeEventListener("loadingdone", refitForFonts);
       ro.disconnect();
       window.removeEventListener("shellx:refit", onRefit);
+      window.removeEventListener("shellx:reconnected", onReconnected);
       window.removeEventListener("keydown", onGlobalKey);
       unlistenData();
       unlistenClosed?.();
@@ -427,6 +444,46 @@ export function TerminalView({ sessionId, serialIo }: { sessionId: SessionId; se
           background: TERMINAL_PALETTES[themeId].background,
         }}
       />
+      {sessionClosed && (
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 15,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 12, background: "rgba(10,12,18,0.55)", backdropFilter: "blur(1px)",
+        }}>
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
+            padding: "22px 28px", borderRadius: 12,
+            background: "var(--panel-1)", border: "1px solid var(--border)",
+            boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+          }}>
+            {reconnecting ? (
+              <>
+                <RefreshCw size={22} className="shellx-spin" style={{ color: "var(--accent)" }} />
+                <div style={{ fontSize: 13, color: "var(--text-1)" }}>{t("Reconnecting…")}</div>
+              </>
+            ) : (
+              <>
+                <Unplug size={22} style={{ color: "var(--text-3)" }} />
+                <div style={{ fontSize: 13, color: "var(--text-1)" }}>{t("Connection lost")}</div>
+                {onReconnect ? (
+                  <button
+                    onClick={onReconnect}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      fontSize: 12, fontWeight: 500, padding: "7px 16px", borderRadius: 7,
+                      background: "var(--accent-fade)", color: "var(--text-1)",
+                      border: "1px solid var(--accent)", cursor: "pointer",
+                    }}>
+                    <RefreshCw size={13} /> {t("Reconnect")}
+                  </button>
+                ) : (
+                  <div style={{ fontSize: 11, color: "var(--text-3)" }}>{t("Close this tab and connect again.")}</div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {searchOpen && (
         <div style={{
           position: "absolute", top: 8, right: 20, zIndex: 20,

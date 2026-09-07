@@ -4,6 +4,14 @@ import type { ConnectionId, ConnectionInfo, OpenConnectionArgs } from "../types/
 export const openConnection = (args: OpenConnectionArgs): Promise<ConnectionInfo> =>
   invoke<ConnectionInfo>("open_connection", { args });
 
+/** Re-dial a dropped terminal session under its existing id, so the
+ *  frontend keeps the same xterm and scrollback. */
+export const reconnectConnection = (
+  id: ConnectionId,
+  args: OpenConnectionArgs,
+): Promise<ConnectionInfo> =>
+  invoke<ConnectionInfo>("reconnect_connection", { args: { id, ...args } });
+
 /** Opens the shell channel on an already-established connection.
  *  Idempotent on the backend — a session that already has a shell is a
  *  no-op. Used when a host switches from tunnels-only to a terminal mode

@@ -57,6 +57,12 @@ interface SessionsState {
    *  this dies with the session. */
   renameSession: (id: ConnectionId, label: string) => void;
   markSessionClosed: (id: ConnectionId) => void;
+  /** Flip a closed session back to active after a successful reconnect. */
+  markSessionActive: (id: ConnectionId) => void;
+  /** Session ids with an auto-reconnect attempt in flight (drives the
+   *  terminal's "reconnecting…" overlay vs the manual "reconnect" button). */
+  reconnecting: Record<string, boolean>;
+  setReconnecting: (id: ConnectionId, on: boolean) => void;
 
   tunnelStatuses: Record<string, TunnelStatus[]>;
   setTunnelStatus: (sessionId: string, status: TunnelStatus) => void;
@@ -90,6 +96,7 @@ export const useSessions = create<SessionsState>((set, get) => ({
   activeId: null,
   activeActivity: {},
   connecting: {},
+  reconnecting: {},
   tunnelStatuses: {},
   layout: null,
   tunnelRuleSessions: {},
@@ -173,6 +180,18 @@ export const useSessions = create<SessionsState>((set, get) => ({
         sessions: st.sessions.map((s) => (s.id === id ? { ...s, state: "closed" } : s)),
         tunnelStatuses: restTunnels,
       };
+    }),
+
+  markSessionActive: (id) =>
+    set((st) => ({
+      sessions: st.sessions.map((s) => (s.id === id ? { ...s, state: "active" } : s)),
+    })),
+
+  setReconnecting: (id, on) =>
+    set((st) => {
+      if (on) return { reconnecting: { ...st.reconnecting, [id]: true } };
+      const { [id]: _drop, ...rest } = st.reconnecting;
+      return { reconnecting: rest };
     }),
 
   setTunnelStatus: (sessionId, status) =>

@@ -459,6 +459,8 @@ const zh: Record<string, string> = {
   "Adding…": "添加中…",
   "Confirm delete": "确认删除",
   "Reconnecting…": "重连中…",
+  "Connection lost": "连接已断开",
+  "Close this tab and connect again.": "关闭此标签后重新连接。",
   "Credentials revoked": "凭证失效",
   "Retry manually": "手动重试",
   "Attempt": "第",

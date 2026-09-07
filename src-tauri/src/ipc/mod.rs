@@ -281,6 +281,71 @@ pub async fn open_connection(
 }
 
 #[derive(Deserialize)]
+pub struct ReconnectArgs {
+    pub id: SessionId,
+    #[serde(flatten)]
+    pub ssh: OpenSshArgs,
+}
+
+/// Re-dial a dropped terminal session under its existing id, so the
+/// frontend keeps the same xterm (and scrollback). Terminal shell only —
+/// tunnels have their own reconnect. Mirrors `open_connection`'s shell path
+/// and subscriber pump, but reuses the id instead of minting a new one.
+#[tauri::command]
+pub async fn reconnect_connection(
+    args: ReconnectArgs,
+    app: AppHandle,
+    mgr: State<'_, SessionManager>,
+    host_store: State<'_, crate::store::HostStore>,
+    settings: State<'_, crate::settings::SettingsStore>,
+) -> Result<ConnectionInfo> {
+    let advanced = crate::settings::advanced_or_default(&settings);
+    let a = &args.ssh;
+    let auth = match a.auth_method.as_deref() {
+        Some("publickey") => {
+            let path = a.key_path.clone()
+                .ok_or_else(|| crate::error::Error::Protocol("publickey auth requires key_path".into()))?;
+            AuthConfig { username: a.username.clone(), method: AuthMethod::Key { path, passphrase: a.passphrase.clone() } }
+        }
+        _ => AuthConfig { username: a.username.clone(), method: AuthMethod::Password(a.password.clone()) },
+    };
+    let policy = Arc::new(hostkeys::TofuPolicy { app: app.clone() });
+    crate::log_info!(
+        crate::logs::categories::SESSION, "reconnecting ssh session",
+        "session": args.id.to_string(), "host": a.host, "port": a.port,
+    );
+    let info = mgr
+        .reconnect_connection(args.id, &a.host, a.port, auth, a.label.clone(), a.host_id, policy, &advanced)
+        .await
+        .map_err(|e| {
+            crate::log_warn!(
+                crate::logs::categories::SESSION, "reconnect failed",
+                "session": args.id.to_string(), "host": a.host, "error": e.to_string(),
+            );
+            e
+        })?;
+
+    if let Err(e) = mgr.open_shell(info.id).await {
+        let _ = mgr.close(info.id).await;
+        return Err(e);
+    }
+    if let Some(hid) = a.host_id {
+        let _ = host_store.touch_last_connected(hid).await;
+    }
+
+    let id = info.id;
+    let mut rx = mgr.subscribe(id).await?;
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        while let Some(chunk) = rx.recv().await {
+            let _ = app_clone.emit(EV_DATA, DataEvent { id, data: chunk });
+        }
+        let _ = app_clone.emit(EV_CLOSED, ClosedEvent { id, reason: "eof".into() });
+    });
+    Ok(info)
+}
+
+#[derive(Deserialize)]
 pub struct OpenShellArgs {
     pub id: SessionId,
 }

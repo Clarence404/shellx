@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import { EmptyState } from "./components/EmptyState";
 import { ConnectingPanel } from "./components/ConnectingPanel";
@@ -28,7 +28,7 @@ import { useFilesStore } from "./state/files";
 import { useUpdater } from "./state/updater";
 import { SYSTEM_FONT_MAP } from "./types/settings";
 import { useTransfersStore } from "./state/transfers";
-import { closeSession, openConnection } from "./ipc/commands";
+import { closeSession, openConnection, reconnectConnection } from "./ipc/commands";
 import { openLocalTerminal } from "./ipc/local_pty";
 import { getHostPassword, getHostPassphrase, setHostPassphrase } from "./ipc/hosts";
 import { onConnectionClosed } from "./ipc/events";
@@ -222,18 +222,97 @@ export function App() {
     };
   }, []);
 
-  // Wire the backend's connection:closed event into the sessions store:
-  // fade the tab first (markSessionClosed), then drop it from the list once
-  // the fade transition (300ms, see TabBar) has had time to play out. Guarded
-  // with the same `cancelled` pattern as the transfer listeners above since
-  // onConnectionClosed resolves asynchronously.
+  // Auto-reconnect bookkeeping for dropped SSH terminal sessions. Timers and
+  // attempt counts are per-session and live in refs so a re-render never
+  // resets them.
+  const reconnectTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const reconnectAttempts = useRef<Map<string, number>>(new Map());
+
+  function cancelReconnect(id: string) {
+    const t = reconnectTimers.current.get(id);
+    if (t) { clearTimeout(t); reconnectTimers.current.delete(id); }
+    reconnectAttempts.current.delete(id);
+    useSessions.getState().setReconnecting(id, false);
+  }
+
+  // Tunnel-style backoff: base → 2.5× → 7.5× → 30×, capped at 60s.
+  function backoffMs(attempt: number, baseSecs: number): number {
+    const mult = [1, 2.5, 7.5, 30][Math.min(attempt, 3)];
+    return Math.min(60, baseSecs * mult) * 1000;
+  }
+
+  // Re-dial a dropped session under its existing id (keeps the xterm). Fetches
+  // stored credentials by host_id — no prompt. Retries with backoff up to the
+  // configured limit; stops early on an auth error.
+  async function reconnectSession(id: string, host: HostInfo, manual: boolean) {
+    if (manual) reconnectAttempts.current.set(id, 0);
+    useSessions.getState().setReconnecting(id, true);
+    try {
+      let args;
+      if (host.auth_method === "publickey") {
+        const passphrase = await getHostPassphrase(host.id);
+        args = {
+          host: host.host, port: host.port, username: host.username, password: "",
+          label: host.label, host_id: host.id,
+          auth_method: "publickey", key_path: host.key_path ?? undefined,
+          passphrase: passphrase ?? undefined,
+        };
+      } else {
+        const password = await getHostPassword(host.id);
+        if (!password) throw new Error("no stored password");
+        args = {
+          host: host.host, port: host.port, username: host.username, password,
+          label: host.label, host_id: host.id,
+        };
+      }
+      await reconnectConnection(id, args);
+      // Success: the same id is live again; keep the terminal, flip state back.
+      useSessions.getState().markSessionActive(id);
+      cancelReconnect(id);
+      window.dispatchEvent(new CustomEvent("shellx:reconnected", { detail: id }));
+    } catch (e) {
+      const err = parseConnectError(e);
+      const authFailed = err.kind === "key-rejected" || err.kind === "passphrase-needed";
+      const attempt = (reconnectAttempts.current.get(id) ?? 0) + 1;
+      reconnectAttempts.current.set(id, attempt);
+      const max = useSettingsStore.getState().advanced.reconnectMaxAttempts;
+      const baseSecs = useSettingsStore.getState().advanced.reconnectIntervalSecs;
+      const exhausted = max > 0 && attempt >= max;
+      if (authFailed || exhausted) {
+        // Give up: leave the session closed with the manual "reconnect" button.
+        useSessions.getState().setReconnecting(id, false);
+        reconnectTimers.current.delete(id);
+        return;
+      }
+      const t = setTimeout(() => {
+        // Only retry if the session is still around and still closed.
+        const s = useSessions.getState().sessions.find((x) => x.id === id);
+        if (s && s.state === "closed") void reconnectSession(id, host, false);
+      }, backoffMs(attempt, baseSecs));
+      reconnectTimers.current.set(id, t);
+    }
+  }
+
+  // Wire the backend's connection:closed event into the sessions store. A
+  // dropped SSH session that came from a saved host is KEPT (so its xterm and
+  // scrollback survive) and auto-reconnect is armed; everything else fades and
+  // is dropped from the list after the tab transition.
   useEffect(() => {
     let cancelled = false;
     let unlisten: (() => void) | undefined;
 
     onConnectionClosed(({ id }) => {
-      markSessionClosed(id);
-      setTimeout(() => removeSession(id), 300);
+      const s = useSessions.getState().sessions.find((x) => x.id === id);
+      const host = s?.host_id ? useHostsStore.getState().hosts.find((h) => h.id === s.host_id) : undefined;
+      // A user-initiated close removes the session first, so `s` is already
+      // gone here — only genuine drops of a still-open session reach this.
+      if (s && s.kind === "ssh" && host) {
+        markSessionClosed(id);
+        void reconnectSession(id, host, false);
+      } else {
+        markSessionClosed(id);
+        setTimeout(() => removeSession(id), 300);
+      }
     }).then((u) => {
       if (cancelled) { u(); return; }
       unlisten = u;
@@ -243,6 +322,7 @@ export function App() {
       cancelled = true;
       unlisten?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markSessionClosed, removeSession]);
 
   // Wire the backend's hostkey:challenge event into the challenges store so the
@@ -470,13 +550,13 @@ export function App() {
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenSnippets={() => setSnippetsOpen(true)}
         onTabSelect={setActive}
-        onTabClose={(id) => { void closeSession(id); removeSession(id); }}
+        onTabClose={(id) => { cancelReconnect(id); void closeSession(id); removeSession(id); }}
         onTabsClose={(ids) => {
           // Batch close: fire the backend close for each session, then
           // remove them all from the frontend list. onConnectionClosed
           // events may still land afterward but markSessionClosed is a
           // no-op once removed, so no double-teardown.
-          ids.forEach((id) => { void closeSession(id); removeSession(id); });
+          ids.forEach((id) => { cancelReconnect(id); void closeSession(id); removeSession(id); });
         }}
         onNewConnection={() => setDialog({ mode: "create" })}
         onImportConfig={() => setImportOpen(true)}
@@ -550,7 +630,13 @@ export function App() {
           return (
             <>
               <div style={{ display: activity === "terminal" ? "block" : "none", height: "100%" }}>
-                <TerminalView sessionId={id} />
+                <TerminalView
+                  sessionId={id}
+                  onReconnect={session?.host_id ? () => {
+                    const h = useHostsStore.getState().hosts.find((x) => x.id === session.host_id);
+                    if (h) void reconnectSession(id, h, true);
+                  } : undefined}
+                />
               </div>
               <div style={{ display: activity === "files" ? "block" : "none", height: "100%" }}>
                 <FileBrowserView connectionId={id} />
