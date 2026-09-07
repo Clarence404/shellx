@@ -33,6 +33,10 @@ interface EditsState {
   markFailed: (id: string, error: string) => void;
   /** Stop watching a single edit (backend removes the temp copy). */
   stop: (id: string) => void;
+  /** Stop every watch belonging to a session — called when it disconnects
+   *  or its tab closes, so watches don't linger and retry against a dead
+   *  connection. */
+  stopForConn: (connId: string) => void;
 }
 
 function basename(p: string): string {
@@ -73,6 +77,14 @@ export const useEditsStore = create<EditsState>((set) => ({
   stop: (id) => {
     void ipc.editStop(id);
     set((s) => ({ edits: s.edits.filter((e) => e.id !== id) }));
+  },
+  stopForConn: (connId) => {
+    set((s) => {
+      const gone = s.edits.filter((e) => e.connId === connId);
+      gone.forEach((e) => void ipc.editStop(e.id));
+      if (gone.length === 0) return s;
+      return { edits: s.edits.filter((e) => e.connId !== connId) };
+    });
   },
 }));
 

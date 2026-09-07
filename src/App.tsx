@@ -41,7 +41,7 @@ import { HostKeyDialog } from "./components/HostKeyDialog";
 import { PassphraseDialog } from "./components/PassphraseDialog";
 import { AuthFailedDialog } from "./components/AuthFailedDialog";
 import { installSessionStream } from "./state/sessionStream";
-import { installEditStream } from "./state/edits";
+import { installEditStream, useEditsStore } from "./state/edits";
 import { onTransferStarted, onTransferProgress, onTransferDone, onTransferState } from "./ipc/transfers";
 import { onTunnelStatus } from "./ipc/tunnels";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
@@ -235,6 +235,7 @@ export function App() {
     let unlisten: (() => void) | undefined;
 
     onConnectionClosed(({ id }) => {
+      useEditsStore.getState().stopForConn(id);
       markSessionClosed(id);
       setTimeout(() => removeSession(id), 300);
     }).then((u) => {
