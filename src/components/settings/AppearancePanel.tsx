@@ -29,6 +29,8 @@ export function AppearancePanel() {
   const filesFontSize = useSettingsStore((s) => s.filesFontSize);
   const terminal = useSettingsStore((s) => s.terminal);
   const localShell = useSettingsStore((s) => s.localShell);
+  const externalEditor = useSettingsStore((s) => s.externalEditor);
+  const doubleClickEdit = useSettingsStore((s) => s.doubleClickEdit);
 
   const setTheme = (id: Settings["themeId"]) => useSettingsStore.getState().setTheme(id);
   const setDensity = (id: Settings["density"]) => useSettingsStore.getState().setDensity(id);
@@ -42,6 +44,8 @@ export function AppearancePanel() {
   const setCursorStyle = (s: Settings["terminal"]["cursorStyle"]) =>
     useSettingsStore.getState().setTerminalCursorStyle(s);
   const setLocalShell = (v: string) => useSettingsStore.getState().setLocalShell(v);
+  const setExternalEditor = (v: string) => useSettingsStore.getState().setExternalEditor(v);
+  const setDoubleClickEdit = (v: boolean) => useSettingsStore.getState().setDoubleClickEdit(v);
   const setLanguage = (v: Settings["language"]) => useSettingsStore.getState().setLanguage(v);
 
   return (
@@ -150,6 +154,27 @@ export function AppearancePanel() {
 
       <TwoColField label={t("Preview")}>
         <FilesPreview fontSize={filesFontSize} />
+      </TwoColField>
+
+      <TwoColField
+        label={t("External editor")}
+        hint={t("Used to edit remote files. Leave blank for the system default program.")}
+      >
+        <ExternalEditorPicker value={externalEditor} onChange={setExternalEditor} />
+      </TwoColField>
+
+      <TwoColField
+        label={t("Double-click a remote file")}
+        hint={t("Edit opens it in the external editor and uploads on save; Download copies it to the local pane.")}
+      >
+        <Segmented
+          options={[
+            { id: "download", label: t("Download") },
+            { id: "edit", label: t("Edit") },
+          ]}
+          value={doubleClickEdit ? "edit" : "download"}
+          onChange={(id) => setDoubleClickEdit(id === "edit")}
+        />
       </TwoColField>
 
       <SectionHeader>{t("Terminal")}</SectionHeader>
@@ -308,6 +333,46 @@ function LocalShellPicker({ value, onChange }: { value: string; onChange: (v: st
           ? t("Enter the full path to your shell executable.")
           : t("Applies to all new local terminal tabs.")}
       </div>
+    </div>
+  );
+}
+
+/** Path input + Browse for the external editor. Blank = OS default. */
+function ExternalEditorPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useT();
+  const inputStyle = {
+    flex: 1, padding: "4px 8px",
+    background: "var(--panel-3, var(--panel-2))",
+    border: "0.5px solid var(--border)", borderRadius: 4,
+    color: "var(--text-1)", fontSize: "var(--font-ui-size)", fontFamily: "var(--font-ui)",
+  } as const;
+  return (
+    <div style={{ display: "flex", gap: 4 }}>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={t("System default program")}
+        style={inputStyle}
+      />
+      <button
+        type="button"
+        onClick={async () => {
+          const selected = await openDialog({
+            multiple: false,
+            filters: [{ name: "Executable", extensions: ["exe", "cmd", "bat", "*"] }],
+          });
+          if (typeof selected === "string" && selected) onChange(selected);
+        }}
+        style={{
+          padding: "4px 8px", background: "var(--panel-3, var(--panel-2))",
+          border: "0.5px solid var(--border)", borderRadius: 4, color: "var(--text-1)",
+          fontSize: "var(--font-ui-size)", fontFamily: "var(--font-ui)", cursor: "pointer",
+          whiteSpace: "nowrap", flexShrink: 0,
+        }}
+      >
+        {t("Browse…")}
+      </button>
     </div>
   );
 }

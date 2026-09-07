@@ -13,6 +13,11 @@ export interface Settings {
     commandSuggest: boolean;
   };
   localShell?: string;
+  /** External editor for "open remote file in editor". Empty → OS default. */
+  externalEditor?: string;
+  /** Double-clicking a remote text file opens it in the editor instead of
+   *  downloading it. Off by default. */
+  doubleClickEdit?: boolean;
   language: "en" | "zh";
   autoUpdateCheck: boolean;
   advanced: AdvancedSettings;

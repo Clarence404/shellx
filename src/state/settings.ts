@@ -22,6 +22,10 @@ interface State extends Settings {
   setTerminalCursorStyle(style: Settings["terminal"]["cursorStyle"]): void;
   localShell: string;
   setLocalShell(v: string): void;
+  externalEditor: string;
+  setExternalEditor(v: string): void;
+  doubleClickEdit: boolean;
+  setDoubleClickEdit(v: boolean): void;
   setLanguage(v: Settings["language"]): void;
   setAutoUpdateCheck(v: boolean): void;
   /** One setter for the whole Advanced block: every control passes the
@@ -55,6 +59,8 @@ function snapshotForSave(s: State): Settings {
     filesFontSize: s.filesFontSize,
     terminal: s.terminal,
     localShell: s.localShell || undefined,
+    externalEditor: s.externalEditor || undefined,
+    doubleClickEdit: s.doubleClickEdit || undefined,
     language: s.language,
     autoUpdateCheck: s.autoUpdateCheck,
     advanced: s.advanced,
@@ -81,6 +87,8 @@ function immediateSave(getState: () => State) {
 export const useSettingsStore = create<State>((set, get) => ({
   ...DEFAULT_SETTINGS,
   localShell: "",
+  externalEditor: "",
+  doubleClickEdit: false,
 
   async load() {
     const loaded = await loadSettings().catch(() => null);
@@ -99,6 +107,8 @@ export const useSettingsStore = create<State>((set, get) => ({
       set({
         ...loaded,
         localShell: loaded.localShell ?? "",
+        externalEditor: loaded.externalEditor ?? "",
+        doubleClickEdit: loaded.doubleClickEdit ?? false,
         advanced: { ...DEFAULT_ADVANCED, ...(loaded.advanced ?? {}) },
         // Same defence for terminal: fields added after a settings.json
         // was written (commandSuggest) must land as their defaults, not
@@ -151,6 +161,16 @@ export const useSettingsStore = create<State>((set, get) => ({
 
   setLocalShell(v) {
     set({ localShell: v });
+    immediateSave(get);
+  },
+
+  setExternalEditor(v) {
+    set({ externalEditor: v });
+    immediateSave(get);
+  },
+
+  setDoubleClickEdit(v) {
+    set({ doubleClickEdit: v });
     immediateSave(get);
   },
 

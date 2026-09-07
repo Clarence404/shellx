@@ -282,6 +282,8 @@ mod tests {
                 command_suggest: true,
             },
             local_shell: None,
+            external_editor: None,
+            double_click_edit: false,
             language: language.into(),
             auto_update_check: true,
             advanced: Default::default(),

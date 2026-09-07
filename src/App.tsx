@@ -9,6 +9,7 @@ import { TunnelsPanel } from "./components/TunnelsPanel";
 import { MonitorPanel } from "./components/MonitorPanel";
 import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
+import { RemoteEditNotice } from "./components/RemoteEdit";
 import { GlobalTunnelsView } from "./components/GlobalTunnelsView";
 import { PaneLayout } from "./components/PaneLayout";
 import { activitiesFor, clampActivity } from "./state/activities";
@@ -40,6 +41,7 @@ import { HostKeyDialog } from "./components/HostKeyDialog";
 import { PassphraseDialog } from "./components/PassphraseDialog";
 import { AuthFailedDialog } from "./components/AuthFailedDialog";
 import { installSessionStream } from "./state/sessionStream";
+import { installEditStream, useEditsStore } from "./state/edits";
 import { onTransferStarted, onTransferProgress, onTransferDone, onTransferState } from "./ipc/transfers";
 import { onTunnelStatus } from "./ipc/tunnels";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
@@ -126,6 +128,7 @@ export function App() {
   // TerminalView subscribes, so a freshly opened tab doesn't lose its
   // welcome banner + prompt to the mount-vs-Rust-pump race.
   useEffect(() => { installSessionStream(); }, []);
+  useEffect(() => { installEditStream(); }, []);
 
   // Sync themeId / density to <html data-*> attributes so tokens.css can
   // pick up the correct :root[data-…] variable block. Empty string on
@@ -307,9 +310,14 @@ export function App() {
       // A user-initiated close removes the session first, so `s` is already
       // gone here — only genuine drops of a still-open session reach this.
       if (s && s.kind === "ssh" && host) {
+        // Kept for auto-reconnect: the same id is re-dialed, so any remote-edit
+        // watches stay valid and resume once the pipe is back — don't stop them.
         markSessionClosed(id);
         void reconnectSession(id, host, false);
       } else {
+        // Genuine drop with no reconnect: the connection is gone for good, so
+        // stop this session's remote-edit watches too.
+        useEditsStore.getState().stopForConn(id);
         markSessionClosed(id);
         setTimeout(() => removeSession(id), 300);
       }
@@ -398,6 +406,7 @@ export function App() {
     onNewTab: () => setDialog({ mode: "create" }),
     onCloseTab: () => {
       if (activeId) {
+        useEditsStore.getState().stopForConn(activeId);
         void closeSession(activeId);
         removeSession(activeId);
       }
@@ -550,13 +559,13 @@ export function App() {
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenSnippets={() => setSnippetsOpen(true)}
         onTabSelect={setActive}
-        onTabClose={(id) => { cancelReconnect(id); void closeSession(id); removeSession(id); }}
+        onTabClose={(id) => { useEditsStore.getState().stopForConn(id); cancelReconnect(id); void closeSession(id); removeSession(id); }}
         onTabsClose={(ids) => {
           // Batch close: fire the backend close for each session, then
           // remove them all from the frontend list. onConnectionClosed
           // events may still land afterward but markSessionClosed is a
           // no-op once removed, so no double-teardown.
-          ids.forEach((id) => { cancelReconnect(id); void closeSession(id); removeSession(id); });
+          ids.forEach((id) => { useEditsStore.getState().stopForConn(id); cancelReconnect(id); void closeSession(id); removeSession(id); });
         }}
         onNewConnection={() => setDialog({ mode: "create" })}
         onImportConfig={() => setImportOpen(true)}
@@ -675,6 +684,7 @@ export function App() {
       />
       <SnippetPalette open={snippetsOpen} onClose={() => setSnippetsOpen(false)} />
       <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />
+      <RemoteEditNotice />
       <HostKeyDialog />
       {passphraseReq && (
         <PassphraseDialog

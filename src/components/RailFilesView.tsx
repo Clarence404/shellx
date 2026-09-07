@@ -3,6 +3,7 @@ import { File as FileIcon, Folder } from "lucide-react";
 import { LocalPane } from "./LocalPane";
 import { RemotePane } from "./RemotePane";
 import { TransferStripSection } from "./TransferStripSection";
+import { EditingChip } from "./RemoteEdit";
 import { ConnectDialog } from "./ConnectDialog";
 import { PaneSplitter } from "./PaneSplitter";
 import { useSessions } from "../state/sessions";
@@ -68,6 +69,7 @@ export function RailFilesView({ onConnectSavedHost }: Props = {}) {
           />
         </div>
       </div>
+      <EditingChip />
       <TransferStripSection showAll />
       <ConnectDialog open={dialogOpen} mode="create" onClose={() => setDialogOpen(false)} />
       {/* Drag ghost — follows the cursor with a small offset so it

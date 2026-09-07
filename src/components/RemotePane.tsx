@@ -4,6 +4,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useRailFiles } from "../state/railFiles";
 import { useSessions } from "../state/sessions";
 import { useHostsStore } from "../state/hosts";
+import { useEditsStore } from "../state/edits";
+import { useSettingsStore } from "../state/settings";
 import {
   sftpMkdir, sftpRename, sftpRemoveFile, sftpRemoveDirRecursive,
 } from "../ipc/sftp";
@@ -472,9 +474,18 @@ export function RemotePane({ onNewConnection, onConnectSavedHost }: Props) {
                   selected={selected.includes(e.name)}
                   onClick={(ev) => useRailFiles.getState().toggleSelectRight(e.name, ev.ctrlKey || ev.metaKey || ev.shiftKey)}
                   onOpen={() => {
-                    if (e.kind === "directory") void setRightPath(joinPath(rightPath, e.name));
-                    else void sftpDownload(rightHost, joinPath(rightPath, e.name), joinPath(leftPath, e.name));
+                    if (e.kind === "directory") { void setRightPath(joinPath(rightPath, e.name)); return; }
+                    // Double-click edits in place when the user opted in;
+                    // otherwise it downloads to the local pane (original).
+                    if (useSettingsStore.getState().doubleClickEdit) {
+                      useEditsStore.getState().requestOpen(rightHost, joinPath(rightPath, e.name));
+                    } else {
+                      void sftpDownload(rightHost, joinPath(rightPath, e.name), joinPath(leftPath, e.name));
+                    }
                   }}
+                  onOpenInEditor={() =>
+                    useEditsStore.getState().requestOpen(rightHost, joinPath(rightPath, e.name))
+                  }
                   onRename={async (newName) => {
                     if (!newName || newName === e.name) return;
                     await sftpRename(rightHost, joinPath(rightPath, e.name), joinPath(rightPath, newName));
