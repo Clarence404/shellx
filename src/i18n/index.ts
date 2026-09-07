@@ -134,6 +134,26 @@ const zh: Record<string, string> = {
   "passive mode": "被动",
   "active mode": "主动",
 
+  // Remote file editing
+  "Open in external editor": "用外部编辑器打开",
+  "This downloads a local temporary copy and opens it in your editor:": "将把该文件下载成本地临时副本，用你的编辑器打开：",
+  "every save uploads it back to the server automatically": "每次保存都会自动传回服务器",
+  "closing shellx or disconnecting stops the watch": "关闭 shellx 或断开连接后停止监听",
+  "Don't show this again": "不再提示",
+  "Download and open": "下载并打开",
+  "Editing": "正在监听",
+  "file(s)": "个文件",
+  "saves upload automatically": "保存即自动回传",
+  "saved": "已回传",
+  "watching…": "监听中…",
+  "upload failed": "回传失败",
+  "Stop watching": "停止监听",
+  "External editor": "外部编辑器",
+  "Used to edit remote files. Leave blank for the system default program.": "用于编辑远程文件。留空则使用系统默认程序。",
+  "System default program": "系统默认程序",
+  "Double-click a remote file": "双击远程文件",
+  "Edit opens it in the external editor and uploads on save; Download copies it to the local pane.": "「编辑」用外部编辑器打开、保存即回传；「下载」复制到本地面板。",
+
   // Terminal clipboard
   "Paste": "粘贴",
   "Copy terminal selection": "复制终端选中内容",

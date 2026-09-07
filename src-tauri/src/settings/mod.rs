@@ -24,6 +24,12 @@ pub struct Settings {
     /// None → use platform default (cmd.exe on Windows, $SHELL on Unix).
     #[serde(default)]
     pub local_shell: Option<String>,
+    /// External editor for "open remote file in editor". None → OS default.
+    #[serde(default)]
+    pub external_editor: Option<String>,
+    /// Double-click a remote text file to edit it instead of downloading.
+    #[serde(default)]
+    pub double_click_edit: bool,
     /// UI language ("en" | "zh"). Missing on old settings.json files —
     /// serde default resolves to "en".
     #[serde(default = "default_language")]
@@ -217,6 +223,8 @@ mod tests {
                 command_suggest: true,
             },
             local_shell: None,
+            external_editor: None,
+            double_click_edit: false,
             language: "en".into(),
             auto_update_check: true,
             advanced: AdvancedSettings::default(),

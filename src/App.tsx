@@ -9,6 +9,7 @@ import { TunnelsPanel } from "./components/TunnelsPanel";
 import { MonitorPanel } from "./components/MonitorPanel";
 import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
+import { RemoteEditNotice } from "./components/RemoteEdit";
 import { GlobalTunnelsView } from "./components/GlobalTunnelsView";
 import { PaneLayout } from "./components/PaneLayout";
 import { activitiesFor, clampActivity } from "./state/activities";
@@ -40,6 +41,7 @@ import { HostKeyDialog } from "./components/HostKeyDialog";
 import { PassphraseDialog } from "./components/PassphraseDialog";
 import { AuthFailedDialog } from "./components/AuthFailedDialog";
 import { installSessionStream } from "./state/sessionStream";
+import { installEditStream } from "./state/edits";
 import { onTransferStarted, onTransferProgress, onTransferDone, onTransferState } from "./ipc/transfers";
 import { onTunnelStatus } from "./ipc/tunnels";
 import { useTabHotkeys } from "./hooks/useTabHotkeys";
@@ -126,6 +128,7 @@ export function App() {
   // TerminalView subscribes, so a freshly opened tab doesn't lose its
   // welcome banner + prompt to the mount-vs-Rust-pump race.
   useEffect(() => { installSessionStream(); }, []);
+  useEffect(() => { installEditStream(); }, []);
 
   // Sync themeId / density to <html data-*> attributes so tokens.css can
   // pick up the correct :root[data-…] variable block. Empty string on
@@ -589,6 +592,7 @@ export function App() {
       />
       <SnippetPalette open={snippetsOpen} onClose={() => setSnippetsOpen(false)} />
       <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />
+      <RemoteEditNotice />
       <HostKeyDialog />
       {passphraseReq && (
         <PassphraseDialog

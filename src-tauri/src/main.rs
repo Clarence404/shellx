@@ -98,8 +98,11 @@ fn main() {
         .manage(MonitorManager::new())
         .manage(shellx::ipc::config::ConfigDir(config_dir.clone()))
         .manage(shellx::ipc::hostkeys::ChallengeRegistry::default())
+        .manage(shellx::ipc::edit::EditRegistry::default())
         .invoke_handler(tauri::generate_handler![
             ipc::open_connection,
+            ipc::edit::edit_open,
+            ipc::edit::edit_stop,
             ipc::open_shell,
             ipc::write_session_input,
             ipc::resize_session,

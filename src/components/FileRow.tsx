@@ -4,7 +4,7 @@ import {
   FileText, FileCode, FileJson, FileImage, FileArchive,
   FileTerminal, FileAudio, FileVideo, FileLock, FileSpreadsheet,
   Database, Download, Edit, Trash2, FolderPlus, Upload, RefreshCw,
-  ArrowRightToLine,
+  ArrowRightToLine, FilePen,
   type LucideIcon,
 } from "lucide-react";
 import { HostContextMenu, type MenuItem } from "./HostContextMenu";
@@ -117,6 +117,9 @@ interface Props {
    *  meaningful for remote panes — LocalPane doesn't pass it because
    *  "download a local file" has no defined semantics. */
   onDownload?: () => void;
+  /** Optional (remote files only): shows "Open in external editor" — edits
+   *  a temp copy locally and uploads back on save. Guarded to non-dirs. */
+  onOpenInEditor?: () => void;
   /** Optional: shows a `Send to remote →` item in the file-scope
    *  section. LocalPane passes this when the RemotePane has an active
    *  host, so the user can upload the individual row without needing
@@ -144,7 +147,7 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(1)} ${units[i]}`;
 }
 
-export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownload, onSendToRemote, disabled, selected, onClick, folderActions }: Props) {
+export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownload, onOpenInEditor, onSendToRemote, disabled, selected, onClick, folderActions }: Props) {
   const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -187,6 +190,10 @@ export function FileRow({ name, kind, size, onOpen, onRename, onDelete, onDownlo
   const isDir = kind === "directory";
   const items: MenuItem[] = [
     { kind: "section", label: isDir ? "This folder" : "This file" },
+    ...(onOpenInEditor && !isDir ? [{
+      label: "Open in external editor", onClick: onOpenInEditor,
+      icon: <FilePen size={12} />,
+    } as MenuItem] : []),
     ...(onDownload ? [{
       label: "Download", onClick: onDownload,
       icon: <Download size={12} />,
