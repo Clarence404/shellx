@@ -99,6 +99,35 @@ vi.mock("./ipc/settings", () => ({
   saveSettings: vi.fn().mockResolvedValue(undefined),
 }));
 
+// On mount App fires a live update check when autoUpdateCheck is on (the
+// default). jsdom has no Tauri updater bridge, so the real check() rejects and
+// the swallowed promise surfaces as an unhandled error that fails the whole
+// run. App-level tests never exercise updating — stub the store.
+vi.mock("./state/updater", () => {
+  const state = {
+    status: "idle" as const,
+    version: null, notes: null, progress: 0, received: 0, total: 0, error: null,
+    check: vi.fn().mockResolvedValue(undefined),
+    downloadAndInstall: vi.fn().mockResolvedValue(undefined),
+  };
+  return {
+    useUpdater: Object.assign(
+      (selector: (s: typeof state) => unknown) => selector(state),
+      { getState: () => state, setState: vi.fn() },
+    ),
+  };
+});
+
+// installEditStream() subscribes to backend edit events on App mount via
+// listen(), which needs the Tauri event bridge that jsdom lacks. App-level
+// tests don't exercise remote editing — return unlisteners.
+vi.mock("./ipc/edit", () => ({
+  editOpen: vi.fn().mockResolvedValue({ id: "e1", connId: "c1", name: "f", remotePath: "/f" }),
+  editStop: vi.fn().mockResolvedValue(undefined),
+  onEditUploaded: vi.fn().mockResolvedValue(() => {}),
+  onEditFailed: vi.fn().mockResolvedValue(() => {}),
+}));
+
 vi.mock("./ipc/hostkeys", () => ({
   hostkeyRespond: vi.fn().mockResolvedValue(undefined),
   hostkeysList: vi.fn().mockResolvedValue([]),
