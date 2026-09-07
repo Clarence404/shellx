@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.30.1** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.31.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -12,12 +12,12 @@ Current release: **v0.30.1** — see [`docs/release-notes/`](docs/release-notes/
 
 ShellX is a desktop app that gives you:
 
-- **SSH terminal** in tabs — connect to Linux / BSD / macOS servers, get a working shell with themes, custom fonts, cursor style; public-key (Ed25519/RSA/ECDSA) or password auth, host-key verification against `~/.ssh/known_hosts`. Ctrl+Shift+C/V copy and paste with a preview before multi-line pastes run, and right-click offers Copy / Paste / Select all
+- **SSH terminal** in tabs — connect to Linux / BSD / macOS servers, get a working shell with themes, custom fonts, cursor style; public-key (Ed25519/RSA/ECDSA) or password auth, host-key verification against `~/.ssh/known_hosts`. Ctrl+Shift+C/V copy and paste with a preview before multi-line pastes run, and right-click offers Copy / Paste / Select all. A dropped saved-host session auto-reconnects under the same tab (scrollback and layout preserved) with backoff, and shows a manual Reconnect button if it gives up
 - **Local terminal** — open a shell on your own machine (PowerShell by default on Windows; any shell via Settings) in a tab right next to your SSH sessions
 - **Serial terminal** — a Serial view lists live COM ports (USB adapters shown with their chip name) and your saved profiles; quick-connect at 115200 8N1 or save a profile with full line settings (baud, data/stop bits, parity, flow control). Sessions open right inside the view with a per-session local-echo toggle and a line-ending choice (CR / LF / CRLF / None) for talking to devices that don't echo
 - **SSH tunnels (port forwarding)** — a dedicated Tunnels view lists every saved forward across every host in one place; start any rule directly (shellx opens the SSH transport silently when the host isn't already connected), auto-reconnect with backoff when a tunnel drops, autostart selected rules on app launch, drag rows to reorder, move a rule between hosts without recreating, share on the LAN (bind 0.0.0.0), or paste an `ssh -L …` command to bulk-import rules
 - **Structured logs** — Settings → Logs shows a real-time stream of every event across tunnels, sessions, file transfers, sftp, monitor, host-key checks, keychain and updater. Filter by level / category / free-text, click any row for full JSON, and export a jsonl dump for bug reports; daily-rotated files at `~/.shellx/logs/` with 7-day retention
-- **SFTP file browser** — WinSCP-style dual-pane (local ↔ remote) with drag-and-drop upload / download, folder transfers, pause / resume / cancel, and drag-out: drop a row past the window edge straight into Explorer or onto the desktop. The transfer strip shows one row per drag — a 20 000-file folder is a single line with its own progress, speed and ETA, never a scrolling file list
+- **SFTP file browser** — WinSCP-style dual-pane (local ↔ remote) with drag-and-drop upload / download, folder transfers, pause / resume / cancel, and drag-out: drop a row past the window edge straight into Explorer or onto the desktop. The transfer strip shows one row per drag — a 20 000-file folder is a single line with its own progress, speed and ETA, never a scrolling file list. Open a remote file in your own editor (right-click, or double-click when set to Edit mode) and every save uploads back automatically; pick the editor and the double-click action in Settings
 - **FTP view** — a dedicated view for SFTP / FTP / FTPS connections with the same dual-pane, queue and drag. Made for old machines: filename encoding (auto / UTF-8 / GBK), passive or active mode, explicit or implicit TLS — and plain FTP is clearly tagged as plaintext. Saved SSH hosts import as SFTP connections in one click. Directory listings are cached and the tree warms in the background over dedicated connections, so browsing a far-away server feels instant after connect
 - **Command completion** — type at any prompt and a dropdown offers your own per-host command history (`h`) plus a built-in dictionary of common commands (`c`). ↑/↓ and Tab to accept; a plain Enter always runs what you typed. Local only — nothing installed on the server, and lines that look like they carry secrets are never recorded
 - **Command snippets** — save the commands worth not retyping and call them anywhere with Ctrl+Shift+K: filter, Enter, and the command lands on the terminal's input line (opt-in run-on-pick per snippet). `${name}` blanks ask for their values with a live preview, and the library travels in your config bundle
@@ -27,7 +27,7 @@ ShellX is a desktop app that gives you:
 - **Light or dark theme** — Light is default; toggle to Dark in Settings and the whole app (including the terminal palette) follows
 - **Bilingual interface** — switch the whole UI between English and Chinese in Settings, applied live
 - **Split panes** — drag a tab onto the edge of a pane to split it, onto the middle to swap the two, or onto the outer band of the area for a full-width row or full-height column. Same-direction splits stay evenly divided; drag a divider to resize, double-click it to level the row. Each pane switches its own Terminal / Files / Tunnels / Monitor
-- **Advanced settings** — Settings → Advanced tunes SSH connect timeout and keepalive, concurrent SFTP transfers, terminal scrollback, tunnel reconnect delay and attempt limit, and how much detail the logs record
+- **Advanced settings** — Settings → Advanced tunes SSH connect timeout and keepalive, concurrent SFTP transfers, terminal scrollback, session and tunnel reconnect delay and attempt limit, and how much detail the logs record
 - **Auto-update** — checks for new releases on startup (can be disabled), shows a banner in Settings → About with a one-click download and relaunch; releases are signed with a Minisign key
 
 It's a single ~7 MB installer with no runtime dependencies (Tauri bundles a small Rust binary and reuses the OS-native webview instead of shipping Chromium — that's why it's small).
