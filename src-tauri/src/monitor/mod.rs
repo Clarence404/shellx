@@ -29,12 +29,50 @@ const POLL_CMD: &str = concat!(
     "echo '---FAILED---'; command -v systemctl >/dev/null 2>&1 && systemctl --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | while read u; do printf '%s\\t' \"$u\"; systemctl show \"$u\" -p Result,ExecMainStatus,ActiveEnterTimestamp,Description --value 2>/dev/null | paste -sd '\\t' -; done"
 );
 
-/// Docker snapshot — its own slower loop so `docker stats`'s sampling
-/// latency never delays the main metrics.
-const DOCKER_CMD: &str = concat!(
-    "echo '---DOCKERPS---'; docker ps --no-trunc --format '{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}' 2>/dev/null; ",
-    "echo '---DOCKERSTATS---'; docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}' 2>/dev/null"
-);
+/// How the monitored user can reach the Docker daemon, from the init probe.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum DockerMode {
+    /// No `docker` binary on PATH — the Containers tab stays hidden.
+    None,
+    /// Daemon reachable directly.
+    Plain,
+    /// Reachable only through passwordless `sudo -n docker`.
+    Sudo,
+    /// Docker installed but unreachable (needs NOPASSWD sudo) — the tab shows
+    /// with a hint instead of a container list.
+    Denied,
+}
+
+impl DockerMode {
+    fn parse(s: &str) -> Self {
+        match s.trim() {
+            "plain" => Self::Plain,
+            "sudo" => Self::Sudo,
+            "denied" => Self::Denied,
+            _ => Self::None,
+        }
+    }
+    /// Docker is present in some form → show the Containers tab.
+    fn present(self) -> bool { !matches!(self, Self::None) }
+    /// We can actually read container stats → run the docker poll loop.
+    fn pollable(self) -> bool { matches!(self, Self::Plain | Self::Sudo) }
+}
+
+/// Docker snapshot command — its own slower loop so `docker stats`'s sampling
+/// latency never delays the main metrics. `sudo` prefixes each call with
+/// `sudo -n` for hosts whose user reaches the daemon only through sudo.
+fn docker_cmd(sudo: bool) -> String {
+    let d = if sudo { "sudo -n docker" } else { "docker" };
+    // Kept out of the format string so their `{{…}}` braces aren't parsed;
+    // the `\t` here are real tabs, matching what parse_containers splits on.
+    let ps_fmt = "{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}";
+    let stats_fmt = "{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}";
+    format!(
+        "echo '---DOCKERPS---'; {d} ps --no-trunc --format '{ps}' 2>/dev/null; \
+         echo '---DOCKERSTATS---'; {d} stats --no-stream --format '{stats}' 2>/dev/null",
+        d = d, ps = ps_fmt, stats = stats_fmt,
+    )
+}
 
 /// Static data — fetched once at session start. Doubles as the Linux
 /// platform check: if /proc/stat is empty the host is not Linux.
@@ -43,7 +81,10 @@ const INIT_CMD: &str = concat!(
     "echo '---OSREL---'; cat /etc/os-release 2>/dev/null; ",
     "echo '---CPUINFO---'; grep -m1 '^model name' /proc/cpuinfo 2>/dev/null; ",
     "echo '---VIRT---'; (systemd-detect-virt 2>/dev/null || echo none); ",
-    "echo '---HASDOCKER---'; command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && echo yes; ",
+    // Docker reachability, as a mode: `plain` (daemon reachable directly),
+    // `sudo` (only via passwordless `sudo -n docker`), `denied` (docker is
+    // installed but neither works — needs NOPASSWD sudo), or empty (no docker).
+    "echo '---DOCKERMODE---'; if command -v docker >/dev/null 2>&1; then if docker info >/dev/null 2>&1; then echo plain; elif sudo -n docker info >/dev/null 2>&1; then echo sudo; else echo denied; fi; fi; ",
     "echo '---UNAME---'; uname -snrm; hostname"
 );
 
@@ -159,9 +200,13 @@ pub struct SystemInfo {
     pub uptime_secs: u64,
     pub cpu_model: String,
     pub virt: String,
-    /// Whether `docker` is on PATH and reachable — the Containers tab only
+    /// Whether `docker` is present in any form — the Containers tab only
     /// appears when true, so hosts without docker never see an empty tab.
     pub has_docker: bool,
+    /// Docker is installed but the daemon is unreachable (no direct access and
+    /// no passwordless sudo). The tab shows a "needs NOPASSWD sudo" hint
+    /// instead of a container list.
+    pub docker_denied: bool,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -554,12 +599,13 @@ impl Drop for AbortOnDrop {
 /// keeps the last known containers.
 async fn docker_loop(
     handle: RusshHandle,
+    cmd: String,
     cache: std::sync::Arc<tokio::sync::Mutex<Vec<ContainerRow>>>,
     ready: std::sync::Arc<std::sync::atomic::AtomicBool>,
     interval: Duration,
 ) {
     loop {
-        if let Ok(out) = exec_cmd(&handle, DOCKER_CMD).await {
+        if let Ok(out) = exec_cmd(&handle, &cmd).await {
             let rows = parse_containers(
                 extract_section(&out, "DOCKERPS"),
                 extract_section(&out, "DOCKERSTATS"),
@@ -611,19 +657,23 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
     let os = parse_os_release(extract_section(&init, "OSREL")).unwrap_or(uname_os);
     let cpu_model = parse_cpu_model(extract_section(&init, "CPUINFO"));
     let virt = parse_virt(extract_section(&init, "VIRT"));
-    let has_docker = extract_section(&init, "HASDOCKER").trim() == "yes";
+    let docker_mode = DockerMode::parse(extract_section(&init, "DOCKERMODE"));
+    let has_docker = docker_mode.present();
+    let docker_denied = docker_mode == DockerMode::Denied;
 
     // Docker on a separate ≥5s loop; the main poll reads this cache so a
     // `docker stats` sample never delays CPU/mem/net. The guard aborts the
-    // sub-loop when this task is dropped (monitor stopped).
+    // sub-loop when this task is dropped (monitor stopped). Only spawned when
+    // we can actually read stats (plain or passwordless-sudo access).
     let container_cache = std::sync::Arc::new(tokio::sync::Mutex::new(Vec::<ContainerRow>::new()));
     let docker_ready = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let _docker_guard = if has_docker {
+    let _docker_guard = if docker_mode.pollable() {
         let dh = handle.clone();
+        let cmd = docker_cmd(docker_mode == DockerMode::Sudo);
         let cache = container_cache.clone();
         let ready = docker_ready.clone();
         let di = interval.max(Duration::from_secs(5));
-        Some(AbortOnDrop(tokio::spawn(docker_loop(dh, cache, ready, di)).abort_handle()))
+        Some(AbortOnDrop(tokio::spawn(docker_loop(dh, cmd, cache, ready, di)).abort_handle()))
     } else {
         None
     };
@@ -708,11 +758,12 @@ async fn run_monitor(conn_id: String, handle: RusshHandle, app: AppHandle, inter
                 cpu_model:   cpu_model.clone(),
                 virt:        virt.clone(),
                 has_docker,
+                docker_denied,
             },
-            containers: if has_docker {
+            containers: if docker_mode.pollable() {
                 container_cache.lock().await.clone()
             } else { Vec::new() },
-            containers_loaded: !has_docker || docker_ready.load(std::sync::atomic::Ordering::Relaxed),
+            containers_loaded: !docker_mode.pollable() || docker_ready.load(std::sync::atomic::Ordering::Relaxed),
             failed_units: parse_failed_units(extract_section(&output, "FAILED")),
             load,
             since_boot,

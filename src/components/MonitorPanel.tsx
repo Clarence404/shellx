@@ -260,7 +260,7 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
         {!waiting && subTab === "performance" && <PerformanceTab snapshots={snapshots} intervalSecs={intervalSecs} />}
         {!waiting && subTab === "process" && <ProcessTab processes={latest?.processes ?? []} />}
         {!waiting && subTab === "disk" && <DiskTab snapshots={snapshots} intervalSecs={intervalSecs} />}
-        {!waiting && subTab === "container" && <ContainerTab containers={latest?.containers ?? []} loaded={latest?.containersLoaded ?? false} />}
+        {!waiting && subTab === "container" && <ContainerTab containers={latest?.containers ?? []} loaded={latest?.containersLoaded ?? false} denied={latest?.system.dockerDenied ?? false} />}
         {!waiting && subTab === "failed" && <FailedTab units={latest?.failedUnits ?? []} />}
       </div>
     </div>
