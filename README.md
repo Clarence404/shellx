@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.31.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.32.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -12,7 +12,7 @@ Current release: **v0.31.0** — see [`docs/release-notes/`](docs/release-notes/
 
 ShellX is a desktop app that gives you:
 
-- **SSH terminal** in tabs — connect to Linux / BSD / macOS servers, get a working shell with themes, custom fonts, cursor style; public-key (Ed25519/RSA/ECDSA) or password auth, host-key verification against `~/.ssh/known_hosts`. Ctrl+Shift+C/V copy and paste with a preview before multi-line pastes run, and right-click offers Copy / Paste / Select all. A dropped saved-host session auto-reconnects under the same tab (scrollback and layout preserved) with backoff, and shows a manual Reconnect button if it gives up
+- **SSH terminal** in tabs — connect to Linux / BSD / macOS servers, get a working shell with themes, custom fonts, cursor style; public-key (Ed25519/RSA/ECDSA) or password auth, host-key verification against `~/.ssh/known_hosts`. Ctrl+Shift+C/V copy and paste with a preview before multi-line pastes run, and right-click offers Copy / Paste / Select all. Ctrl+Shift+F searches the scrollback with a match counter, highlight-all, and case / whole-word / regex toggles. A dropped saved-host session auto-reconnects under the same tab (scrollback and layout preserved) with backoff, and shows a manual Reconnect button if it gives up
 - **Local terminal** — open a shell on your own machine (PowerShell by default on Windows; any shell via Settings) in a tab right next to your SSH sessions
 - **Serial terminal** — a Serial view lists live COM ports (USB adapters shown with their chip name) and your saved profiles; quick-connect at 115200 8N1 or save a profile with full line settings (baud, data/stop bits, parity, flow control). Sessions open right inside the view with a per-session local-echo toggle and a line-ending choice (CR / LF / CRLF / None) for talking to devices that don't echo
 - **SSH tunnels (port forwarding)** — a dedicated Tunnels view lists every saved forward across every host in one place; start any rule directly (shellx opens the SSH transport silently when the host isn't already connected), auto-reconnect with backoff when a tunnel drops, autostart selected rules on app launch, drag rows to reorder, move a rule between hosts without recreating, share on the LAN (bind 0.0.0.0), or paste an `ssh -L …` command to bulk-import rules
