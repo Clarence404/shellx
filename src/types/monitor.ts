@@ -47,6 +47,7 @@ export interface SystemInfo {
   cpuModel: string;
   virt: string;
   hasDocker: boolean;
+  dockerDenied: boolean;
 }
 
 export interface ContainerRow {

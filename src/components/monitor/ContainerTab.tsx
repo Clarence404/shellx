@@ -1,4 +1,4 @@
-import { Boxes } from "lucide-react";
+import { Boxes, ShieldAlert } from "lucide-react";
 import type { ContainerRow } from "../../types/monitor";
 import { fmtBytes } from "./format";
 import { useWidthTier } from "./useWidth";
@@ -11,10 +11,39 @@ function stateColor(state: string, healthy: boolean | null): string {
   return "var(--text-3)"; // exited / created / paused
 }
 
-export function ContainerTab({ containers, loaded }: { containers: ContainerRow[]; loaded: boolean }) {
+export function ContainerTab({ containers, loaded, denied }: { containers: ContainerRow[]; loaded: boolean; denied?: boolean }) {
   const t = useT();
   const [ref, tier] = useWidthTier<HTMLDivElement>();
   const narrow = tier === "narrow";
+
+  // Docker is installed but this user can't reach the daemon and has no
+  // passwordless sudo for it, so we can't read stats. Say so — and how to fix
+  // it — instead of an empty or perpetually-loading list.
+  if (denied) {
+    const sudoers = "your_user ALL=(ALL) NOPASSWD: /usr/bin/docker";
+    return (
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 12, padding: "48px 28px", textAlign: "center",
+      }}>
+        <ShieldAlert size={26} style={{ color: "var(--warn)" }} />
+        <div style={{ fontSize: "var(--font-ui-size)", color: "var(--text-1)", fontWeight: 600 }}>
+          {t("Docker needs passwordless sudo")}
+        </div>
+        <div style={{ fontSize: "calc(var(--font-ui-size) - 1px)", color: "var(--text-2)", maxWidth: 460, lineHeight: 1.5 }}>
+          {t("This user can't reach the Docker daemon directly, and passwordless sudo isn't set up for it. Add a sudoers rule so shellx can read container stats without a password:")}
+        </div>
+        <code style={{
+          fontFamily: "var(--font-mono)", fontSize: "calc(var(--font-ui-size) - 1px)", color: "var(--text-1)",
+          background: "var(--panel-1)", border: "1px solid var(--border)", borderRadius: 6,
+          padding: "8px 12px", userSelect: "all", whiteSpace: "nowrap", maxWidth: "100%", overflowX: "auto",
+        }}>{sudoers}</code>
+        <div style={{ fontSize: "calc(var(--font-ui-size) - 2px)", color: "var(--text-3)", maxWidth: 460 }}>
+          {t("Run `sudo visudo` and add the line (swap in your username), then reopen this tab.")}
+        </div>
+      </div>
+    );
+  }
 
   // Docker runs on its own loop, so the first time this tab opens the cache
   // may not have filled yet — show a loading state rather than a premature
