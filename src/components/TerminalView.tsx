@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
-import { ChevronUp, ChevronDown, X, Copy, ClipboardPaste, TextSelect, RefreshCw, Unplug } from "lucide-react";
+import { ChevronUp, ChevronDown, X, Copy, ClipboardPaste, TextSelect, RefreshCw, Unplug, CaseSensitive, WholeWord, Regex } from "lucide-react";
 import { HostContextMenu } from "./HostContextMenu";
 import { needsPasteConfirm } from "../terminal/pasteGuard";
 import {
@@ -29,6 +29,19 @@ export interface SerialIo {
   lineEnding: "cr" | "lf" | "crlf" | "none";
 }
 
+/** Highlight-all colours for scrollback search. Theme-neutral: a warm amber
+ *  for every match, a stronger orange for the active one, both legible over
+ *  light and dark terminal palettes. Overview-ruler marks are solid (they must
+ *  be, per the addon's type). */
+const SEARCH_DECORATIONS = {
+  matchBackground: "rgba(255, 213, 74, 0.35)",
+  matchBorder: "rgba(255, 213, 74, 0.6)",
+  matchOverviewRuler: "#ffd54a",
+  activeMatchBackground: "rgba(255, 140, 26, 0.65)",
+  activeMatchBorder: "#ff8c1a",
+  activeMatchColorOverviewRuler: "#ff8c1a",
+} as const;
+
 export function TerminalView({ sessionId, serialIo, onReconnect }: {
   sessionId: SessionId;
   serialIo?: SerialIo;
@@ -53,6 +66,12 @@ export function TerminalView({ sessionId, serialIo, onReconnect }: {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [searchOpts, setSearchOpts] = useState({ caseSensitive: false, wholeWord: false, regex: false });
+  // Read inside the incremental onChange / navigation without re-closing them.
+  const searchOptsRef = useRef(searchOpts);
+  searchOptsRef.current = searchOpts;
+  /** Active-match index (0-based, -1 when none) + total, from the addon. */
+  const [matches, setMatches] = useState({ index: -1, count: 0 });
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   /** A paste big enough to deserve a look before it hits the shell. */
   const [pastePending, setPastePending] = useState<string | null>(null);
@@ -68,16 +87,37 @@ export function TerminalView({ sessionId, serialIo, onReconnect }: {
   function closeSearch() {
     setSearchOpen(false);
     searchRef.current?.clearDecorations();
+    setMatches({ index: -1, count: 0 });
     termRef.current?.focus();
   }
 
-  function findNext(q: string) {
-    if (q) searchRef.current?.findNext(q);
+  /** Run a search with the current toggles + highlight-all decorations. An
+   *  empty query clears everything; `incremental` extends the current match
+   *  instead of jumping (used while typing). */
+  function doSearch(q: string, dir: "next" | "prev", incremental = false) {
+    if (!q) {
+      searchRef.current?.clearDecorations();
+      setMatches({ index: -1, count: 0 });
+      return;
+    }
+    const o = searchOptsRef.current;
+    const opts = {
+      caseSensitive: o.caseSensitive, wholeWord: o.wholeWord, regex: o.regex,
+      incremental, decorations: SEARCH_DECORATIONS,
+    };
+    if (dir === "prev") searchRef.current?.findPrevious(q, opts);
+    else searchRef.current?.findNext(q, opts);
   }
 
-  function findPrev(q: string) {
-    if (q) searchRef.current?.findPrevious(q);
-  }
+  function findNext(q: string) { doSearch(q, "next"); }
+  function findPrev(q: string) { doSearch(q, "prev"); }
+
+  // Re-run the search when a toggle flips so the highlights + count update in
+  // place without the user retyping.
+  useEffect(() => {
+    if (searchOpen && query) doSearch(query, "next", true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchOpts]);
 
   function copySelection() {
     const sel = termRef.current?.getSelection();
@@ -157,6 +197,9 @@ export function TerminalView({ sessionId, serialIo, onReconnect }: {
     termRef.current = term;
     fitRef.current = fit;
     searchRef.current = search;
+    // The addon reports match position + total after every search; mirror it
+    // into state for the "n/m" readout. resultIndex is -1 when there are none.
+    search.onDidChangeResults((e) => setMatches({ index: e.resultIndex, count: e.resultCount }));
 
     // Inline command suggestions (fish-style ghost text + → to accept),
     // driven by the locally recorded history. The host element is the
@@ -498,8 +541,7 @@ export function TerminalView({ sessionId, serialIo, onReconnect }: {
             onChange={(e) => {
               setQuery(e.target.value);
               // Incremental: extend the current match instead of jumping.
-              if (e.target.value) searchRef.current?.findNext(e.target.value, { incremental: true });
-              else searchRef.current?.clearDecorations();
+              doSearch(e.target.value, "next", true);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && e.shiftKey) findPrev(query);
@@ -513,6 +555,32 @@ export function TerminalView({ sessionId, serialIo, onReconnect }: {
               borderRadius: 4, color: "var(--text-1)", outline: "none",
             }}
           />
+          <span style={{
+            fontSize: 11, color: query && matches.count === 0 ? "var(--error)" : "var(--text-3)",
+            minWidth: 40, textAlign: "center", fontVariantNumeric: "tabular-nums",
+            userSelect: "none", whiteSpace: "nowrap",
+          }}>
+            {query ? (matches.count > 0 ? `${matches.index + 1}/${matches.count}` : t("0/0")) : ""}
+          </span>
+          {([
+            ["caseSensitive", CaseSensitive, t("Match case")],
+            ["wholeWord", WholeWord, t("Whole word")],
+            ["regex", Regex, t("Regular expression")],
+          ] as const).map(([key, Icon, label]) => {
+            const on = searchOpts[key];
+            return (
+              <button key={key} onClick={() => setSearchOpts((s) => ({ ...s, [key]: !s[key] }))}
+                title={label} aria-pressed={on}
+                style={{
+                  background: on ? "var(--accent-fade, rgba(120,170,255,0.22))" : "none",
+                  border: on ? "1px solid var(--accent, #5b8cff)" : "1px solid transparent",
+                  cursor: "pointer", color: on ? "var(--accent, #5b8cff)" : "var(--text-2)",
+                  padding: 2, display: "flex", borderRadius: 3,
+                }}>
+                <Icon size={14} />
+              </button>
+            );
+          })}
           <button onClick={() => findPrev(query)} title={t("Previous match") + " (Shift+Enter)"}
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-2)", padding: 3, display: "flex", borderRadius: 3 }}>
             <ChevronUp size={14} />

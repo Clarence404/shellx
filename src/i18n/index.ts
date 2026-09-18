@@ -439,6 +439,10 @@ const zh: Record<string, string> = {
   "Search": "搜索",
   "Previous match": "上一个匹配",
   "Next match": "下一个匹配",
+  "Match case": "区分大小写",
+  "Whole word": "全字匹配",
+  "Regular expression": "正则表达式",
+  "0/0": "无结果",
 
   // Host dropdown (Files view)
   "Pick a host": "选择主机",
