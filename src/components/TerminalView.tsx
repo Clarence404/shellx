@@ -29,15 +29,16 @@ export interface SerialIo {
   lineEnding: "cr" | "lf" | "crlf" | "none";
 }
 
-/** Highlight-all colours for scrollback search. Theme-neutral: a warm amber
- *  for every match, a stronger orange for the active one, both legible over
- *  light and dark terminal palettes. Overview-ruler marks are solid (they must
- *  be, per the addon's type). */
+/** Highlight-all colours for scrollback search: a warm amber for every match,
+ *  a stronger orange for the active one. All values MUST be solid `#RRGGBB` —
+ *  the search addon parses match/active backgrounds as #RRGGBB only, and an
+ *  `rgba(…)` string makes it throw while building decorations, which silently
+ *  zeroes the result count and highlights (looks like "search finds nothing"). */
 const SEARCH_DECORATIONS = {
-  matchBackground: "rgba(255, 213, 74, 0.35)",
-  matchBorder: "rgba(255, 213, 74, 0.6)",
-  matchOverviewRuler: "#ffd54a",
-  activeMatchBackground: "rgba(255, 140, 26, 0.65)",
+  matchBackground: "#e2c044",
+  matchBorder: "#e2c044",
+  matchOverviewRuler: "#e2c044",
+  activeMatchBackground: "#ff8c1a",
   activeMatchBorder: "#ff8c1a",
   activeMatchColorOverviewRuler: "#ff8c1a",
 } as const;
