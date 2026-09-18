@@ -30,10 +30,9 @@ export interface SerialIo {
 }
 
 /** Highlight-all colours for scrollback search: a warm amber for every match,
- *  a stronger orange for the active one. All values MUST be solid `#RRGGBB` —
- *  the search addon parses match/active backgrounds as #RRGGBB only, and an
- *  `rgba(…)` string makes it throw while building decorations, which silently
- *  zeroes the result count and highlights (looks like "search finds nothing"). */
+ *  a stronger orange for the active one. Match/active backgrounds must be solid
+ *  `#RRGGBB` per the addon's type. (The highlight-all path also needs the
+ *  terminal's `allowProposedApi` — see the Terminal constructor.) */
 const SEARCH_DECORATIONS = {
   matchBackground: "#e2c044",
   matchBorder: "#e2c044",
@@ -189,6 +188,10 @@ export function TerminalView({ sessionId, serialIo, onReconnect }: {
       convertEol: false,
       scrollback: useSettingsStore.getState().advanced.terminalScrollback,
       theme: TERMINAL_PALETTES[initialTheme],
+      // The search addon's highlight-all draws match decorations via xterm's
+      // proposed decoration API; without this it throws ("You must set the
+      // allowProposedApi option"), which killed the search count + highlights.
+      allowProposedApi: true,
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
