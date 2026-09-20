@@ -62,6 +62,10 @@ export function attachCommandSuggest(opts: {
     borderRadius: "6px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
     padding: "3px",
+    // Explicit, defensively: an ancestor could inherit pointer-events:none
+    // from something else absolutely positioned over the terminal (e.g. a
+    // drag overlay), which would otherwise make every row unclickable.
+    pointerEvents: "auto",
   } as Partial<CSSStyleDeclaration>);
   container.appendChild(list);
 
@@ -86,10 +90,28 @@ export function attachCommandSuggest(opts: {
     hide();
   }
 
-  function renderRows() {
+  /** The row elements currently in `list`, in candidate order — kept so
+   *  `highlightRows` can restyle them without rebuilding. */
+  let rowEls: HTMLDivElement[] = [];
+
+  /** (Re)paints just the selected-row background + keeps it on screen.
+   *  Cheap, and safe to call from a mouseenter fired ON one of these same
+   *  rows — it never replaces the DOM node the pointer is sitting over. */
+  function highlightRows() {
+    rowEls.forEach((row, i) => {
+      row.style.background = i === selIdx ? "var(--accent-fade)" : "transparent";
+    });
+    // Keep the highlight on screen while ↑/↓ walk past the fold.
+    rowEls[selIdx]?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** Rebuilds the row elements from `candidates` — only needed when the
+   *  candidate list itself changes (a fresh fetch), not on hover/arrow
+   *  navigation (see `highlightRows`). */
+  function buildRows() {
     const line = shadow.line;
     list.textContent = "";
-    candidates.forEach((c, i) => {
+    rowEls = candidates.map((c, i) => {
       const row = document.createElement("div");
       Object.assign(row.style, {
         display: "flex",
@@ -98,16 +120,25 @@ export function attachCommandSuggest(opts: {
         padding: "3px 8px",
         borderRadius: "4px",
         cursor: "pointer",
-        background: i === selIdx ? "var(--accent-fade)" : "transparent",
+        pointerEvents: "auto",
       } as Partial<CSSStyleDeclaration>);
+      // mousedown fires before the terminal's own mouseup would steal
+      // focus, so we act on it (with preventDefault to keep that focus on
+      // the terminal); click is a defensive fallback in case mousedown
+      // doesn't land in some environment. accept() is idempotent — a
+      // second call for the same row after the first has already
+      // consumed it is a harmless no-op (see accept()).
       row.addEventListener("mousedown", (e) => {
-        // mousedown, not click: the terminal steals focus on mouseup.
+        e.preventDefault();
+        accept(i);
+      });
+      row.addEventListener("click", (e) => {
         e.preventDefault();
         accept(i);
       });
       row.addEventListener("mouseenter", () => {
         selIdx = i;
-        renderRows();
+        highlightRows();
       });
 
       const text = document.createElement("span");
@@ -146,10 +177,9 @@ export function attachCommandSuggest(opts: {
       row.appendChild(text);
       row.appendChild(badge);
       list.appendChild(row);
+      return row;
     });
-    // Keep the highlight on screen while ↑/↓ walk past the fold.
-    const sel = list.children[selIdx] as HTMLElement | undefined;
-    sel?.scrollIntoView({ block: "nearest" });
+    highlightRows();
   }
 
   function position() {
@@ -188,7 +218,7 @@ export function attachCommandSuggest(opts: {
       list.style.display = "none";
       return;
     }
-    renderRows();
+    buildRows();
     list.style.display = "block";
     position();
   }
@@ -235,12 +265,12 @@ export function attachCommandSuggest(opts: {
     if (ev.type !== "keydown" || !visible()) return true;
     if (ev.key === "ArrowDown") {
       selIdx = (selIdx + 1) % candidates.length;
-      renderRows();
+      highlightRows();
       return false;
     }
     if (ev.key === "ArrowUp") {
       selIdx = selIdx <= 0 ? candidates.length - 1 : selIdx - 1;
-      renderRows();
+      highlightRows();
       return false;
     }
     if (ev.key === "Tab") {
