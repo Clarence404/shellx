@@ -42,7 +42,10 @@ function makeFakeTerm() {
 }
 
 function keydown(key: string): KeyboardEvent {
-  return { type: "keydown", key, ctrlKey: false, shiftKey: false } as KeyboardEvent;
+  return {
+    type: "keydown", key, ctrlKey: false, shiftKey: false,
+    preventDefault: vi.fn(),
+  } as unknown as KeyboardEvent;
 }
 
 /** Decodes what a writeSessionInput call actually put on the wire. */
@@ -76,7 +79,16 @@ describe("attachCommandSuggest", () => {
     await typeAndWaitForCandidates(feed, "syst");
 
     expect(suggest.handleKey(keydown("ArrowDown"))).toBe(false); // consumed by the dropdown
-    expect(suggest.handleKey(keydown("Enter"))).toBe(false); // consumed — never reaches the shell
+    const enterEv = keydown("Enter");
+    expect(suggest.handleKey(enterEv)).toBe(false); // consumed — never reaches the shell
+    // Returning false only stops xterm's OWN processing of this keydown; a
+    // Chromium/WebView2 textarea still fires a separate `keypress` for
+    // Enter afterward unless keydown was actually cancelled, and xterm has
+    // its own independent handler for that event which sends a raw \r —
+    // executing whatever accept() just filled in. preventDefault() is what
+    // suppresses that follow-up keypress; without it this test's other
+    // assertions all pass while the real app still executes the line.
+    expect(enterEv.preventDefault).toHaveBeenCalled();
 
     expect(writeSessionInput).toHaveBeenCalledTimes(1);
     const sent = sentBytes();
