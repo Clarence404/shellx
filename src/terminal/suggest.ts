@@ -263,12 +263,24 @@ export function attachCommandSuggest(opts: {
 
   function handleKey(ev: KeyboardEvent): boolean {
     if (ev.type !== "keydown" || !visible()) return true;
+    // preventDefault() on every key we consume here, not just because xterm
+    // already stops processing it (that's what returning false does) — a
+    // browser suppresses the matching `keypress` event for the SAME
+    // keystroke only when `keydown` was cancelled. Without it, Chromium
+    // (WebView2 included) still fires `keypress` for Enter, and xterm has
+    // its own independent handler for that event — one our `ev.type !==
+    // "keydown"` guard above never sees — which sends a raw \r straight to
+    // the PTY right after accept() fills the line, submitting it. That's
+    // the whole line, not the highlight state, so this bug never showed up
+    // from a mouse click, which involves no keypress event at all.
     if (ev.key === "ArrowDown") {
+      ev.preventDefault();
       selIdx = (selIdx + 1) % candidates.length;
       highlightRows();
       return false;
     }
     if (ev.key === "ArrowUp") {
+      ev.preventDefault();
       selIdx = selIdx <= 0 ? candidates.length - 1 : selIdx - 1;
       highlightRows();
       return false;
@@ -281,10 +293,12 @@ export function attachCommandSuggest(opts: {
     if (ev.key === "Enter" && selIdx >= 0) {
       // Enter takes the highlight only after an explicit ↑/↓ — an
       // un-navigated Enter still runs the line the user typed.
+      ev.preventDefault();
       accept(selIdx);
       return false;
     }
     if (ev.key === "Escape") {
+      ev.preventDefault();
       dismissed = true;
       hide();
       return false;
