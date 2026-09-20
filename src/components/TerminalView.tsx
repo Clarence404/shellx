@@ -146,14 +146,20 @@ export function TerminalView({ sessionId, serialIo, onReconnect }: {
   }
 
   function doPaste(text: string) {
-    // Straight to the PTY, deliberately WITHOUT bracketed paste:
-    // xterm's paste() wraps the text in \x1b[200~ markers when the
-    // shell asked for them, and bash 5.1+ then paints the whole paste
-    // in reverse video until Enter — which read as a rendering bug.
-    // The multi-line-executes-immediately risk those markers guard is
-    // already covered by the confirmation dialog above.
+    // Normalise line endings for the PTY either way.
     const normalized = text.replace(/\r\n/g, "\r").replace(/\n/g, "\r");
-    void writeSessionInput(sessionId, Array.from(new TextEncoder().encode(normalized)));
+    // Bracket the paste (\x1b[200~ … \x1b[201~) ONLY when the remote program
+    // actually asked for it (DECSET 2004 — xterm reports this live via
+    // modes.bracketedPasteMode). This is exactly why vim/nano request it:
+    // without the markers they can't tell a paste from fast typing, so every
+    // newline in the pasted text re-triggers their own autoindent and a
+    // multi-line file (e.g. YAML) comes out "staircased" one extra indent
+    // per line. A plain shell that never asked for bracketed paste (most
+    // bash prompts) gets the same raw bytes as before — unaffected.
+    const payload = termRef.current?.modes.bracketedPasteMode
+      ? `\x1b[200~${normalized}\x1b[201~`
+      : normalized;
+    void writeSessionInput(sessionId, Array.from(new TextEncoder().encode(payload)));
     setPastePending(null);
     // A paste is user input: jump to the live prompt so the pasted line
     // (and the response it triggers) is in view, the same way typing does.
