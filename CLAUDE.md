@@ -32,7 +32,16 @@ The flow is always:
 2. Confirm tests + tsc pass locally.
 3. **Auto-launch Tauri** — after every batch of substantive code changes finishes and passes tests, launch `pnpm tauri:dev` yourself if it's not already running (via `Start-Process cmd.exe /c "pnpm tauri:dev"` if `pnpm` is broken in bash — see the corepack workaround note further below). Do not ask the user to launch it. Do not wait for the user to say "启动" or "run it". If a previous instance is still running, HMR delivers pure frontend changes for free — but Rust changes need a rebuild, and Tauri handles that automatically once the process is up. Point out what to look at in one or two sentences after launching.
 4. **Stop and wait.** Do not proceed to tagging until the user gives explicit go-ahead (e.g. "打 tag", "发版", "OK", "看好了 → 发布"). Silence is not approval. A user message about a different topic is not approval. Approval for one release is not standing approval for future releases.
-5. Only after explicit approval: merge the feature branch into `main` (fast-forward or `--no-ff` as appropriate), bump the three version fields (see below), write both release-notes files (see below), **update `README.md` + `README.zh-CN.md`** if the release adds or changes anything user-visible (features, screenshots, usage — per the Docs language policy the pair moves together), commit on `main`, tag, push. A release that ships a new feature but leaves the README stale is an incomplete release.
+5. Only after explicit approval: merge the feature branch into `main` (fast-forward or `--no-ff` as appropriate), bump the three version fields (see below), write both release-notes files (see below), **check whether `README.md` + `README.zh-CN.md` need updating and update both if so** (per the Docs language policy the pair moves together), commit on `main`, tag, push. A release that ships a new feature but leaves the README stale is an incomplete release.
+
+   The README check is not just "did this add a user-visible feature". Also check, every release:
+   - **Feature bullets** (§1) — new or changed user-visible behavior.
+   - **Architecture** (§2) — a new `src-tauri/src/` top-level module, a new frontend `src/state/` concept worth naming, or a stale forward-looking claim (something described as "future" or "not yet" that has since shipped).
+   - **Dependencies / tooling** (§3) — a new required build tool, changed minimum version, new platform-specific prerequisite.
+   - **Troubleshooting** — a new recurring build/runtime error worth documenting, or an existing entry whose fix no longer applies.
+   - **Keyboard shortcuts table** — a new or changed global shortcut.
+
+   None of these need to fire every release — most releases touch none of them. But actually look, rather than only pattern-matching "is there a new feature bullet to add".
 
 **Corepack workaround (this environment specifically):** `pnpm` via bash sometimes hits `ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING` from corepack partway through a session. When that happens, launch pnpm from `cmd.exe` instead — `Start-Process -FilePath "cmd.exe" -ArgumentList "/c","pnpm tauri:dev > `"$env:TEMP\tauri-out.log`" 2>&1" -WorkingDirectory "<repo>" -WindowStyle Hidden` reliably works. Poll for `Get-Process shellx` to know when the window is up.
 

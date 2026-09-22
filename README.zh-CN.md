@@ -48,10 +48,16 @@ ShellX 分成前后端两半，中间隔着一层清晰的 IPC 边界。
 
 `src-tauri/src/` 是一个 Tauri 包裹的 Rust binary crate。它暴露一组 `#[tauri::command]` 函数（`src-tauri/src/ipc/`）供前端调用。层次结构：
 
-- **transport/** —— 通过网络传字节。目前只有 TCP；trait 设计让 RS-232 / WebSocket 未来能无缝加入，上层不用改。
-- **protocol/** —— SSH（用 [`russh`](https://github.com/warp-tech/russh)）+ SFTP。认证、PTY、channel、resize、文件传输。
+- **transport/** —— 网络连接的字节传输。目前只有 TCP，trait 留了扩展空间。串口走的是完全独立的路径（见下面的 `protocol/serial.rs`），根本不经过这个 trait。
+- **protocol/** —— SSH（用 [`russh`](https://github.com/warp-tech/russh)）、SFTP、FTP/FTPS（`ftp/`）、串口（`protocol/serial.rs`，基于 `serialport` crate）。认证、PTY、channel、resize、文件传输。
 - **session::SessionManager** —— 用 UUID 索引每个活跃连接。每个会话跑一个专门的 `tokio` 任务，双向搬运字节（通过 `session:data` / `session:closed` 这样的 Tauri 事件给前端）。
+- **monitor/** —— 通过独立的 SSH 会话轮询已连接的 Linux 主机，采集 CPU/内存/网络/磁盘指标、进程、Docker 容器和失败的 systemd 单元，把快照流式推给前端。
+- **transfer/** —— 以后台 `tokio` 任务跑上传/下载：进度、暂停/继续、取消。
 - **local/** —— 本机文件系统：list、mkdir、rename、copy、磁盘枚举（给磁盘选择器用）。
+- **store/**、**settings/** —— sqlite 存储的保存主机 / 串口配置 / 命令历史，以及 JSON 设置文件。
+- **hostkeys/**、**keys/** —— 基于 `known_hosts` 的 host-key TOFU 验证，以及磁盘上私钥的发现。
+- **sshconfig/**、**bundle/** —— 读取 `~/.ssh/config` 用于导入，以及主机/隧道/设置打包成单个 JSON 文件的导出导入。
+- **logs/** —— 上面每个子系统写入的结构化事件日志，支撑「设置 → 日志」。
 
 ### 前后端通信
 
@@ -196,6 +202,12 @@ Windows/Linux 上用 `Ctrl+Shift+T` / `Ctrl+Shift+W`（不是 `Ctrl+T` / `Ctrl+W
 
 ## 常见问题
 
+**刚装完发布的安装包，不是从源码构建的？** 下面这两条是给你的；再往下都是给从源码构建 ShellX 的开发者的。
+
+**Windows 提示"Windows 已保护你的电脑"（SmartScreen）** —— 安装包还没做代码签名（签名在 v1.0 路线图上）。点 **更多信息**，再点 **仍要运行**。
+
+**macOS 提示应用"已损坏，无法打开" / "无法验证开发者"**（Gatekeeper）—— 同样是没签名。打开 **系统设置 → 隐私与安全性**，往下翻能看到被拦截的提示，点 **仍要打开**。如果没看到这一栏，改用命令行手动清掉隔离标记：`xattr -cr /Applications/ShellX.app`，再重新打开。
+
 **`error: Missing manifest in toolchain 'stable-…'`** —— Rust toolchain 安装中途被打断（Windows Defender 经常干这事）。修：
 
 ```bash
@@ -209,7 +221,7 @@ cargo --version && rustc --version
 
 **`warning: output filename collision at ... shellx.pdb`** —— 无害。`[lib]` 和 `[[bin]]` 共享 crate 名。构建正常，二进制能跑。详见 [rust-lang/cargo#6313](https://github.com/rust-lang/cargo/issues/6313)。
 
-**Windows Defender 拦截构建出来的 exe** —— 没做代码签名。签名在 v1.0 路线图上，现在的解法：右键 → 属性 → **解除阻止**。
+**Windows Defender 拦截你本地构建出来的 `target/debug` 或 `target/release` exe**（不是上面说的安装包——同一个根因，不同的二进制）—— 右键 → 属性 → **解除阻止**。
 
 ---
 

@@ -48,10 +48,16 @@ ShellX has two halves and a boundary between them.
 
 `src-tauri/src/` is a Rust binary crate wrapped by Tauri. It exposes a set of `#[tauri::command]` functions (`src-tauri/src/ipc/`) that the frontend calls. The interesting layers behind that:
 
-- **transport/** — bytes over the wire. Just TCP today; the trait is designed so RS-232 / WebSocket can plug in without touching upper layers.
-- **protocol/** — SSH (via [`russh`](https://github.com/warp-tech/russh)) and SFTP. Auth, PTYs, channels, resize, file transfers.
+- **transport/** — bytes over the wire for network connections. Just TCP today; the trait leaves room for more. Serial ports are a separate path (see `protocol/serial.rs` below) — they don't go through this trait at all.
+- **protocol/** — SSH (via [`russh`](https://github.com/warp-tech/russh)), SFTP, FTP/FTPS (`ftp/`), and serial (`protocol/serial.rs`, via the `serialport` crate). Auth, PTYs, channels, resize, file transfers.
 - **session::SessionManager** — owns every live connection keyed by UUID. Each session runs a dedicated `tokio` task that pumps bytes between the network and the frontend (via `session:data` / `session:closed` Tauri events).
+- **monitor/** — polls a connected Linux host over its own SSH session for CPU/memory/network/disk metrics, processes, Docker containers and failed systemd units, and streams snapshots to the frontend.
+- **transfer/** — upload/download transfers as background `tokio` tasks: progress, pause/resume, cancellation.
 - **local/** — host filesystem: list, mkdir, rename, copy, disk enumeration for the disk picker.
+- **store/**, **settings/** — the sqlite-backed saved-hosts / serial-profile / command-history stores, and the JSON settings file.
+- **hostkeys/**, **keys/** — `known_hosts`-backed host-key TOFU verification, and private-key discovery on disk.
+- **sshconfig/**, **bundle/** — reading `~/.ssh/config` for import, and the single-JSON-file export/import of hosts, tunnels and settings.
+- **logs/** — the structured event log every subsystem above writes to, backing Settings → Logs.
 
 ### Communication
 
@@ -196,6 +202,12 @@ Windows/Linux use `Ctrl+Shift+T` / `Ctrl+Shift+W` (not `Ctrl+T` / `Ctrl+W`) so t
 
 ## Troubleshooting
 
+**Just installed the app — not building from source?** These two apply to you; the rest below are for building ShellX from source.
+
+**Windows says "Windows protected your PC" (SmartScreen)** — the installer isn't code-signed yet (signing is on the v1.0 roadmap). Click **More info**, then **Run anyway**.
+
+**macOS says the app "can't be opened" / "cannot verify the developer"** (Gatekeeper) — same reason, unsigned build. Open **System Settings → Privacy & Security**, scroll down to the blocked-app notice, and click **Open Anyway**. If that section doesn't appear, clear the quarantine flag by hand instead: `xattr -cr /Applications/ShellX.app`, then launch it again.
+
 **`error: Missing manifest in toolchain 'stable-…'`** — the Rust toolchain install was interrupted (Windows Defender often does this). Fix:
 
 ```bash
@@ -209,7 +221,7 @@ cargo --version && rustc --version
 
 **`warning: output filename collision at ... shellx.pdb`** — benign; `[lib]` and `[[bin]]` share the crate name. Build succeeds. See [rust-lang/cargo#6313](https://github.com/rust-lang/cargo/issues/6313).
 
-**Windows Defender flags the built exe** — it's unsigned. Code signing is on the v1.0 roadmap; for now, right-click → Properties → **Unblock**.
+**Windows Defender flags your locally-built `target/debug` or `target/release` exe** (not the installer above — same root cause, different binary) — right-click → Properties → **Unblock**.
 
 ---
 
