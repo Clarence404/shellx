@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.33.2** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.34.0** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -28,7 +28,7 @@ ShellX is a desktop app that gives you:
 - **Bilingual interface** — switch the whole UI between English and Chinese in Settings, applied live
 - **Split panes** — drag a tab onto the edge of a pane to split it, onto the middle to swap the two, or onto the outer band of the area for a full-width row or full-height column. Same-direction splits stay evenly divided; drag a divider to resize, double-click it to level the row. Each pane switches its own Terminal / Files / Tunnels / Monitor
 - **Advanced settings** — Settings → Advanced tunes SSH connect timeout and keepalive, concurrent SFTP transfers, terminal scrollback, session and tunnel reconnect delay and attempt limit, and how much detail the logs record
-- **Auto-update** — checks for new releases on startup (can be disabled), shows a banner in Settings → About with a one-click download and relaunch; releases are signed with a Minisign key
+- **Auto-update** — checks for new releases on startup (can be disabled); a "what's new" card shows the release notes right away and offers a one-click download and relaunch, or check manually any time from Settings → About; releases are signed with a Minisign key
 
 It's a single ~7 MB installer with no runtime dependencies (Tauri bundles a small Rust binary and reuses the OS-native webview instead of shipping Chromium — that's why it's small).
 
