@@ -4,6 +4,7 @@ import { getConfigPaths, type ConfigPaths } from "../../ipc/config";
 import { useUpdater } from "../../state/updater";
 import { useSettingsStore } from "../../state/settings";
 import { useT } from "../../i18n";
+import { ReleaseNotes } from "../ReleaseNotes";
 
 export function AboutPanel() {
   const version = import.meta.env.PACKAGE_VERSION;
@@ -66,7 +67,9 @@ export function AboutPanel() {
                 {newVersion && <span style={{ color: "var(--text-2)", marginLeft: 6 }}>v{newVersion}</span>}
               </div>
               {notes && (
-                <div style={{ color: "var(--text-2)", marginBottom: 8, lineHeight: 1.5 }}>{notes}</div>
+                <div style={{ color: "var(--text-2)", marginBottom: 8 }}>
+                  <ReleaseNotes text={notes} />
+                </div>
               )}
               <button
                 onClick={() => void useUpdater.getState().downloadAndInstall()}

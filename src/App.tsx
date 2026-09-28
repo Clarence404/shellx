@@ -10,6 +10,7 @@ import { MonitorPanel } from "./components/MonitorPanel";
 import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
 import { RemoteEditNotice } from "./components/RemoteEdit";
+import { UpdateNotice } from "./components/UpdateNotice";
 import { GlobalTunnelsView } from "./components/GlobalTunnelsView";
 import { PaneLayout } from "./components/PaneLayout";
 import { activitiesFor, clampActivity } from "./state/activities";
@@ -685,6 +686,7 @@ export function App() {
       <SnippetPalette open={snippetsOpen} onClose={() => setSnippetsOpen(false)} />
       <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />
       <RemoteEditNotice />
+      <UpdateNotice />
       <HostKeyDialog />
       {passphraseReq && (
         <PassphraseDialog
