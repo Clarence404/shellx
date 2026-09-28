@@ -9,6 +9,11 @@ interface UpdaterState {
   status: UpdateStatus;
   version: string | null;
   notes: string | null;
+  /** True when this update was found by the silent startup check rather
+   *  than a manual "Check for updates" click — the proactive "what's new"
+   *  card only shows for this case, since a manual check already put the
+   *  user in front of the Settings → About banner. */
+  foundSilently: boolean;
   /** 0..1 while downloading; stays 0 when total size unknown. */
   progress: number;
   /** Bytes received so far; updated on every Progress event. */
@@ -24,7 +29,8 @@ interface UpdaterState {
 let pending: Update | null = null;
 
 export const useUpdater = create<UpdaterState>((set, get) => ({
-  status: "idle", version: null, notes: null, progress: 0, received: 0, total: 0, error: null,
+  status: "idle", version: null, notes: null, foundSilently: false,
+  progress: 0, received: 0, total: 0, error: null,
 
   async check(silent) {
     const s = get().status;
@@ -34,7 +40,7 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
       const upd = await updaterCheck();
       if (upd) {
         pending = upd;
-        set({ status: "available", version: upd.version, notes: upd.body ?? null });
+        set({ status: "available", version: upd.version, notes: upd.body ?? null, foundSilently: silent });
         void logPush({
           level: "info", category: "updater",
           message: `update available: ${upd.version}`,

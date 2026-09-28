@@ -106,13 +106,16 @@ vi.mock("./ipc/settings", () => ({
 vi.mock("./state/updater", () => {
   const state = {
     status: "idle" as const,
-    version: null, notes: null, progress: 0, received: 0, total: 0, error: null,
+    version: null, notes: null, foundSilently: false,
+    progress: 0, received: 0, total: 0, error: null,
     check: vi.fn().mockResolvedValue(undefined),
     downloadAndInstall: vi.fn().mockResolvedValue(undefined),
   };
   return {
+    // UpdateNotice calls useUpdater() with no selector to destructure the
+    // whole state — support both that and the selector form other callers use.
     useUpdater: Object.assign(
-      (selector: (s: typeof state) => unknown) => selector(state),
+      (selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state),
       { getState: () => state, setState: vi.fn() },
     ),
   };
