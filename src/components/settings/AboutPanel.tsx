@@ -117,19 +117,27 @@ export function AboutPanel() {
       )}
 
       {/* ── Update error banner ── */}
+      {/* Deliberately calm: a failed CHECK (network hiccup, the update
+          server briefly unavailable mid-release) isn't a real error the
+          user needs to worry about — it just means try again later. The
+          raw exception (e.g. "Could not fetch a valid release JSON from
+          the remote") is exposed only as a title tooltip, not the message
+          itself; no red/alarming styling. */}
       {status === "error" && (
-        <div style={{
-          marginTop: 16, padding: "8px 12px", borderRadius: 6,
-          border: "1px solid var(--error)", background: "rgba(243,139,168,.08)",
-          fontSize: 12, display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <span style={{ color: "var(--error)", flex: 1 }}>{t("Update check failed")}{error ? `: ${error}` : ""}</span>
+        <div
+          title={error ?? undefined}
+          style={{
+            marginTop: 16, padding: "8px 12px", borderRadius: 6,
+            border: "1px solid var(--border)", background: "var(--panel-1)",
+            fontSize: 12, display: "flex", alignItems: "center", gap: 8,
+          }}>
+          <span style={{ color: "var(--text-2)", flex: 1 }}>{t("Couldn't check for updates right now — try again later.")}</span>
           <button
             onClick={() => void useUpdater.getState().check(false)}
             style={{
               fontSize: 11, padding: "2px 8px", borderRadius: 4,
-              border: "1px solid var(--error)", background: "transparent",
-              color: "var(--error)", cursor: "pointer",
+              border: "1px solid var(--border)", background: "transparent",
+              color: "var(--text-2)", cursor: "pointer",
             }}
           >{t("Retry")}</button>
         </div>
