@@ -409,7 +409,7 @@ const zh: Record<string, string> = {
   "A new version is ready to download.": "有新版本可以下载。",
   "Later": "以后再说",
   "Downloading…": "下载中…",
-  "A new release may be in progress — try again later.": "新版本可能正在发布中，请稍后再试。",
+  "A new release may be in progress — try again later.": "新版本正在发布中，请稍后再试。",
   "Retry": "重试",
   "Automatically check for updates": "自动检查更新",
 
