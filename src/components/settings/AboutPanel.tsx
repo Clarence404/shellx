@@ -131,7 +131,7 @@ export function AboutPanel() {
             border: "1px solid var(--border)", background: "var(--panel-1)",
             fontSize: 12, display: "flex", alignItems: "center", gap: 8,
           }}>
-          <span style={{ color: "var(--text-2)", flex: 1 }}>{t("Couldn't check for updates right now — try again later.")}</span>
+          <span style={{ color: "var(--text-2)", flex: 1 }}>{t("A new release may be in progress — try again later.")}</span>
           <button
             onClick={() => void useUpdater.getState().check(false)}
             style={{
