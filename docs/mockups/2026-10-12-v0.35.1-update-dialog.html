@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>更新弹窗 · 交互图 (v0.35.1)</title>
+<style>
+:root{--bg:#eef0f4;--panel:#fff;--panel2:#f4f5f8;--border:#e3e6ec;--t1:#1f2430;--t2:#5b6272;--t3:#98a0b0;--accent:#4c7cff;--fade:rgba(76,124,255,.12)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:var(--t1);padding:24px}
+.win{max-width:900px;margin:0 auto;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.08);overflow:hidden;height:420px}
+.tb{display:flex;align-items:center;height:36px;background:var(--panel2);border-bottom:1px solid var(--border);padding:0 10px;gap:8px}
+.tb b{font-size:12px}.tb .sp{flex:1}.tb .pill2{font-size:12px;color:var(--t2);padding:3px 10px;border-radius:999px;border:1px solid var(--border);background:#fff}
+#pill{display:none;height:24px;padding:0 11px;border-radius:999px;border:none;background:var(--accent);color:#fff;font:600 12px inherit;font-family:inherit;cursor:pointer;align-items:center;gap:5px}
+.body{padding:20px;color:var(--t3)}
+.ctl{max-width:900px;margin:14px auto 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;color:var(--t2)}
+.ctl button{border:1px solid var(--border);background:#fff;border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:20}
+.dlg{width:520px;max-width:calc(100vw - 48px);max-height:82vh;display:flex;flex-direction:column;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.4)}
+.h{display:flex;align-items:center;gap:10px;padding:16px 20px 10px}.h .t{font-size:15px;font-weight:600}
+.h .v{font-size:11px;font-weight:600;padding:1px 8px;border-radius:999px;background:var(--fade);color:var(--accent)}
+.h .x{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--t3);font-size:18px;line-height:1}
+.cur{padding:0 20px 12px;font-size:12px;color:var(--t2)}
+.nt{margin:0 20px;padding:12px 14px;overflow:auto;min-height:80px;max-height:260px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);font-size:12px;color:var(--t2)}
+.nt p{margin:0 0 8px}.nt ul{margin:0;padding-left:18px}.nt li{margin:5px 0}.nt b{color:var(--t1)}
+.ft{padding:14px 20px 16px;display:flex;align-items:center;gap:8px}
+.skip{background:none;border:none;cursor:pointer;color:var(--t3);font:inherit;padding:6px 4px}
+.ft .sp{flex:1}
+.ghost{padding:6px 12px;border-radius:5px;border:1px solid #d5d9e2;color:var(--t1);text-decoration:none;font-size:12px}
+.pri{padding:6px 14px;border-radius:5px;border:none;background:var(--accent);color:#fff;font:600 12px inherit;font-family:inherit;cursor:pointer}
+.prog{padding:14px 20px 16px;display:none}.prog .r{display:flex;justify-content:space-between;margin-bottom:6px}
+.bar{height:8px;border-radius:4px;background:var(--border);overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+</style></head><body>
+<div class="win">
+  <div class="tb"><b>shellx</b><span class="sp"></span>
+    <button id="pill" onclick="openDlg()">⬇ <span id="pl">更新</span></button>
+    <span class="pill2">代码片段</span></div>
+  <div class="body">（应用主界面）— 标题栏右侧的蓝色“更新”按钮：有新版本时出现，关闭弹窗后仍可点它重开；点“忽略此版本”后消失。</div>
+</div>
+<div class="ctl">
+  <button onclick="reset(true)">▶ 模拟启动时发现新版本（自动弹出）</button>
+  <button onclick="reset(false)">模拟“已看过”（只有标题栏按钮）</button>
+  <button onclick="toggleNotes()">切换：有/无更新说明</button>
+  <span id="st"></span>
+</div>
+<div class="ov" id="ov" onclick="closeDlg()"><div class="dlg" onclick="event.stopPropagation()">
+  <div class="h"><span style="color:var(--accent)">✦</span><span class="t">发现新版本</span><span class="v">v0.35.1</span><button class="x" onclick="closeDlg()">×</button></div>
+  <div class="cur">当前版本 v0.35.0 → 新版本 v0.35.1</div>
+  <div class="nt" id="nt"></div>
+  <div class="ft" id="ft">
+    <button class="skip" onclick="skip()">忽略此版本</button><span class="sp"></span>
+    <a class="ghost" href="#" onclick="return false">打开下载页</a>
+    <button class="pri" onclick="dl()">下载并重启</button>
+  </div>
+  <div class="prog" id="pg"><div class="r"><span>下载中…</span><span id="pc">0%</span></div><div class="bar"><i id="bi"></i></div><div style="font-size:11px;color:var(--t2);margin-top:4px" id="by"></div></div>
+</div></div>
+<script>
+const NOTES='<p>发现新版本时，弹窗里直接显示这个版本改了什么；还可以忽略某个版本，标题栏有“更新”按钮随时重开。</p><ul><li><b>更新说明。</b>弹窗显示本版本的更新内容，不用再去 GitHub 找。</li><li><b>忽略此版本。</b>不想升级的版本点一下就不再打扰，更新的版本出来会再提示。</li><li><b>标题栏“更新”按钮。</b>关掉弹窗后还能从这里重新打开。</li></ul>';
+let hasNotes=true,state='avail',ignored=false,timer;
+const $=id=>document.getElementById(id);
+function render(){$('nt').innerHTML=hasNotes?NOTES:'<span style="color:var(--t3)">这个版本没有发布更新说明。</span>';
+ $('pill').style.display=(state!=='idle'&&!ignored)?'inline-flex':'none';
+ $('st').textContent='状态：'+(ignored?'已忽略 v0.35.1':state==='dl'?'下载中':'有可用更新');}
+function openDlg(){$('ov').style.display='flex'}
+function closeDlg(){$('ov').style.display='none'}
+function skip(){ignored=true;closeDlg();render()}
+function dl(){state='dl';$('ft').style.display='none';$('pg').style.display='block';$('pill').style.display='none';let p=0;
+ timer=setInterval(()=>{p+=4;$('pc').textContent=p+'%';$('bi').style.width=p+'%';$('by').textContent=(p*0.05).toFixed(1)+' MB / 5.0 MB';$('pl').textContent=p+'%';render();
+  if(p>=100){clearInterval(timer);$('pc').textContent='完成，重启中…'}},120)}
+function reset(auto){clearInterval(timer);state='avail';ignored=false;$('ft').style.display='flex';$('pg').style.display='none';$('bi').style.width='0';$('pl').textContent='更新';render();auto?openDlg():closeDlg()}
+function toggleNotes(){hasNotes=!hasNotes;render()}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDlg()});
+reset(true);
+</script></body></html>
