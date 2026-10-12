@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import { Sparkles, X } from "lucide-react";
 import { useUpdater } from "../state/updater";
-import { useT } from "../i18n";
+import { useT, useLanguage } from "../i18n";
 import { ReleaseNotes } from "./ReleaseNotes";
+import { notesForLanguage } from "../state/releaseNotesLang";
+import { externalLinkProps } from "../ipc/external";
 
 const DOWNLOAD_PAGE = "https://github.com/Clarence404/shellx/releases/latest";
 
@@ -21,6 +23,9 @@ function fmtBytes(b: number): string {
 export function UpdateDialog() {
   const t = useT();
   const { status, version, notes, dialogOpen, progress, received, total, error } = useUpdater();
+  const lang = useLanguage();
+  // The manifest carries both languages; show the one the UI is in.
+  const localized = notesForLanguage(notes, lang);
   const current = import.meta.env.PACKAGE_VERSION;
   const open = dialogOpen && !!version && (status === "available" || status === "downloading" || status === "error");
 
@@ -88,8 +93,8 @@ export function UpdateDialog() {
           border: "1px solid var(--border)", borderRadius: 8, background: "var(--panel-1)",
           fontSize: 12, color: "var(--text-2)",
         }}>
-          {notes?.trim()
-            ? <ReleaseNotes text={notes} />
+          {localized
+            ? <ReleaseNotes text={localized} />
             : <span style={{ color: "var(--text-3)" }}>{t("No release notes were published for this version.")}</span>}
         </div>
 
@@ -138,9 +143,7 @@ export function UpdateDialog() {
                 >{t("Skip this version")}</button>
                 <span style={{ flex: 1 }} />
                 <a
-                  href={DOWNLOAD_PAGE}
-                  target="_blank"
-                  rel="noreferrer"
+                  {...externalLinkProps(DOWNLOAD_PAGE)}
                   style={{
                     padding: "6px 12px", borderRadius: 5, fontSize: 12, textDecoration: "none",
                     border: "1px solid var(--border-hi)", color: "var(--text-1)",

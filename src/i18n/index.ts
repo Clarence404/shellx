@@ -723,6 +723,12 @@ export function translate(lang: Language, key: string): string {
   return lang === "zh" ? (zh[key] ?? key) : key;
 }
 
+/** The UI language, for callers that must branch on it rather than look
+ *  a key up (release notes arrive per-language from the manifest). */
+export function useLanguage(): Language {
+  return useSettingsStore((s) => s.language);
+}
+
 /** Returns a `t()` translator bound to the current UI language. */
 export function useT(): (key: string) => string {
   const lang = useSettingsStore((s) => s.language);
