@@ -11,6 +11,8 @@ export interface HostInfo {
   auth_method: string;   // "password" | "publickey"
   key_path: string | null;
   connection_mode: string;  // "terminal_only" | "term_tunnels" | "tunnels_only"
+  /** Sidebar group, or null when ungrouped. A group exists while a host names it. */
+  group_name: string | null;
 }
 
 export interface SaveHostArgs {
@@ -24,6 +26,7 @@ export interface SaveHostArgs {
   key_path?: string | null;
   passphrase?: string;
   connection_mode?: string;
+  group_name?: string | null;
 }
 
 export interface UpdateHostArgs {
@@ -38,6 +41,8 @@ export interface UpdateHostArgs {
   key_path?: string | null;
   passphrase?: string | null;
   connection_mode?: string;
+  /** null ungroups; absent leaves the group alone. */
+  group_name?: string | null;
 }
 
 // Response for save_host/update_host: the saved/updated host plus whether the

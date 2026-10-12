@@ -360,6 +360,29 @@ mod tests {
     }
 
     #[test]
+    fn a_hosts_group_travels_in_the_bundle() {
+        let mut h = host(1, "web");
+        h.group_name = Some("prod".into());
+        let b = build(&[h, host(2, "nas")], &[], None, &[], no_secrets, "0", 0);
+        let text = serde_json::to_string(&b).unwrap();
+        assert!(text.contains("\"groupName\":\"prod\""), "camelCase, like every other bundle field");
+        let back = parse(&text).unwrap();
+        assert_eq!(back.hosts[0].group_name.as_deref(), Some("prod"));
+        assert_eq!(back.hosts[1].group_name, None, "an ungrouped host stays ungrouped");
+    }
+
+    #[test]
+    fn a_bundle_written_before_groups_existed_imports_ungrouped() {
+        // No groupName key at all — what every bundle before this field looks like.
+        let text = r#"{"format":"shellx.config","version":1,"exportedAt":1,"appVersion":"0.30.0",
+            "hosts":[{"id":"00000000-0000-0000-0000-000000000001","label":"web","host":"web.example.com",
+            "port":22,"username":"deploy","authMethod":"password","connectionMode":"terminal_only"}],
+            "tunnels":[]}"#;
+        let b = parse(text).unwrap();
+        assert_eq!(b.hosts[0].group_name, None);
+    }
+
+    #[test]
     fn a_bundle_without_settings_still_loads() {
         let b = build(&[host(1, "web")], &[], None, &[], no_secrets, "0", 0);
         let text = serde_json::to_string(&b).unwrap();

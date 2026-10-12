@@ -1,6 +1,8 @@
 import { MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { HostContextMenu } from "./HostContextMenu";
+import { HostContextMenu, type MenuItem } from "./HostContextMenu";
+import { markStyle } from "./HostGroupHeader";
+import { splitHighlight } from "../state/hostGroups";
 import { useIconSizes } from "../state/settings";
 import type { HostInfo } from "../types/host";
 import { useT } from "../i18n";
@@ -36,12 +38,19 @@ interface Props {
    *  whether this right-click keeps or drops the selection. */
   onContextMenuOpen?: () => void;
   /** Shown in place of the ordinary menu when several rows are picked. */
-  bulkItems?: { label: string; onClick: () => void; variant?: "danger" }[];
+  bulkItems?: MenuItem[];
+  /** "Move to group" entries, slotted into the ordinary menu above Edit. */
+  moveItems?: MenuItem[];
+  /** Sits under a group header — drawn indented. */
+  indent?: boolean;
+  /** The active sidebar search: hits in the name are highlighted, and the
+   *  row grows a user@address line so an address match explains itself. */
+  query?: string;
 }
 
 const DOUBLE_CLICK_MS = 250;
 
-export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, onOpenNewShell, onDisconnect, onEdit, onDuplicate, onDelete, selected, selecting, onSelect, onContextMenuOpen, bulkItems }: Props) {
+export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, onOpenNewShell, onDisconnect, onEdit, onDuplicate, onDelete, selected, selecting, onSelect, onContextMenuOpen, bulkItems, moveItems, indent, query }: Props) {
   const t = useT();
   const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -87,10 +96,11 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
   // actions cluster, followed by a separator, then the saved-host
   // actions (Edit / Duplicate / Delete). Delete stays danger-red at the
   // bottom to keep destructive actions where the eye expects them.
-  const items = bulkItems ?? [
+  const items: MenuItem[] = bulkItems ?? [
     { label: t("Connect"), onClick: onConnect },
     ...(onDisconnect ? [{ label: t("Disconnect"), onClick: onDisconnect }] : []),
     { kind: "separator" as const },
+    ...(moveItems ?? []),
     { label: t("Edit"), onClick: onEdit },
     { label: t("Duplicate"), onClick: onDuplicate },
     { label: t("Delete"), onClick: onDelete, variant: "danger" as const },
@@ -125,6 +135,7 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
         data-selected={selected ? "true" : undefined}
         style={{
           width: "100%",
+          paddingLeft: indent ? 14 : 0,
           // A selected row squares off its left edge so the accent bar
           // reads as one continuous rail down the picked span.
           borderRadius: selected ? "0 5px 5px 0" : 5,
@@ -162,8 +173,18 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
               animation: isConnecting ? "hostrow-pulse 900ms ease-in-out infinite" : undefined,
               boxShadow: isConnecting ? "0 0 0 0 var(--accent-shadow)" : undefined,
             }} />
-          <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {host.label}
+          <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <Highlighted text={host.label} query={query} />
+            </span>
+            {query?.trim() && (
+              <span style={{
+                fontSize: 11, color: "var(--text-3)", whiteSpace: "nowrap",
+                overflow: "hidden", textOverflow: "ellipsis",
+              }}>
+                <Highlighted text={host.username} query={query} />@<Highlighted text={host.host} query={query} />
+              </span>
+            )}
           </span>
         </button>
         <button
@@ -190,6 +211,15 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
           onClose={() => setMenu(null)}
         />
       )}
+    </>
+  );
+}
+
+function Highlighted({ text, query }: { text: string; query?: string }) {
+  return (
+    <>
+      {splitHighlight(text, query ?? "").map((seg, i) =>
+        seg.hit ? <mark key={i} style={markStyle}>{seg.text}</mark> : <span key={i}>{seg.text}</span>)}
     </>
   );
 }

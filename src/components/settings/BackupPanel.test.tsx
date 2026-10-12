@@ -27,7 +27,7 @@ vi.mock("../../ipc/settings", () => ({
 function row(over: Partial<BundleHostRow> = {}): BundleHostRow {
   return {
     id: "b1", label: "web", host: "web.example.com", port: 22, username: "deploy",
-    notes: null, authMethod: "password", keyPath: null, connectionMode: "terminal_only",
+    notes: null, authMethod: "password", keyPath: null, connectionMode: "terminal_only", groupName: null,
     hasPassword: false, hasPassphrase: false, tunnelCount: 0, duplicate: false,
     ...over,
   };

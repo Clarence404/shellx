@@ -3,6 +3,7 @@ import { useT } from "../i18n";
 import { useHostsStore } from "../state/hosts";
 import { openConnection } from "../ipc/commands";
 import { KeyPicker } from "./KeyPicker";
+import { groupNames } from "../state/hostGroups";
 import type { HostInfo } from "../types/host";
 
 type Mode = "create" | "edit";
@@ -48,6 +49,13 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
   const [passphrase, setPassphrase] = useState("");
   const [forgetPassphrase, setForgetPassphrase] = useState(false);
 
+  // Sidebar group. Free text with the existing groups offered as a list:
+  // typing a name nobody uses yet creates the group. Read once — the form is
+  // a modal, the host list can't change underneath it.
+  const [groupName, setGroupName] = useState(initial?.group_name ?? "");
+  const existingGroups = groupNames(useHostsStore.getState().hosts ?? []);
+  const groupTrim = groupName.trim();
+
   // No live auto-fill: it used to write the label on the first username
   // keystroke (`r@host`) and then lock, because its own write made `label`
   // non-empty. The name is shown as a placeholder instead and resolved to
@@ -73,6 +81,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             key_path: selectedKeyPath,
             passphrase: forgetPassphrase ? null : (passphrase || undefined),
             connection_mode: connectionMode,
+            group_name: groupTrim || null,
           });
           if (!result.password_stored) {
             setErr("Host saved, but credential storage failed. Try again or connect manually.");
@@ -86,6 +95,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
             label: finalLabel, host, port: Number(port), username,
             password: forgetPassword ? null : (password.length > 0 ? password : undefined),
             connection_mode: connectionMode,
+            group_name: groupTrim || null,
           });
           if (!result.password_stored) {
             setErr("Host saved, but password storage failed. Try again or connect manually.");
@@ -104,6 +114,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               key_path: selectedKeyPath ?? undefined,
               passphrase: passphrase || undefined,
               connection_mode: connectionMode,
+              group_name: groupTrim || undefined,
             });
             if (!inserted.password_stored) {
               setErr("Host saved, but credential storage failed. Try again or connect manually.");
@@ -133,6 +144,7 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
               label: finalLabel, host, port: pn, username,
               password: (rememberPassword && canRememberPw) ? password : undefined,
               connection_mode: connectionMode,
+              group_name: groupTrim || undefined,
             });
             if (!inserted.password_stored) {
               setErr("Host saved, but password storage failed. Try again or connect manually.");
@@ -276,6 +288,43 @@ export function HostForm({ mode, initial, onDone, onCancel }: Props) {
                 </label>
               )}
             </>
+          )}
+
+          {/* A connect-only (unsaved) connection has nowhere to keep a group. */}
+          {(mode === "edit" || saveHost) && (
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{
+                fontSize: 11, color: "var(--text-1)", fontWeight: 500,
+                textTransform: "uppercase", letterSpacing: 0.8,
+              }}>
+                {t("Group")}
+                <span style={{ color: "var(--text-3)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                  {" "}({t("optional")})
+                </span>
+              </span>
+              <input
+                aria-label={t("Group")}
+                list="shellx-host-groups"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder={t("Pick a group, or type a new name")}
+                maxLength={40}
+                style={{
+                  background: "var(--panel-1)", border: "1px solid var(--border)",
+                  borderRadius: 4, padding: "6px 8px", fontSize: 12, color: "var(--text-1)",
+                }}
+              />
+              <datalist id="shellx-host-groups">
+                {existingGroups.map((g) => <option key={g} value={g} />)}
+              </datalist>
+              <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+                {!groupTrim
+                  ? t("No group")
+                  : existingGroups.includes(groupTrim)
+                    ? `${t("Joins group")} “${groupTrim}”`
+                    : `${t("Creates group")} “${groupTrim}”`}
+              </span>
+            </label>
           )}
 
           {mode === "create" && (

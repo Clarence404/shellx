@@ -9,6 +9,7 @@ export interface BundleHostRow {
   authMethod: string;
   keyPath: string | null;
   connectionMode: string;
+  groupName: string | null;
   /** A password existed on the exporting machine — never the password. */
   hasPassword: boolean;
   hasPassphrase: boolean;

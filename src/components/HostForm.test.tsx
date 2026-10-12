@@ -48,6 +48,90 @@ describe("HostForm", () => {
     expect(screen.queryByRole("button", { name: /save & connect/i })).not.toBeInTheDocument();
   });
 
+  // The Group field: free text over the existing groups. Each test reloads
+  // HostForm with its own store, like the edit-mode tests above.
+  async function groupForm(hosts: unknown[], addHost = vi.fn().mockResolvedValue({
+    id: "id-1", label: "l", host: "h", port: 22, username: "u", notes: null, created_at: 0,
+    last_connected_at: null, sort_order: 0, auth_method: "password", key_path: null,
+    connection_mode: "terminal_only", group_name: null, password_stored: true,
+  }), updateHostById = vi.fn()) {
+    vi.resetModules();
+    vi.doMock("../state/hosts", () => ({
+      useHostsStore: Object.assign(
+        (selector: any) => selector({ keychainAvailable: true, addHost, updateHostById }),
+        { getState: () => ({ keychainAvailable: true, hosts }) },
+      ),
+    }));
+    vi.doMock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), save: vi.fn() }));
+    const { HostForm: Reloaded } = await import("./HostForm");
+    return { Reloaded, addHost, updateHostById };
+  }
+  const PROD = { id: "p1", label: "web", group_name: "prod" };
+
+  it("group: a new name says it will create the group, an existing one says it joins", async () => {
+    const user = userEvent.setup();
+    const { Reloaded } = await groupForm([PROD]);
+    render(<Reloaded mode="create" onDone={() => {}} onCancel={() => {}} />);
+    const box = screen.getByRole("combobox", { name: "Group" });
+    expect(screen.getByText("No group")).toBeInTheDocument();
+
+    await user.type(box, "staging");
+    expect(screen.getByText(/Creates group/)).toHaveTextContent("staging");
+    await user.clear(box);
+    await user.type(box, "prod");
+    expect(screen.getByText(/Joins group/)).toHaveTextContent("prod");
+  });
+
+  it("group: create sends the trimmed group name with the new host", async () => {
+    const user = userEvent.setup();
+    const { Reloaded, addHost } = await groupForm([]);
+    render(<Reloaded mode="create" onDone={() => {}} onCancel={() => {}} />);
+    await user.type(screen.getByPlaceholderText("192.168.1.10 / example.com"), "10.0.0.1");
+    await user.type(screen.getByPlaceholderText("root"), "chen");
+    await user.type(screen.getByRole("combobox", { name: "Group" }), "  prod  ");
+    await user.click(screen.getByRole("button", { name: /save & connect/i }));
+    expect(addHost).toHaveBeenCalledWith(expect.objectContaining({ group_name: "prod" }));
+  });
+
+  it("group: left blank, create sends no group", async () => {
+    const user = userEvent.setup();
+    const { Reloaded, addHost } = await groupForm([]);
+    render(<Reloaded mode="create" onDone={() => {}} onCancel={() => {}} />);
+    await user.type(screen.getByPlaceholderText("192.168.1.10 / example.com"), "10.0.0.1");
+    await user.type(screen.getByPlaceholderText("root"), "chen");
+    await user.click(screen.getByRole("button", { name: /save & connect/i }));
+    expect(addHost.mock.calls[0][0].group_name).toBeUndefined();
+  });
+
+  it("group: a connect-only connection has no Group field", async () => {
+    const user = userEvent.setup();
+    const { Reloaded } = await groupForm([]);
+    render(<Reloaded mode="create" onDone={() => {}} onCancel={() => {}} />);
+    expect(screen.getByRole("combobox", { name: "Group" })).toBeInTheDocument();
+    await user.click(screen.getByRole("checkbox", { name: /save this host/i }));
+    expect(screen.queryByRole("combobox", { name: "Group" })).toBeNull();
+  });
+
+  it("group: edit starts from the host's group, and clearing it sends null", async () => {
+    const user = userEvent.setup();
+    const updateHostById = vi.fn().mockResolvedValue({ password_stored: true });
+    const { Reloaded } = await groupForm([PROD], undefined, updateHostById);
+    render(<Reloaded
+      mode="edit"
+      initial={{
+        id: "id-1", label: "prod-1", host: "10.0.0.1", port: 22, username: "chen", notes: null,
+        created_at: 0, last_connected_at: null, sort_order: 0, auth_method: "password",
+        key_path: null, connection_mode: "terminal_only", group_name: "prod",
+      }}
+      onDone={() => {}} onCancel={() => {}} />);
+    const box = screen.getByRole("combobox", { name: "Group" });
+    expect(box).toHaveValue("prod");
+
+    await user.clear(box);
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(updateHostById).toHaveBeenCalledWith(expect.objectContaining({ id: "id-1", group_name: null }));
+  });
+
   it("edit mode: shows 'Save' button, hides 'Save this host' checkbox", async () => {
     render(<HostForm
       mode="edit"
@@ -55,7 +139,7 @@ describe("HostForm", () => {
         id: "id-1", label: "prod-1", host: "10.0.0.1", port: 22,
         username: "chen", notes: null,
         created_at: 0, last_connected_at: null, sort_order: 0,
-        auth_method: "password", key_path: null, connection_mode: "terminal_only",
+        auth_method: "password", key_path: null, connection_mode: "terminal_only", group_name: null,
       }}
       onDone={() => {}} onCancel={() => {}} />);
     expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
@@ -93,7 +177,7 @@ describe("HostForm", () => {
         id: "id-1", label: "prod-1", host: "10.0.0.1", port: 22,
         username: "chen", notes: null,
         created_at: 0, last_connected_at: null, sort_order: 0,
-        auth_method: "password", key_path: null, connection_mode: "terminal_only",
+        auth_method: "password", key_path: null, connection_mode: "terminal_only", group_name: null,
       }}
       onDone={onDone} onCancel={() => {}} />);
 
@@ -135,7 +219,7 @@ describe("HostForm", () => {
         id: "id-1", label: "prod-1", host: "10.0.0.1", port: 22,
         username: "chen", notes: null,
         created_at: 0, last_connected_at: null, sort_order: 0,
-        auth_method: "password", key_path: null, connection_mode: "terminal_only",
+        auth_method: "password", key_path: null, connection_mode: "terminal_only", group_name: null,
       }}
       onDone={() => {}} onCancel={() => {}} />);
 
@@ -169,7 +253,7 @@ describe("HostForm", () => {
         id: "id-1", label: "prod-1", host: "10.0.0.1", port: 22,
         username: "chen", notes: null,
         created_at: 0, last_connected_at: null, sort_order: 0,
-        auth_method: "password", key_path: null, connection_mode: "terminal_only",
+        auth_method: "password", key_path: null, connection_mode: "terminal_only", group_name: null,
       }}
       onDone={() => {}} onCancel={() => {}} />);
     expect(screen.queryByRole("checkbox", { name: /forget stored password/i })).not.toBeInTheDocument();

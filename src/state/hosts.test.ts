@@ -71,10 +71,10 @@ describe("hosts store", () => {
       hosts: [
         { id: "a", label: "a", host: "h", port: 22, username: "u",
           notes: null, created_at: 100, last_connected_at: null, sort_order: 100,
-          auth_method: "password", key_path: null, connection_mode: "terminal_only" },
+          auth_method: "password", key_path: null, connection_mode: "terminal_only", group_name: null },
         { id: "b", label: "b", host: "h", port: 22, username: "u",
           notes: null, created_at: 200, last_connected_at: null, sort_order: 200,
-          auth_method: "password", key_path: null, connection_mode: "terminal_only" },
+          auth_method: "password", key_path: null, connection_mode: "terminal_only", group_name: null },
       ],
       keychainAvailable: false, loaded: true,
     });
