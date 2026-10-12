@@ -89,6 +89,18 @@ describe("the command line", () => {
     });
   });
 
+  it("refuses to write a manifest whose English half is empty but Chinese is not", () => {
+    inTempDir((dir) => {
+      writeFileSync(join(dir, "v.zh-CN.md"), `${ZH}
+`);
+      // Mirrors the real failure: the English path pointed at nothing while
+      // the Chinese one had content, which silently shipped Chinese-only.
+      expect(() => run(join(dir, "latest.json"), join(dir, "gone.md"), join(dir, "v.zh-CN.md")))
+        .toThrow();
+      expect(written(dir).notes).toBe("stale");
+    }, { ...MANIFEST, notes: "stale" });
+  });
+
   it("a missing notes file leaves notes empty instead of failing the release", () => {
     inTempDir((dir) => {
       run(join(dir, "latest.json"), join(dir, "does-not-exist.md"));
