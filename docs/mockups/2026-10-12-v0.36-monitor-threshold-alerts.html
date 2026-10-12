@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>监控阈值告警 · 交互图 (v0.36)</title>
+<style>
+:root{--bg:#eef0f4;--panel:#fff;--panel2:#f4f5f8;--border:#e3e6ec;--t1:#1f2430;--t2:#5b6272;--t3:#98a0b0;--accent:#4c7cff;--fade:rgba(76,124,255,.12);--ok:#2fbf71;--warn:#e8a33d;--warnf:rgba(232,163,61,.13);--err:#e5484d;--errf:rgba(229,72,77,.12)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:var(--t1);padding:20px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.07)}
+h3{margin:0;font-size:12px;font-weight:600;color:var(--t2);padding:11px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px}
+h3 .tag{margin-left:auto;font-weight:400;font-size:11px;color:var(--t3)}
+.side{width:230px}
+.row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;margin:2px 6px;cursor:pointer}
+.row:hover{background:var(--panel2)}.row.on{background:var(--fade)}
+.dot{width:7px;height:7px;border-radius:50%;background:#c9cedb;flex-shrink:0}.row.live .dot{background:var(--ok)}
+.nm{font-weight:500;font-size:12px}
+.bdg{margin-left:auto;font-size:10px;font-weight:600;padding:1px 6px;border-radius:999px;display:none}
+.bdg.w{background:var(--warnf);color:#8a5b12}.bdg.e{background:var(--errf);color:var(--err)}
+.grp{font-size:11px;font-weight:600;color:var(--t2);padding:7px 12px 3px}
+.mon{flex:1;min-width:430px}
+.tabs{display:flex;gap:6px;padding:9px 14px;border-bottom:1px solid var(--border);background:var(--panel2);flex-wrap:wrap}
+.tb{padding:5px 11px;border-radius:6px;font-size:12px;border:none;background:none;color:var(--t2);cursor:pointer;font-family:inherit}
+.tb.on{background:var(--accent);color:#fff;font-weight:600}
+.tb.al{border:1px solid var(--err);color:var(--err);background:var(--errf);font-weight:600;display:inline-flex;gap:5px;align-items:center}
+.tb.al.on{background:var(--err);color:#fff}
+.body{padding:14px;min-height:300px}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.k{background:var(--panel2);border-radius:8px;padding:9px 10px;border:1px solid transparent}
+.k .l{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.4px}
+.k .v{font-size:19px;font-weight:600;margin-top:2px}
+.k.hot{background:var(--errf);border-color:var(--err)}.k.hot .v{color:var(--err)}
+.k.wm{background:var(--warnf);border-color:var(--warn)}.k.wm .v{color:#8a5b12}
+.al{border:1px solid var(--border);border-left-width:3px;border-radius:0 8px 8px 0;padding:10px 12px;margin-bottom:8px;background:var(--panel2)}
+.al.e{border-left-color:var(--err)}.al.w{border-left-color:var(--warn)}.al.ok{border-left-color:var(--ok);opacity:.65}
+.al .h{display:flex;align-items:center;gap:8px;font-weight:600;font-size:12px}
+.al .h .when{margin-left:auto;font-weight:400;font-size:11px;color:var(--t3)}
+.al .d{font-size:11px;color:var(--t2);margin-top:3px}
+.sp{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:0 4px}
+.pil{font-size:10px;padding:1px 7px;border-radius:999px;font-weight:600}
+.pil.e{background:var(--errf);color:var(--err)}.pil.w{background:var(--warnf);color:#8a5b12}.pil.ok{background:rgba(47,191,113,.14);color:#1b7a47}
+.set{width:340px}
+.sec{padding:12px 14px;border-bottom:1px solid var(--border)}
+.sec:last-child{border-bottom:none}
+.sw{display:flex;align-items:center;gap:9px;font-size:12px;cursor:pointer;user-select:none}
+.sw input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+.hint{font-size:11px;color:var(--t3);margin:5px 0 0 24px}
+.th{display:flex;align-items:center;gap:9px;margin-top:11px;font-size:12px}
+.th label{width:88px;color:var(--t2)}
+.th input[type=range]{flex:1;accent-color:var(--accent)}
+.th .vv{width:46px;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.th input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px}
+.th.off{opacity:.42}
+.num{width:52px;border:1px solid var(--border);border-radius:5px;padding:3px 6px;font:inherit;font-size:12px;text-align:right}
+.lbl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);font-weight:700;margin-bottom:8px}
+.toast{position:fixed;right:20px;bottom:20px;width:320px;background:#fff;border:1px solid var(--border);border-left:3px solid var(--err);border-radius:9px;box-shadow:0 14px 40px rgba(0,0,0,.22);padding:12px 14px;display:none;z-index:50}
+.toast .tt{font-weight:600;font-size:12px;display:flex;align-items:center;gap:7px}
+.toast .tb2{font-size:11px;color:var(--t2);margin-top:4px}
+.toast .x{margin-left:auto;cursor:pointer;color:var(--t3);border:none;background:none;font-size:15px;line-height:1}
+.ctl{max-width:1180px;margin:0 auto 14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ctl button{border:1px solid var(--border);background:#fff;border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer}
+.note{max-width:1180px;margin:16px auto 0;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 18px}
+.note b{font-weight:600}.note ul{margin:6px 0 0;padding-left:20px;color:var(--t2)}.note li{margin:4px 0}
+.empty{color:var(--t3);text-align:center;padding:40px 10px;font-size:12px}
+</style></head><body>
+<div class="ctl">
+  <b style="margin-right:4px">模拟：</b>
+  <button onclick="scen(0)">一切正常</button>
+  <button onclick="scen(1)">CPU 持续超阈值</button>
+  <button onclick="scen(2)">CPU + 磁盘 + 服务挂了</button>
+  <button onclick="scen(3)">恢复（告警解除）</button>
+</div>
+<div class="wrap">
+  <div class="card side"><h3>主机</h3>
+    <div class="grp">生产</div>
+    <div class="row live on"><span class="dot"></span><span class="nm">web-01</span><span class="bdg e" id="bd1">2</span></div>
+    <div class="row live"><span class="dot"></span><span class="nm">db-01</span><span class="bdg w" id="bd2">1</span></div>
+    <div class="grp">测试</div>
+    <div class="row"><span class="dot"></span><span class="nm">staging</span></div>
+  </div>
+
+  <div class="card mon"><h3>监控 · web-01<span class="tag" id="bgnote">后台监控中 · 10s</span></h3>
+    <div class="tabs">
+      <button class="tb on" id="tp" onclick="tab('p')">性能</button>
+      <button class="tb" onclick="tab('p')">进程</button>
+      <button class="tb" onclick="tab('p')">磁盘</button>
+      <button class="tb al" id="ta" onclick="tab('a')" style="display:none">⚠ 告警 <span id="acnt">0</span></button>
+    </div>
+    <div class="body" id="pbody">
+      <div class="kpi">
+        <div class="k" id="kcpu"><div class="l">CPU</div><div class="v" id="vcpu">18%</div></div>
+        <div class="k" id="kmem"><div class="l">内存</div><div class="v" id="vmem">46%</div></div>
+        <div class="k" id="kdisk"><div class="l">磁盘 /</div><div class="v" id="vdisk">52%</div></div>
+        <div class="k" id="kload"><div class="l">负载</div><div class="v" id="vload">0.4</div></div>
+      </div>
+      <div style="height:120px;background:var(--panel2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:12px">（性能曲线）</div>
+    </div>
+    <div class="body" id="abody" style="display:none"></div>
+  </div>
+
+  <div class="card set"><h3>设置 · 告警</h3>
+    <div class="sec">
+      <label class="sw"><input type="checkbox" id="en" checked onchange="render()"> 启用阈值告警</label>
+      <div class="hint">连接打开期间持续采集，关掉监控面板也继续。</div>
+      <label class="sw" style="margin-top:9px"><input type="checkbox" id="sys" checked> 发送系统通知</label>
+      <div class="hint">应用在后台时也能收到 Windows 通知。</div>
+    </div>
+    <div class="sec" id="thsec">
+      <div class="lbl">阈值</div>
+      <div class="th"><input type="checkbox" checked><label>CPU</label><input type="range" min="50" max="100" value="85" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="vv">85%</span></div>
+      <div class="th"><input type="checkbox" checked><label>内存</label><input type="range" min="50" max="100" value="90" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="vv">90%</span></div>
+      <div class="th"><input type="checkbox" checked><label>磁盘</label><input type="range" min="50" max="100" value="90" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="vv">90%</span></div>
+      <div class="th off"><input type="checkbox"><label>交换分区</label><input type="range" min="10" max="100" value="50" oninput="this.nextElementSibling.textContent=this.value+'%'"><span class="vv">50%</span></div>
+      <div class="th off"><input type="checkbox"><label>负载 / 核</label><input type="range" min="1" max="10" value="2" oninput="this.nextElementSibling.textContent=this.value+'x'"><span class="vv">2x</span></div>
+      <div class="th"><input type="checkbox" checked><label>服务失败</label><span style="flex:1;color:var(--t3);font-size:11px">systemctl --failed 出现新条目</span></div>
+    </div>
+    <div class="sec">
+      <div class="lbl">触发条件</div>
+      <div class="th"><label>持续</label><input class="num" type="number" value="3" min="1" max="20"><span style="color:var(--t2)">次采样后才报警</span></div>
+      <div class="th"><label>静默</label><input class="num" type="number" value="10" min="1" max="120"><span style="color:var(--t2)">分钟内不重复报同一条</span></div>
+      <div class="hint" style="margin-left:0">回落到阈值以下 5% 才算恢复，避免在阈值上下抖动时反复报警。</div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <b>这些是要你拍板的点，mock 里按我的建议预设：</b>
+  <ul>
+    <li><b>后台继续采集</b> —— 关掉监控面板后，只要连接还在，就以 10 秒间隔继续采样（打开面板时恢复你选的频率）。不这么做的话，只有盯着监控面板时才会报警。</li>
+    <li><b>阈值是全局的</b> —— 所有主机共用一套。按主机单独设阈值留到以后再做。</li>
+    <li><b>告警不写进数据库</b> —— 只存在内存里，重启应用后清空。</li>
+  </ul>
+</div>
+
+<div class="toast" id="toast"><div class="tt">⚠ web-01 · CPU 持续偏高<button class="x" onclick="document.getElementById('toast').style.display='none'">×</button></div><div class="tb2">CPU 94%，已持续 3 次采样（阈值 85%）。</div></div>
+<script>
+var $=function(i){return document.getElementById(i)};
+var S=0;
+var SC=[
+ {cpu:18,mem:46,disk:52,load:0.4,alerts:[]},
+ {cpu:94,mem:48,disk:52,load:3.1,alerts:[{s:'e',t:'CPU 持续偏高',d:'CPU <span class="sp">94%</span>，已持续 3 次采样（阈值 85%）。',w:'刚刚',p:'触发中'}]},
+ {cpu:96,mem:62,disk:93,load:5.2,alerts:[
+   {s:'e',t:'CPU 持续偏高',d:'CPU <span class="sp">96%</span>，已持续 12 次采样（阈值 85%）。',w:'4 分钟前',p:'触发中'},
+   {s:'w',t:'磁盘空间不足',d:'挂载点 <span class="sp">/</span> 已用 <span class="sp">93%</span>（阈值 90%），剩余 4.2 GB。',w:'1 分钟前',p:'触发中'},
+   {s:'e',t:'服务失败',d:'<span class="sp">nginx.service</span> 进入 failed 状态。',w:'刚刚',p:'触发中'}]},
+ {cpu:22,mem:44,disk:52,load:0.6,alerts:[{s:'ok',t:'CPU 持续偏高',d:'已恢复，当前 CPU <span class="sp">22%</span>。',w:'刚刚',p:'已恢复'}]}
+];
+function tab(w){$('pbody').style.display=w==='p'?'block':'none';$('abody').style.display=w==='a'?'block':'none';
+ $('tp').classList.toggle('on',w==='p');$('ta').classList.toggle('on',w==='a')}
+function render(){
+ var c=SC[S],on=$('en').checked,al=on?c.alerts:[];
+ $('vcpu').textContent=c.cpu+'%';$('vmem').textContent=c.mem+'%';$('vdisk').textContent=c.disk+'%';$('vload').textContent=c.load;
+ $('kcpu').className='k'+(on&&c.cpu>=85?' hot':'');$('kmem').className='k'+(on&&c.mem>=90?' hot':'');
+ $('kdisk').className='k'+(on&&c.disk>=90?' wm':'');$('kload').className='k';
+ var act=al.filter(function(a){return a.s!=='ok'}).length;
+ $('ta').style.display=al.length?'inline-flex':'none';$('acnt').textContent=act;
+ $('bd1').style.display=act?'inline-block':'none';$('bd1').textContent=act;
+ $('bd2').style.display=(on&&S===2)?'inline-block':'none';
+ $('thsec').style.opacity=on?1:0.4;$('bgnote').textContent=on?'后台监控中 · 10s':'仅面板打开时采集';
+ $('abody').innerHTML=al.length?al.map(function(a){return '<div class="al '+a.s+'"><div class="h">'+(a.s==='ok'?'✓':'⚠')+' '+a.t+'<span class="pil '+a.s+'">'+a.p+'</span><span class="when">'+a.w+'</span></div><div class="d">'+a.d+'</div></div>'}).join(''):'<div class="empty">没有告警。</div>';
+ if(!al.length)tab('p');
+}
+function scen(i){S=i;render();if(i>0)tab('a');
+ if(i===1||i===2){var t=$('toast');t.style.display='block';clearTimeout(window._h);window._h=setTimeout(function(){t.style.display='none'},6000)}}
+render();
+</script></body></html>
