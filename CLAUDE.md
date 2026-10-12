@@ -97,6 +97,15 @@ cd src-tauri && cargo sweep --time 7
 
 `cargo sweep --time 7` deletes only artifacts unused for 7 days and keeps the live cache — no full rebuild afterwards, unlike `cargo clean`. Reach for `cargo clean` only when the user asks or the directory is pathological; the dev app and any cargo/rustc processes must be stopped first either way.
 
+**If the sweep barely dents it, look at `target/debug/incremental` — that is usually the whole problem.** After a day of heavy iteration every artifact counts as recently used, so `cargo sweep` (at any `--time`) frees almost nothing while the directory sits at tens of GB. On 2026-10-12 a sweep recovered 3 GB of 58 GB; `incremental/` alone held 35 GB.
+
+```
+du -sh src-tauri/target/debug/incremental src-tauri/target/debug/deps
+rm -rf src-tauri/target/debug/incremental
+```
+
+Deleting it costs one non-incremental compile of shellx itself (tens of seconds). Compiled dependencies live in `deps/` and are untouched, so this is nothing like `cargo clean` — that one rebuilds all ~640 crates. Same precondition: stop the dev app first.
+
 ## Version fields
 
 Version lives in three files, keep them in lockstep:
