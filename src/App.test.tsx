@@ -106,7 +106,7 @@ vi.mock("./ipc/settings", () => ({
 vi.mock("./state/updater", () => {
   const state = {
     status: "idle" as const,
-    version: null, notes: null, foundSilently: false,
+    version: null, notes: null, dialogOpen: false, ignored: null,
     progress: 0, received: 0, total: 0, error: null,
     check: vi.fn().mockResolvedValue(undefined),
     downloadAndInstall: vi.fn().mockResolvedValue(undefined),

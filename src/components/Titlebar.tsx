@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Minus, Square, X, Copy as Restore, Search, Sun, Moon, Zap } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { TabBar, type Tab } from "./TabBar";
+import { UpdatePill } from "./UpdatePill";
 import type { HostInfo } from "../types/host";
 import { useSettingsStore } from "../state/settings";
 import { useT } from "../i18n";
@@ -110,6 +111,7 @@ export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClo
         onDoubleClick={() => void win().toggleMaximize()}
         style={{ flexShrink: 0, width: 16, height: "100%" }}
       />
+      <UpdatePill />
       {onOpenSnippets && (
         <PillButton
           onClick={onOpenSnippets}

@@ -167,3 +167,33 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+  # tauri-action uploads latest.json (the updater manifest) with an EMPTY
+  # `notes` field — it does not copy the Release body into it — so the app's
+  # "what's new" card had nothing to show. Once every platform job has
+  # finished writing the manifest, fill `notes` from the same
+  # docs/release-notes/<tag>.md the Release page is built from.
+  update-manifest-notes:
+    needs: [create-release, publish-tauri]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Put the release notes into latest.json
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          if ! gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --clobber; then
+            echo "::warning::no latest.json on $TAG (did every platform build fail?) — nothing to annotate"
+            exit 0
+          fi
+          node scripts/inject-update-notes.mjs latest.json "docs/release-notes/${TAG}.md"
+          gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber
