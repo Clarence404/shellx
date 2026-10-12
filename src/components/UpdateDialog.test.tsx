@@ -160,23 +160,56 @@ describe("when the dialog opens by itself", () => {
 });
 
 describe("UpdatePill (titlebar button)", () => {
-  it("is absent when there is nothing to update to", () => {
+  const found = { version: "0.34.0", body: NOTES, downloadAndInstall: vi.fn() };
+
+  it("is a quiet check-for-updates button when there is nothing to update to", () => {
     render(<UpdatePill />);
+    expect(screen.getByRole("button", { name: "Check for updates" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Update available" })).toBeNull();
   });
 
-  it("appears while an update is waiting, and reopens the dialog after it was closed", async () => {
+  it("clicking it checks, and a found update opens the dialog", async () => {
+    const user = userEvent.setup();
+    mockCheck.mockResolvedValue(found);
+    render(<UpdatePill />);
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    expect(mockCheck).toHaveBeenCalledTimes(1);
+    expect(useUpdater.getState().dialogOpen).toBe(true);
+  });
+
+  it("when already current it does not open anything", async () => {
+    const user = userEvent.setup();
+    mockCheck.mockResolvedValue(null);
+    render(<UpdatePill />);
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    expect(useUpdater.getState().status).toBe("upToDate");
+    expect(useUpdater.getState().dialogOpen).toBe(false);
+  });
+
+  it("becomes the blue Update pill while one is waiting, and reopens the dialog", async () => {
     const user = userEvent.setup();
     setAvailable({ dialogOpen: false });
     render(<UpdatePill />);
+    expect(screen.queryByRole("button", { name: "Check for updates" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Update available" }));
     expect(useUpdater.getState().dialogOpen).toBe(true);
   });
 
-  it("is hidden once that version is skipped", () => {
+  it("goes back to the quiet button once that version is skipped", () => {
     setAvailable({ dialogOpen: false, ignored: "0.34.0" });
     render(<UpdatePill />);
     expect(screen.queryByRole("button", { name: "Update available" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Check for updates" })).toBeInTheDocument();
+  });
+
+  it("a click on a skipped version still shows it", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(IGNORED, "0.34.0");
+    useUpdater.setState({ ignored: "0.34.0" });
+    mockCheck.mockResolvedValue(found);
+    render(<UpdatePill />);
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    expect(useUpdater.getState().dialogOpen).toBe(true);
   });
 
   it("shows the percentage while downloading", () => {
