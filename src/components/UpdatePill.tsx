@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CircleArrowUp, CircleCheck, Download, RefreshCw } from "lucide-react";
+import { CloudCheck, CloudDownload, Download } from "lucide-react";
 import { useUpdater } from "../state/updater";
 import { useT } from "../i18n";
 
@@ -75,9 +75,9 @@ export function UpdatePill() {
         borderRadius: 6, cursor: checking ? "default" : "pointer",
       }}
     >
-      {checking ? <RefreshCw size={13} className="shellx-spin" />
-        : flash ? <CircleCheck size={14} />
-        : <CircleArrowUp size={14} />}
+      {checking ? <CloudDownload size={14} style={{ animation: "shellx-dot-pulse 1.2s ease-in-out infinite" }} />
+        : flash ? <CloudCheck size={14} />
+        : <CloudDownload size={14} />}
     </button>
   );
 }
