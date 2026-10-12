@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
+import { externalLinkProps } from "../../ipc/external";
 import { ExternalLink, Folder } from "lucide-react";
 import { getConfigPaths, type ConfigPaths } from "../../ipc/config";
 import { useUpdater } from "../../state/updater";
 import { useSettingsStore } from "../../state/settings";
-import { useT } from "../../i18n";
+import { useT, useLanguage } from "../../i18n";
 import { ReleaseNotes } from "../ReleaseNotes";
+import { notesForLanguage } from "../../state/releaseNotesLang";
 
 export function AboutPanel() {
   const version = import.meta.env.PACKAGE_VERSION;
   const [paths, setPaths] = useState<ConfigPaths | null>(null);
   const t = useT();
+  const lang = useLanguage();
 
   const { status, version: newVersion, notes, progress, received, total, error } = useUpdater();
   const autoUpdateCheck = useSettingsStore((s) => s.autoUpdateCheck);
@@ -43,8 +46,7 @@ export function AboutPanel() {
       </div>
       <div style={{ fontSize: 12, color: "var(--text-2)", marginBottom: 6 }}>MIT License · Copyright © 2026</div>
       <a
-        href="https://github.com/Clarence404/shellx"
-        target="_blank" rel="noreferrer"
+        {...externalLinkProps("https://github.com/Clarence404/shellx")}
         style={{
           fontSize: 12, color: "var(--accent)", textDecoration: "none",
           display: "inline-flex", alignItems: "center", gap: 4,
@@ -66,9 +68,9 @@ export function AboutPanel() {
                 {t("New version available")}
                 {newVersion && <span style={{ color: "var(--text-2)", marginLeft: 6 }}>v{newVersion}</span>}
               </div>
-              {notes && (
+              {notesForLanguage(notes, lang) && (
                 <div style={{ color: "var(--text-2)", marginBottom: 8 }}>
-                  <ReleaseNotes text={notes} />
+                  <ReleaseNotes text={notesForLanguage(notes, lang)} />
                 </div>
               )}
               <button

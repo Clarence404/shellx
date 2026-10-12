@@ -29,6 +29,7 @@ jobs:
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
           NOTES_FILE="docs/release-notes/${TAG}.md"
+          NOTES_ZH_FILE="docs/release-notes/${TAG}.zh-CN.md"
           {
             echo "body<<EOF_NOTES"
             if [ -f "$NOTES_FILE" ]; then
@@ -37,6 +38,14 @@ jobs:
             else
               echo "Auto-built from the tagged commit — release notes file"
               echo "\`$NOTES_FILE\` was not present at build time."
+              echo
+            fi
+            # Both languages on the Release page, English first. A release
+            # whose translation is missing just shows the English half.
+            if [ -f "$NOTES_ZH_FILE" ]; then
+              echo "---"
+              echo
+              cat "$NOTES_ZH_FILE"
               echo
             fi
             # Standing footer, appended to every release. MUST stay on ONE
@@ -172,7 +181,8 @@ jobs:
   # `notes` field — it does not copy the Release body into it — so the app's
   # "what's new" card had nothing to show. Once every platform job has
   # finished writing the manifest, fill `notes` from the same
-  # docs/release-notes/<tag>.md the Release page is built from.
+  # docs/release-notes/<tag>.md (+ .zh-CN.md) the Release page is built
+  # from. Both languages travel in the one field; the app picks its half.
   update-manifest-notes:
     needs: [create-release, publish-tauri]
     permissions:
@@ -195,5 +205,5 @@ jobs:
             echo "::warning::no latest.json on $TAG (did every platform build fail?) — nothing to annotate"
             exit 0
           fi
-          node scripts/inject-update-notes.mjs latest.json "docs/release-notes/${TAG}.md"
+          node scripts/inject-update-notes.mjs latest.json \n            "docs/release-notes/${TAG}.md" "docs/release-notes/${TAG}.zh-CN.md"
           gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber

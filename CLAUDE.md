@@ -32,7 +32,7 @@ The flow is always:
 2. Confirm tests + tsc pass locally.
 3. **Auto-launch Tauri** — after every batch of substantive code changes finishes and passes tests, launch `pnpm tauri:dev` yourself if it's not already running (via `Start-Process cmd.exe /c "pnpm tauri:dev"` if `pnpm` is broken in bash — see the corepack workaround note further below). Do not ask the user to launch it. Do not wait for the user to say "启动" or "run it". If a previous instance is still running, HMR delivers pure frontend changes for free — but Rust changes need a rebuild, and Tauri handles that automatically once the process is up. Point out what to look at in one or two sentences after launching.
 4. **Stop and wait.** Do not proceed to tagging until the user gives explicit go-ahead (e.g. "打 tag", "发版", "OK", "看好了 → 发布"). Silence is not approval. A user message about a different topic is not approval. Approval for one release is not standing approval for future releases.
-5. Only after explicit approval: merge the feature branch into `main` (fast-forward or `--no-ff` as appropriate), bump the three version fields (see below), write both release-notes files (see below), **check whether `README.md` + `README.zh-CN.md` need updating and update both if so** (per the Docs language policy the pair moves together), commit on `main`, tag, push. A release that ships a new feature but leaves the README stale is an incomplete release.
+5. Only after explicit approval: merge the feature branch into `main` (fast-forward or `--no-ff` as appropriate), bump the three version fields (see below), write both release-notes files — English and `.zh-CN` (see below), **check whether `README.md` + `README.zh-CN.md` need updating and update both if so** (per the Docs language policy the pair moves together), commit on `main`, tag, push. A release that ships a new feature but leaves the README stale is an incomplete release.
 
    The README check is not just "did this add a user-visible feature". Also check, every release:
    - **Feature bullets** (§1) — new or changed user-visible behavior.
@@ -56,11 +56,12 @@ The flow is always:
 ## Docs language policy
 
 - **`README.md` and `README.zh-CN.md` are a bilingual pair — kept in strict sync.** Any change to one lands together with the equivalent change to the other, in the same commit. Structure, section order, and headings mirror each other; only the prose language differs. Do not update just one and let the other drift.
-- **`docs/**` and release notes ship in English only.** Do not create `.zh-CN.md` (or any other locale suffix) versions of files under `docs/` unless the user explicitly asks — existing translated files in the tree stay as history but no new ones are added and drift is fine going forward.
+- **Release notes are a bilingual pair too — `docs/release-notes/vX.Y.Z.md` and `vX.Y.Z.zh-CN.md`.** Both ship in the commit that precedes the tag. The app shows the half matching its UI language, so skipping the translation means Chinese users read English (it degrades, it does not break — but do not skip it).
+- **The rest of `docs/**` ships in English only.** Do not create `.zh-CN.md` (or any other locale suffix) versions of other files under `docs/` unless the user explicitly asks — existing translated files in the tree stay as history but no new ones are added and drift is fine going forward.
 
 ## Release notes stay concise
 
-`docs/release-notes/vX.Y.Z.md` is for shellx **users**, not for the author of the commit. Aim for a scan-and-move-on read, not an engineering journal:
+`docs/release-notes/vX.Y.Z.md` (and its `.zh-CN.md` twin) is for shellx **users**, not for the author of the commit. Aim for a scan-and-move-on read, not an engineering journal:
 
 - **Open with a ≤60-word TL;DR paragraph** — what changed in this version, in one sitting.
 - **Then 3-5 grouped bullets**, organized by user-visible feature (not by code module). Each bullet is one to two sentences.
@@ -70,16 +71,18 @@ The flow is always:
 
 ## Release notes flow
 
-`.github/workflows/release.yml` auto-injects release notes into the GitHub Release body when a `v*` tag is pushed. The workflow looks for one file per tag:
+`.github/workflows/release.yml` auto-injects release notes into the GitHub Release body when a `v*` tag is pushed, and a later job (`update-manifest-notes`) puts the same text into the updater manifest's `notes` field so the in-app update dialog can show it. The workflow looks for two files per tag:
 
-- `docs/release-notes/vX.Y.Z.md`
+- `docs/release-notes/vX.Y.Z.md` — English
+- `docs/release-notes/vX.Y.Z.zh-CN.md` — Chinese
 
 Behaviour:
 
-- **File present** → contents used verbatim as the Release body.
-- **File missing** → a placeholder ships and the build still succeeds; do not rely on this path.
+- **Both present** → the Release body is English, then `---`, then Chinese. The manifest carries both halves in its one `notes` string, separated by the `<!--shellx:zh-CN-->` marker that `scripts/inject-update-notes.mjs` writes and `src/state/releaseNotesLang.ts` splits on — change one and you must change the other.
+- **Translation missing** → English ships alone and the app shows it whatever the UI language. Do not rely on this path.
+- **English missing** → a placeholder ships and the build still succeeds; do not rely on this path either.
 
-**Rule for future releases:** ship this file in the commit that precedes the tag.
+**Rule for future releases:** ship both files in the commit that precedes the tag.
 
 ## Build cache hygiene
 

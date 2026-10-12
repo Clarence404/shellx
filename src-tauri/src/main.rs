@@ -53,6 +53,7 @@ fn main() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
