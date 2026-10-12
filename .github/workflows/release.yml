@@ -205,5 +205,5 @@ jobs:
             echo "::warning::no latest.json on $TAG (did every platform build fail?) — nothing to annotate"
             exit 0
           fi
-          node scripts/inject-update-notes.mjs latest.json \n            "docs/release-notes/${TAG}.md" "docs/release-notes/${TAG}.zh-CN.md"
+          node scripts/inject-update-notes.mjs latest.json "docs/release-notes/${TAG}.md" "docs/release-notes/${TAG}.zh-CN.md"
           gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber

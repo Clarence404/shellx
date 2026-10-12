@@ -51,11 +51,17 @@ function main(argv) {
     return 2;
   }
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-  const out = injectNotes(
-    manifest,
-    read(notesPath, "English"),
-    notesZhPath ? read(notesZhPath, "Chinese") : "",
-  );
+  const en = read(notesPath, "English");
+  const zh = notesZhPath ? read(notesZhPath, "Chinese") : "";
+  // A translation with nothing to translate means the arguments are wrong.
+  // This shipped once: a YAML line continuation that bash read as a literal
+  // argument, shifting every path by one. Fail loudly — the rest of the
+  // release is already published, and only this manifest is at stake.
+  if (!tidy(en) && tidy(zh)) {
+    console.error("::error::English notes are empty but Chinese notes are not — check the argument order");
+    return 1;
+  }
+  const out = injectNotes(manifest, en, zh);
   writeFileSync(manifestPath, JSON.stringify(out, null, 2) + "\n");
   console.log(`notes for ${out.version}: ${out.notes.length} chars`);
   return 0;
