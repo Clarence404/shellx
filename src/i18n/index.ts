@@ -430,6 +430,7 @@ const zh: Record<string, string> = {
   "Check for updates": "检查更新",
   "Checking…": "检查中…",
   "Up to date": "已是最新版本",
+  "Update check failed": "检查更新失败",
   "New version available": "发现新版本",
   "Download & restart": "下载并重启",
   "Update available": "发现新版本",
