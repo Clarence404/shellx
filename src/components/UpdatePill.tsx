@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Download, Loader2 } from "lucide-react";
+import { CircleArrowUp, CircleCheck, Download, RefreshCw } from "lucide-react";
 import { useUpdater } from "../state/updater";
 import { useT } from "../i18n";
 
@@ -71,13 +71,13 @@ export function UpdatePill() {
         height: 22, width: 26, marginRight: 4,
         border: "1px solid var(--border)",
         background: hover ? "var(--panel-2)" : "var(--panel-1)",
-        color: flash ? "var(--ok, var(--accent))" : hover ? "var(--text-1)" : "var(--text-3)",
+        color: flash ? "var(--ok, #2fbf71)" : hover ? "var(--text-1)" : "var(--text-3)",
         borderRadius: 6, cursor: checking ? "default" : "pointer",
       }}
     >
-      {checking ? <Loader2 size={12} className="shellx-spin" />
-        : flash ? <Check size={12} strokeWidth={2.4} />
-        : <Download size={12} />}
+      {checking ? <RefreshCw size={13} className="shellx-spin" />
+        : flash ? <CircleCheck size={14} />
+        : <CircleArrowUp size={14} />}
     </button>
   );
 }
