@@ -590,6 +590,7 @@ mod tests {
             double_click_edit: false,
             language: "zh".into(),
             auto_update_check: true,
+            alerts: Default::default(),
             advanced: Default::default(),
             schema_version: 1,
         };

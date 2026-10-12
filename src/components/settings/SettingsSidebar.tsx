@@ -1,11 +1,11 @@
-import { Palette, Info, Wrench, Shield, Keyboard, FileText, PackageOpen, type LucideIcon } from "lucide-react";
+import { Palette, Info, Wrench, Shield, Keyboard, FileText, PackageOpen, BellRing, type LucideIcon } from "lucide-react";
 import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { useSettingsStore, useIconSizes } from "../../state/settings";
 import { useUpdater } from "../../state/updater";
 import { SectionHeader } from "../SectionHeader";
 import { useT } from "../../i18n";
 
-type Section = "appearance" | "shortcuts" | "about" | "trusted-servers" | "logs" | "advanced" | "backup";
+type Section = "appearance" | "shortcuts" | "about" | "trusted-servers" | "alerts" | "logs" | "advanced" | "backup";
 
 interface Props {
   active: Section;
@@ -63,6 +63,8 @@ export function SettingsSidebar({ active, onSelect }: Props) {
         onClick={() => onSelect("shortcuts")} />
       <Row id="trusted-servers" label={t("Known hosts")} Icon={Shield}
         onClick={() => onSelect("trusted-servers")} />
+      <Row id="alerts" label={t("Alerts")} Icon={BellRing}
+        onClick={() => onSelect("alerts")} />
       <Row id="logs" label={t("Logs")} Icon={FileText}
         onClick={() => onSelect("logs")} />
       <Row id="advanced" label={t("Advanced")} Icon={Wrench}

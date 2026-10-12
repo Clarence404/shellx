@@ -103,6 +103,12 @@ vi.mock("./ipc/settings", () => ({
 // default). jsdom has no Tauri updater bridge, so the real check() rejects and
 // the swallowed promise surfaces as an unhandled error that fails the whole
 // run. App-level tests never exercise updating — stub the store.
+vi.mock("./state/monitorBridge", () => ({
+  startMonitorBridge: vi.fn().mockResolvedValue(undefined),
+  stopMonitorBridge: vi.fn(),
+  claimMonitor: vi.fn(),
+  releaseMonitor: vi.fn(),
+}));
 vi.mock("./state/updater", () => {
   const state = {
     status: "idle" as const,

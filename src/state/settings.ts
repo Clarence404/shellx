@@ -9,6 +9,7 @@ import {
   VALID_THEMES,
 } from "../types/settings";
 import { loadSettings, saveSettings } from "../ipc/settings";
+import { DEFAULT_ALERTS, ALERT_RANGES, type AlertSettings, type AlertThreshold } from "../types/alerts";
 
 interface State extends Settings {
   load(): Promise<void>;
@@ -28,6 +29,9 @@ interface State extends Settings {
   setDoubleClickEdit(v: boolean): void;
   setLanguage(v: Settings["language"]): void;
   setAutoUpdateCheck(v: boolean): void;
+  /** One setter for the whole Alerts block, clamped on the way in the
+   *  same way setAdvanced clamps its own — see ALERT_RANGES. */
+  setAlerts<K extends keyof AlertSettings>(key: K, value: AlertSettings[K]): void;
   /** One setter for the whole Advanced block: every control passes the
    *  field it owns, values are clamped to ADVANCED_RANGES on the way in.
    *  A single setter keeps eight near-identical ones out of the store. */
@@ -47,6 +51,21 @@ function clampAdvanced<K extends keyof AdvancedSettings>(
   return Math.max(min, Math.min(max, Math.round(value))) as AdvancedSettings[K];
 }
 
+/** Clamp an alert field to its declared range: a threshold's `value`,
+ *  or a bare number like sustainSamples. Booleans pass through. */
+function clampAlert<K extends keyof AlertSettings>(key: K, value: AlertSettings[K]): AlertSettings[K] {
+  const range = (ALERT_RANGES as Record<string, readonly [number, number]>)[key as string];
+  if (!range) return value;
+  const [min, max] = range;
+  const fit = (n: number) => Math.max(min, Math.min(max, n));
+  if (typeof value === "number") return fit(value) as AlertSettings[K];
+  if (value && typeof value === "object" && "value" in value) {
+    const t = value as AlertThreshold;
+    return { enabled: t.enabled, value: fit(t.value) } as AlertSettings[K];
+  }
+  return value;
+}
+
 const SAVE_DEBOUNCE_MS = 300;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -63,6 +82,7 @@ function snapshotForSave(s: State): Settings {
     doubleClickEdit: s.doubleClickEdit || undefined,
     language: s.language,
     autoUpdateCheck: s.autoUpdateCheck,
+    alerts: s.alerts,
     advanced: s.advanced,
     schemaVersion: s.schemaVersion,
   };
@@ -110,6 +130,8 @@ export const useSettingsStore = create<State>((set, get) => ({
         externalEditor: loaded.externalEditor ?? "",
         doubleClickEdit: loaded.doubleClickEdit ?? false,
         advanced: { ...DEFAULT_ADVANCED, ...(loaded.advanced ?? {}) },
+        // Same for alerts, absent before v0.36.
+        alerts: { ...DEFAULT_ALERTS, ...(loaded.alerts ?? {}) },
         // Same defence for terminal: fields added after a settings.json
         // was written (commandSuggest) must land as their defaults, not
         // as undefined.
@@ -179,6 +201,10 @@ export const useSettingsStore = create<State>((set, get) => ({
     immediateSave(get);
   },
 
+  setAlerts(key, value) {
+    set({ alerts: { ...get().alerts, [key]: clampAlert(key, value) } });
+    scheduleSave(get);
+  },
   setAutoUpdateCheck(v) {
     set({ autoUpdateCheck: v });
     immediateSave(get);

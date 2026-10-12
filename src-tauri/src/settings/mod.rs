@@ -37,6 +37,11 @@ pub struct Settings {
     /// Check GitHub Releases for updates on startup. serde default: true.
     #[serde(default = "default_auto_update_check")]
     pub auto_update_check: bool,
+    /// Monitor threshold alerts. Missing on settings.json files written
+    /// before v0.36 — serde default resolves to `AlertSettings::default()`,
+    /// which is switched off, so upgrading never starts alerting on its own.
+    #[serde(default)]
+    pub alerts: AlertSettings,
     /// Power-user tuning. Missing on settings.json files written before
     /// v0.20 — serde default resolves to `AdvancedSettings::default()`.
     #[serde(default)]
@@ -128,6 +133,107 @@ impl AdvancedSettings {
             terminal_scrollback: self.terminal_scrollback.clamp(500, 50_000),
             reconnect_interval_secs: self.reconnect_interval_secs.clamp(1, 60),
             reconnect_max_attempts: self.reconnect_max_attempts.min(20),
+        }
+    }
+}
+
+/// One numeric alert rule, as Settings → Alerts presents it: a toggle
+/// and the percentage (or load multiple) the metric must stay under.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AlertThreshold {
+    pub enabled: bool,
+    pub value: f64,
+}
+
+impl AlertThreshold {
+    fn new(enabled: bool, value: f64) -> Self {
+        Self { enabled, value }
+    }
+    fn sanitized(&self, min: f64, max: f64) -> Self {
+        Self {
+            enabled: self.enabled,
+            value: self.value.clamp(min, max),
+        }
+    }
+}
+
+/// Monitor threshold alerts, surfaced in Settings → Alerts. One global
+/// set shared by every host. Like `AdvancedSettings`, every field has a
+/// serde default and every number is range-checked by `sanitized()`, so
+/// a hand-edited file cannot make the rules nonsensical.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AlertSettings {
+    /// Master switch. Off means no background sampling and no alerts.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Also raise an OS notification when an alert fires.
+    #[serde(default = "default_true")]
+    pub system_notifications: bool,
+    #[serde(default = "default_cpu_rule")]
+    pub cpu: AlertThreshold,
+    #[serde(default = "default_memory_rule")]
+    pub memory: AlertThreshold,
+    #[serde(default = "default_disk_rule")]
+    pub disk: AlertThreshold,
+    #[serde(default = "default_swap_rule")]
+    pub swap: AlertThreshold,
+    /// 1-minute load average divided by core count.
+    #[serde(default = "default_load_rule")]
+    pub load_per_core: AlertThreshold,
+    /// A unit entering `systemctl --failed` is its own alert.
+    #[serde(default = "default_true")]
+    pub failed_units: bool,
+    /// Consecutive breaching samples before an alert fires, 1..=20.
+    #[serde(default = "default_sustain_samples")]
+    pub sustain_samples: u32,
+    /// Minutes before the same rule may fire again, 1..=120.
+    #[serde(default = "default_cooldown_mins")]
+    pub cooldown_mins: u32,
+}
+
+fn default_true() -> bool { true }
+fn default_cpu_rule() -> AlertThreshold { AlertThreshold::new(true, 85.0) }
+fn default_memory_rule() -> AlertThreshold { AlertThreshold::new(true, 90.0) }
+fn default_disk_rule() -> AlertThreshold { AlertThreshold::new(true, 90.0) }
+fn default_swap_rule() -> AlertThreshold { AlertThreshold::new(false, 50.0) }
+fn default_load_rule() -> AlertThreshold { AlertThreshold::new(false, 2.0) }
+fn default_sustain_samples() -> u32 { 3 }
+fn default_cooldown_mins() -> u32 { 10 }
+
+impl Default for AlertSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            system_notifications: true,
+            cpu: default_cpu_rule(),
+            memory: default_memory_rule(),
+            disk: default_disk_rule(),
+            swap: default_swap_rule(),
+            load_per_core: default_load_rule(),
+            failed_units: true,
+            sustain_samples: default_sustain_samples(),
+            cooldown_mins: default_cooldown_mins(),
+        }
+    }
+}
+
+impl AlertSettings {
+    /// Clamp every number into the range its UI control offers. Ranges
+    /// must match ALERT_RANGES on the TypeScript side.
+    pub fn sanitized(&self) -> Self {
+        Self {
+            enabled: self.enabled,
+            system_notifications: self.system_notifications,
+            cpu: self.cpu.sanitized(50.0, 100.0),
+            memory: self.memory.sanitized(50.0, 100.0),
+            disk: self.disk.sanitized(50.0, 100.0),
+            swap: self.swap.sanitized(10.0, 100.0),
+            load_per_core: self.load_per_core.sanitized(1.0, 10.0),
+            failed_units: self.failed_units,
+            sustain_samples: self.sustain_samples.clamp(1, 20),
+            cooldown_mins: self.cooldown_mins.clamp(1, 120),
         }
     }
 }
@@ -227,6 +333,7 @@ mod tests {
             double_click_edit: false,
             language: "en".into(),
             auto_update_check: true,
+            alerts: Default::default(),
             advanced: AdvancedSettings::default(),
             schema_version: 1,
         }
@@ -257,6 +364,47 @@ mod tests {
         assert_eq!(got.advanced, AdvancedSettings::default());
         assert_eq!(got.advanced.sftp_concurrency, 4);
         assert_eq!(got.advanced.log_level, "info");
+    }
+
+    #[test]
+    fn a_settings_json_without_alerts_gets_defaults_and_stays_quiet() {
+        // Anything written before v0.36 has no `alerts` key. Upgrading
+        // must not start alerting on its own, so the default is off.
+        let td = TempDir::new().unwrap();
+        let store = SettingsStore::open(td.path());
+        let legacy = r#"{"themeId":"warm-light","density":"comfortable","terminal":{"fontFamily":"fira-code","fontSize":14,"cursorStyle":"block"},"schemaVersion":1}"#;
+        std::fs::write(td.path().join("settings.json"), legacy).unwrap();
+        let got = store.load().unwrap().unwrap();
+        assert_eq!(got.alerts, AlertSettings::default());
+        assert!(!got.alerts.enabled);
+        assert_eq!(got.alerts.cpu.value, 85.0);
+        assert_eq!(got.alerts.sustain_samples, 3);
+    }
+
+    #[test]
+    fn alert_settings_sanitized_clamps_every_number() {
+        let wild = AlertSettings {
+            enabled: true,
+            system_notifications: false,
+            cpu: AlertThreshold::new(true, 400.0),
+            memory: AlertThreshold::new(true, -5.0),
+            disk: AlertThreshold::new(true, 95.0),
+            swap: AlertThreshold::new(true, 0.0),
+            load_per_core: AlertThreshold::new(true, 99.0),
+            failed_units: true,
+            sustain_samples: 0,
+            cooldown_mins: 9999,
+        };
+        let got = wild.sanitized();
+        assert_eq!(got.cpu.value, 100.0);
+        assert_eq!(got.memory.value, 50.0);
+        assert_eq!(got.disk.value, 95.0, "a value already in range is left alone");
+        assert_eq!(got.swap.value, 10.0);
+        assert_eq!(got.load_per_core.value, 10.0);
+        assert_eq!(got.sustain_samples, 1);
+        assert_eq!(got.cooldown_mins, 120);
+        assert!(got.enabled, "clamping must not flip the switches");
+        assert!(!got.system_notifications);
     }
 
     #[test]

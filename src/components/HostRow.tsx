@@ -10,6 +10,8 @@ import { useT } from "../i18n";
 interface Props {
   host: HostInfo;
   isConnected: boolean;
+  /** Alerts firing on this host right now; 0 hides the badge. */
+  alertCount?: number;
   isConnecting?: boolean;
   /** True when the currently active tab belongs to this host — the row
    *  keeps a hover-like highlight so users see which host they're on. */
@@ -50,7 +52,7 @@ interface Props {
 
 const DOUBLE_CLICK_MS = 250;
 
-export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, onOpenNewShell, onDisconnect, onEdit, onDuplicate, onDelete, selected, selecting, onSelect, onContextMenuOpen, bulkItems, moveItems, indent, query }: Props) {
+export function HostRow({ host, isConnected, alertCount = 0, isConnecting, isActive, onConnect, onOpenNewShell, onDisconnect, onEdit, onDuplicate, onDelete, selected, selecting, onSelect, onContextMenuOpen, bulkItems, moveItems, indent, query }: Props) {
   const t = useT();
   const iconSizes = useIconSizes();
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
@@ -186,6 +188,18 @@ export function HostRow({ host, isConnected, isConnecting, isActive, onConnect, 
               </span>
             )}
           </span>
+          {alertCount > 0 && (
+            <span
+              data-testid={`alert-badge-${host.id}`}
+              title={`${alertCount} ${alertCount === 1 ? "alert" : "alerts"}`}
+              style={{
+                flexShrink: 0, fontSize: 10, fontWeight: 600, lineHeight: "15px",
+                minWidth: 15, height: 15, padding: "0 4px", borderRadius: 999,
+                textAlign: "center", background: "var(--error-fade)", color: "var(--error)",
+                border: "1px solid var(--error)",
+              }}
+            >{alertCount}</span>
+          )}
         </button>
         <button
           aria-label="host options"
