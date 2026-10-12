@@ -214,6 +214,7 @@ pub async fn import_from(
                 auth_method: h.auth_method.clone(),
                 key_path: h.key_path.clone(),
                 connection_mode: Some(h.connection_mode.clone()),
+                group_name: h.group_name.clone(),
             })
             .await;
         let record = match inserted {
@@ -346,6 +347,7 @@ mod tests {
             auth_method: "password".into(),
             key_path: None,
             connection_mode: Some("term_tunnels".into()),
+            group_name: None,
         }
     }
 

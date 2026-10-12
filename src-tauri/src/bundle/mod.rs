@@ -40,6 +40,10 @@ pub struct BundleHost {
     #[serde(default)]
     pub key_path: Option<String>,
     pub connection_mode: String,
+    /// Sidebar group. Absent from bundles written before groups existed —
+    /// serde default (ungrouped) keeps those importable.
+    #[serde(default)]
+    pub group_name: Option<String>,
     /// A password was in the keychain on the exporting machine. The
     /// password itself is not here and never will be.
     #[serde(default)]
@@ -126,6 +130,7 @@ pub fn build(
                 auth_method: h.auth_method.clone(),
                 key_path: h.key_path.clone(),
                 connection_mode: h.connection_mode.clone(),
+                group_name: h.group_name.clone(),
                 has_password: f.has_password,
                 has_passphrase: f.has_passphrase,
             }
@@ -244,6 +249,7 @@ mod tests {
             auth_method: "password".into(),
             key_path: None,
             connection_mode: "terminal_only".into(),
+            group_name: None,
         }
     }
 

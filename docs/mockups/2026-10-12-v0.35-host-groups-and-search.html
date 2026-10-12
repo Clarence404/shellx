@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>主机分组 + 搜索 · 交互图</title>
+<style>
+:root{--bg:#eef0f4;--panel:#fff;--panel2:#f4f5f8;--border:#e3e6ec;--t1:#1f2430;--t2:#5b6272;--t3:#98a0b0;--accent:#4c7cff;--fade:rgba(76,124,255,.12);--ok:#2fbf71;--err:#e5484d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:13px/1.4 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:var(--t1);padding:24px;display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+.drawer{width:272px;height:560px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;box-shadow:0 6px 24px rgba(0,0,0,.08);position:relative}
+.hdr{display:flex;align-items:center;justify-content:space-between;font-weight:600;font-size:14px;padding:4px 2px 8px}
+.hdr small{color:var(--t3);font-weight:400}
+.search{position:relative;margin-bottom:8px}
+.search input{width:100%;height:32px;border:1px solid var(--border);border-radius:7px;background:var(--panel2);padding:0 28px 0 30px;font:inherit;color:var(--t1);outline:none}
+.search input:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--fade)}
+.search .ic{position:absolute;left:10px;top:7px;color:var(--t3);font-size:13px}
+.search .x{position:absolute;right:8px;top:6px;color:var(--t3);cursor:pointer;display:none;font-size:14px}
+.list{flex:1;overflow:auto;margin:0 -4px;padding:0 4px}
+.grp{display:flex;align-items:center;gap:6px;padding:6px 6px;margin-top:4px;border-radius:6px;cursor:pointer;user-select:none;color:var(--t2);font-size:12px;font-weight:600}
+.grp:hover{background:var(--panel2)}
+.grp .chev{display:inline-block;width:12px;transition:transform .12s;color:var(--t3)}
+.grp.closed .chev{transform:rotate(-90deg)}
+.grp .cnt{margin-left:auto;font-weight:400;color:var(--t3);font-size:11px}
+.grp .live{color:var(--ok);font-weight:500}
+.grp input{font:inherit;border:1px solid var(--accent);border-radius:4px;padding:1px 4px;width:140px;outline:none}
+.row{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 24px;border-radius:6px;cursor:pointer}
+.row.flat{padding-left:8px}
+.row:hover{background:var(--panel2)}
+.row.active{background:var(--fade)}
+.row.sel{background:rgba(76,124,255,.22);box-shadow:inset 3px 0 0 var(--accent)}
+.bar{display:flex;gap:8px;align-items:center;margin-top:8px}
+.bar .sm{height:34px;border-radius:6px;border:1px solid var(--border);background:var(--panel2);color:var(--t2);font:inherit;padding:0 12px}
+.bar .mv{flex:1;height:34px;border-radius:6px;border:1px solid var(--accent);background:var(--fade);color:var(--t1);font:inherit;font-weight:500}
+.dot{width:7px;height:7px;border-radius:50%;background:#c9cedb;flex-shrink:0}
+.row.on .dot{background:var(--ok)}
+.nm{font-weight:500}.sub{color:var(--t3);font-size:11px}
+.txt{min-width:0;display:flex;flex-direction:column}
+mark{background:rgba(255,196,0,.35);color:inherit;border-radius:2px;padding:0 1px}
+.empty{color:var(--t3);text-align:center;padding:28px 8px;font-size:12px}
+.foot{display:flex;gap:8px;margin-top:8px}
+.btn{flex:1;height:34px;border-radius:6px;background:var(--fade);border:1px solid var(--accent);color:var(--t1);font:inherit;font-weight:500}
+.menu{position:fixed;z-index:9;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.18);padding:4px;min-width:170px;display:none}
+.menu div{padding:6px 10px;border-radius:5px;cursor:pointer;white-space:nowrap}
+.menu div:hover{background:var(--panel2)}
+.menu .sep{height:1px;background:var(--border);padding:0;margin:4px 2px;cursor:default}
+.menu .lbl{color:var(--t3);font-size:11px;cursor:default;padding:4px 10px 2px}.menu .lbl:hover{background:none}
+.menu .danger{color:var(--err)}
+.notes{max-width:420px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.notes h3{margin:0 0 8px;font-size:14px}.notes ul{margin:0 0 12px;padding-left:18px;color:var(--t2)}.notes li{margin:4px 0}
+.notes .try{background:var(--fade);border-radius:8px;padding:10px 12px;color:var(--t1)}
+.ov{position:fixed;inset:0;background:rgba(20,24,34,.35);display:none;align-items:center;justify-content:center;z-index:20}
+.form{width:340px;background:#fff;border-radius:10px;border:1px solid var(--border);box-shadow:0 16px 48px rgba(0,0,0,.25)}
+.form h4{margin:0;padding:14px 18px 10px;font-size:13px;border-bottom:1px solid var(--border)}
+.form .bd{padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.form label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--t1);font-weight:500;text-transform:uppercase;letter-spacing:.6px}
+.form input,.form select{border:1px solid var(--border);border-radius:5px;padding:6px 8px;font:inherit;font-size:12px;text-transform:none;letter-spacing:0;background:var(--panel2);outline:none}
+.form input:focus{border-color:var(--accent);background:#fff}
+.form .new{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--fade)}
+.form .hint{font-size:10px;color:var(--t3);text-transform:none;letter-spacing:0;font-weight:400}
+.form .ft{display:flex;gap:8px;padding:0 18px 16px}
+.form .ft button{flex:1;padding:7px;border-radius:5px;font:inherit;border:1px solid var(--border);background:#fff;color:var(--t2)}
+.form .ft .pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.kbd{border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px;background:#fff}
+</style></head><body>
+
+<div class="drawer" id="drawer">
+  <div class="hdr"><span>主机 <small id="total"></small></span><span style="color:var(--t3)">«</span></div>
+  <div class="search"><span class="ic">⌕</span><input id="q" placeholder="搜索主机…  名称 / 地址 / 用户 / 分组"><span class="x" id="qx">✕</span></div>
+  <div class="list" id="list"></div>
+  <div class="foot" id="foot"><button class="btn" id="newbtn">＋ 新建连接</button></div>
+</div>
+
+<div class="menu" id="menu"></div>
+
+<div class="ov" id="ov"><div class="form">
+  <h4 id="ftitle">新建 SSH 连接</h4>
+  <div class="bd">
+    <label>名称<input id="f_label" placeholder="user@host"></label>
+    <label>主机<input id="f_host" placeholder="192.168.1.10 / example.com"></label>
+    <label>用户名<input id="f_user" placeholder="root"></label>
+    <label>分组 <span class="hint">（可选）</span>
+      <input id="f_group" list="glist" placeholder="选已有分组，或直接输入新名字">
+      <datalist id="glist"></datalist>
+      <span class="hint" id="ghint">不填 = 未分组</span>
+    </label>
+  </div>
+  <div class="ft"><button id="f_cancel">取消</button><button class="pri" id="f_ok">保存并连接</button></div>
+</div></div>
+
+<div class="notes">
+  <h3>这是个能点的示意（数据是假的）</h3>
+  <ul>
+    <li><b>点分组标题</b>折叠 / 展开，折叠状态下次打开还在</li>
+    <li><b>搜索框</b>实时过滤；搜索时命中的分组自动展开，只留匹配的主机，命中字符高亮；<span class="kbd">Esc</span> 清空，<span class="kbd">Enter</span> 连接第一个匹配项</li>
+    <li><b>右键主机</b> → 移动到分组（选已有分组，或「新建分组」）</li>
+    <li><b>右键分组标题</b> → 重命名 / 解散分组（主机回到「未分组」，不会被删）</li>
+    <li><b>点「＋ 新建连接」</b>看表单里新增的「分组」栏：下拉里是已有分组，也可以直接打新名字，输入时下面会提示「加入已有分组」还是「将新建分组」；编辑主机的表单同样有这一栏</li>
+    <li><b>已有的连接怎么归组</b>：升级后所有现有主机都在「未分组」，行为和以前一模一样。归组有三条路——①右键单台 → 移动到分组；②<span class="kbd">Ctrl</span>+点选多台，底部出现「移动 N 台到分组」，一次归好；③编辑表单里的「分组」栏。<b>分组只是整理手段，不影响连接本身</b>：已连的会话、标签页、隧道、文件面板都不会因为改分组而断开或变化</li>
+    <li>没分组的主机排在最后，没有任何分组时列表长得和现在一样</li>
+    <li>分组头上显示「总数 · 在线数」，一眼看出哪组有连着的机器</li>
+  </ul>
+  <div class="try">试试：按住 <b>Ctrl</b> 点 cache-01 和 jump-tmp，再点底部「移动 2 台到分组」；搜 <b>db</b>、搜 <b>root</b>、搜 <b>测试</b>；右键 <b>cache-01</b> 移到「生产」；右键「测试」标题重命名。</div>
+</div>
+
+<script>
+let hosts=[
+ {id:1,label:"web-01",host:"10.0.1.11",user:"deploy",group:"生产",on:true},
+ {id:2,label:"web-02",host:"10.0.1.12",user:"deploy",group:"生产",on:false},
+ {id:3,label:"db-master",host:"10.0.2.10",user:"root",group:"生产",on:true},
+ {id:4,label:"db-replica",host:"10.0.2.11",user:"root",group:"生产",on:false},
+ {id:5,label:"staging-app",host:"192.168.3.20",user:"ubuntu",group:"测试",on:false},
+ {id:6,label:"staging-db",host:"192.168.3.21",user:"ubuntu",group:"测试",on:false},
+ {id:7,label:"nas",host:"192.168.3.250",user:"chen.han",group:"家里",on:true},
+ {id:8,label:"cache-01",host:"10.0.3.5",user:"root",group:null,on:false},
+ {id:9,label:"jump-tmp",host:"172.16.0.9",user:"ops",group:null,on:false}
+];
+const closed=new Set(["家里"]);
+const q=document.getElementById("q"),list=document.getElementById("list"),menu=document.getElementById("menu");
+let renaming=null;const sel=new Set();
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+function hl(s,k){if(!k)return esc(s);const i=s.toLowerCase().indexOf(k);if(i<0)return esc(s);return esc(s.slice(0,i))+"<mark>"+esc(s.slice(i,i+k.length))+"</mark>"+esc(s.slice(i+k.length))}
+function groups(){return [...new Set(hosts.map(h=>h.group).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh"))}
+function render(){
+  const k=q.value.trim().toLowerCase(); document.getElementById("qx").style.display=k?"block":"none";
+  const match=h=>!k||[h.label,h.host,h.user,h.group||""].some(x=>x.toLowerCase().includes(k));
+  const gs=groups(), hasG=gs.length>0; let out="",shown=0;
+  const row=(h,flat)=>{shown++;return `<div class="row ${flat?"flat":""} ${h.on?"on":""} ${sel.has(h.id)?"sel":""}" data-id="${h.id}"><span class="dot"></span><span class="txt"><span class="nm">${hl(h.label,k)}</span><span class="sub">${hl(h.user,k)}@${hl(h.host,k)}</span></span></div>`};
+  for(const g of gs){
+    const hs=hosts.filter(h=>h.group===g&&match(h)); if(k&&!hs.length)continue;
+    const open=k?true:!closed.has(g), live=hs.filter(h=>h.on).length;
+    const name=renaming===g?`<input id="rn" value="${esc(g)}">`:hl(g,k);
+    out+=`<div class="grp ${open?"":"closed"}" data-g="${esc(g)}"><span class="chev">▾</span><span>${name}</span><span class="cnt">${hs.length}${live?` · <span class="live">${live} 在线</span>`:""}</span></div>`;
+    if(open)out+=hs.map(h=>row(h,false)).join("");
+  }
+  const un=hosts.filter(h=>!h.group&&match(h));
+  if(un.length){ if(hasG)out+=`<div class="grp" style="cursor:default"><span class="chev" style="visibility:hidden">▾</span><span>未分组</span><span class="cnt">${un.length}</span></div>`; out+=un.map(h=>row(h,!hasG)).join(""); }
+  list.innerHTML=out||`<div class="empty">没有匹配「${esc(q.value)}」的主机</div>`;
+  document.getElementById("total").textContent=k?`${shown} / ${hosts.length}`:`${hosts.length}`;
+  renderFoot();
+  const rn=document.getElementById("rn"); if(rn){rn.focus();rn.select();rn.onkeydown=e=>{if(e.key==="Enter")doRename(g0,rn.value);if(e.key==="Escape"){renaming=null;render()}};rn.onblur=()=>{if(renaming){doRename(g0,rn.value)}};}
+}
+let g0=null;
+function doRename(old,nu){nu=nu.trim();renaming=null;if(nu&&nu!==old){hosts.forEach(h=>{if(h.group===old)h.group=nu});if(closed.has(old)){closed.delete(old);closed.add(nu)}}render()}
+list.addEventListener("click",e=>{const g=e.target.closest(".grp[data-g]");if(g&&!e.target.matches("input")){const n=g.dataset.g;closed.has(n)?closed.delete(n):closed.add(n);render()}});
+list.addEventListener("contextmenu",e=>{
+  const r=e.target.closest(".row"),g=e.target.closest(".grp[data-g]"); if(!r&&!g)return; e.preventDefault();
+  let html="";
+  if(r){const id=+r.dataset.id;
+    html=`<div>连接</div><div>在新标签打开</div><div>编辑</div><div class="sep"></div><div class="lbl">移动到分组</div>`+
+      groups().map(x=>`<div data-mv="${id}" data-to="${esc(x)}">${esc(x)}</div>`).join("")+
+      `<div data-mv="${id}" data-to="__new">＋ 新建分组…</div><div data-mv="${id}" data-to="">移出分组</div><div class="sep"></div><div class="danger">删除</div>`;
+  } else {const n=g.dataset.g; html=`<div data-rn="${esc(n)}">重命名分组</div><div class="danger" data-un="${esc(n)}">解散分组（主机保留）</div>`}
+  menu.innerHTML=html;menu.style.display="block";menu.style.left=Math.min(e.clientX,innerWidth-190)+"px";menu.style.top=Math.min(e.clientY,innerHeight-300)+"px";
+});
+menu.addEventListener("click",e=>{const t=e.target; if(t.dataset.mv){const h=hosts.find(x=>x.id==t.dataset.mv);let to=t.dataset.to;if(to==="__new"){let i=1;while(groups().includes("新分组"+i))i++;to="新分组"+i;renaming=to;g0=to}h.group=to||null}
+  if(t.dataset.mm!==undefined){let to=t.dataset.mm;if(to==="__new"){let i=1;while(groups().includes("新分组"+i))i++;to="新分组"+i;renaming=to;g0=to}hosts.forEach(h=>{if(sel.has(h.id))h.group=to||null});sel.clear()}
+  if(t.dataset.rn){renaming=t.dataset.rn;g0=renaming}
+  if(t.dataset.un){hosts.forEach(h=>{if(h.group===t.dataset.un)h.group=null})}
+  menu.style.display="none";render()});
+document.addEventListener("click",e=>{if(!menu.contains(e.target))menu.style.display="none"});
+list.addEventListener("click",e=>{const r=e.target.closest(".row");if(!r)return;const id=+r.dataset.id;
+  if(e.ctrlKey||e.metaKey||sel.size){sel.has(id)?sel.delete(id):sel.add(id);render();return}
+  document.querySelectorAll(".row.active").forEach(x=>x.classList.remove("active"));r.classList.add("active")});
+function renderFoot(){const f=document.getElementById("foot");
+  if(sel.size){f.className="bar";f.innerHTML=`<button class="mv" id="mvbtn">移动 ${sel.size} 台到分组 ▾</button><button class="sm" id="clr">取消</button>`;
+    document.getElementById("clr").onclick=()=>{sel.clear();render()};
+    document.getElementById("mvbtn").onclick=ev=>{ev.stopPropagation();const r=ev.target.getBoundingClientRect();
+      menu.innerHTML=`<div class="lbl">移动 ${sel.size} 台到…</div>`+groups().map(x=>`<div data-mm="${esc(x)}">${esc(x)}</div>`).join("")+`<div data-mm="__new">＋ 新建分组…</div><div data-mm="">移出分组</div>`;
+      menu.style.display="block";menu.style.left=r.left+"px";menu.style.top=(r.top-(groups().length*30+110))+"px"};
+  }else{f.className="foot";f.innerHTML='<button class="btn" id="newbtn">＋ 新建连接</button>';document.getElementById("newbtn").onclick=openForm}}
+q.addEventListener("input",render);document.addEventListener("keydown",e=>{if(e.key==="Escape"&&sel.size&&document.activeElement!==q){sel.clear();render()}});
+q.addEventListener("keydown",e=>{if(e.key==="Escape"){q.value="";render()}if(e.key==="Enter"){const r=list.querySelector(".row");if(r){r.click();}}});
+document.getElementById("qx").onclick=()=>{q.value="";render();q.focus()};
+// ── 新建连接表单：重点看「分组」这一栏 ──
+const ov=document.getElementById("ov"),fg=document.getElementById("f_group"),gh=document.getElementById("ghint");
+function openForm(){
+  ["f_label","f_host","f_user"].forEach(i=>document.getElementById(i).value="");fg.value="";fg.classList.remove("new");gh.textContent="不填 = 未分组";
+  document.getElementById("glist").innerHTML=groups().map(g=>`<option value="${esc(g)}">`).join("");
+  ov.style.display="flex";document.getElementById("f_host").focus();
+}
+fg.addEventListener("input",()=>{const v=fg.value.trim();
+  if(!v){gh.textContent="不填 = 未分组";fg.classList.remove("new")}
+  else if(groups().includes(v)){gh.textContent="加入已有分组「"+v+"」";fg.classList.remove("new")}
+  else{gh.textContent="将新建分组「"+v+"」";fg.classList.add("new")}});
+document.getElementById("newbtn").onclick=openForm;
+document.getElementById("f_cancel").onclick=()=>ov.style.display="none";
+document.getElementById("f_ok").onclick=()=>{
+  const host=document.getElementById("f_host").value.trim()||"10.0.9.9",user=document.getElementById("f_user").value.trim()||"root";
+  const label=document.getElementById("f_label").value.trim()||`${user}@${host}`,g=fg.value.trim()||null;
+  hosts.push({id:Date.now(),label,host,user,group:g,on:true});if(g)closed.delete(g);ov.style.display="none";q.value="";render();
+  list.scrollTop=list.scrollHeight;
+};
+render();
+</script></body></html>
