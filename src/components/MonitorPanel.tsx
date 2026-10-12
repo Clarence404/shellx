@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import { ShieldAlert, Server } from "lucide-react";
 import { useMonitorStore } from "../state/monitor";
-import { startMonitor, stopMonitor, onMonitorSnapshot, onMonitorUnsupported } from "../ipc/monitor";
+import { onMonitorUnsupported } from "../ipc/monitor";
+import { claimMonitor, releaseMonitor } from "../state/monitorBridge";
+import { useAlerts, alertsFor } from "../state/alerts";
 import { useSessions } from "../state/sessions";
 import { ActivitySwitcher } from "./paneChrome";
 import { KpiRow } from "./monitor/KpiRow";
@@ -10,13 +12,13 @@ import { PerformanceTab } from "./monitor/PerformanceTab";
 import { ProcessTab } from "./monitor/ProcessTab";
 import { DiskTab } from "./monitor/DiskTab";
 import { ContainerTab } from "./monitor/ContainerTab";
-import { FailedTab } from "./monitor/FailedTab";
+import { AlertsTab } from "./monitor/AlertsTab";
 import { fmtKb, fmtUptime } from "./monitor/format";
 import { useWidthTier, type WidthTier } from "./monitor/useWidth";
 import { TriangleAlert } from "lucide-react";
 import { useT } from "../i18n";
 
-type SubTab = "performance" | "process" | "disk" | "container" | "failed";
+type SubTab = "performance" | "process" | "disk" | "container" | "alerts";
 
 const INTERVALS = [1, 2, 5, 10, 30] as const;
 type IntervalSecs = typeof INTERVALS[number];
@@ -159,25 +161,34 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
   // The connection's saved name is the title the user recognizes — prefer
   // it over the remote's own hostname.
   const sessionLabel = useSessions((s) => s.sessions.find((x) => x.id === connectionId)?.label);
+  const byConn = useAlerts((s) => s.byConn);
+  const alerts = alertsFor(byConn, connectionId);
+  // The tab's count: threshold alerts still firing, plus each failed
+  // unit (those are listed by the units section, not twice).
+  const firingCount = alerts.filter((a) => a.kind !== "failedUnit" && a.clearedAt === null).length;
+  const unitCount = latest?.failedUnits.length ?? 0;
+  const alertCount = firingCount + unitCount;
 
-  const unlistenSnapRef = useRef<(() => void) | undefined>(undefined);
   const unlistenUnsupRef = useRef<(() => void) | undefined>(undefined);
+
+  // Snapshots arrive through the app-wide bridge (it keeps sampling for
+  // alerts after this panel closes), so the panel only claims a faster
+  // rate while it is on screen.
+  useEffect(() => {
+    claimMonitor(connectionId, intervalSecs);
+    return () => releaseMonitor(connectionId);
+  }, [connectionId, intervalSecs]);
 
   useEffect(() => {
     let cancelled = false;
-    void startMonitor(connectionId, intervalSecs).catch(() => {});
-    onMonitorSnapshot(connectionId, (snap) => useMonitorStore.getState().push(snap))
-      .then((u) => { if (cancelled) { u(); return; } unlistenSnapRef.current = u; }).catch(() => {});
     onMonitorUnsupported(connectionId, () => setUnsupported(true))
       .then((u) => { if (cancelled) { u(); return; } unlistenUnsupRef.current = u; }).catch(() => {});
     return () => {
       cancelled = true;
-      void stopMonitor(connectionId).catch(() => {});
-      unlistenSnapRef.current?.(); unlistenUnsupRef.current?.();
-      unlistenSnapRef.current = undefined; unlistenUnsupRef.current = undefined;
-      useMonitorStore.getState().clear(connectionId);
+      unlistenUnsupRef.current?.();
+      unlistenUnsupRef.current = undefined;
     };
-  }, [connectionId, intervalSecs]);
+  }, [connectionId]);
 
   const waiting = unsupported || snapshots.length === 0;
   const [widthRef, tier] = useWidthTier<HTMLDivElement>();
@@ -185,9 +196,9 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
   // A conditional sub-tab (containers, alerts) can disappear — fall back to
   // Performance so the pane never shows an orphaned empty view.
   useEffect(() => {
-    if (subTab === "failed" && (latest?.failedUnits.length ?? 0) === 0) setSubTab("performance");
+    if (subTab === "alerts" && alerts.length === 0 && (latest?.failedUnits.length ?? 0) === 0) setSubTab("performance");
     if (subTab === "container" && !latest?.system.hasDocker) setSubTab("performance");
-  }, [subTab, latest]);
+  }, [subTab, latest, alerts.length]);
 
   return (
     // The whole panel is a fixed-height flex column: identity, controls,
@@ -228,15 +239,15 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
               {t("Containers")}
             </button>
           )}
-          {(latest?.failedUnits.length ?? 0) > 0 && (
-            <button onClick={() => setSubTab("failed")} style={{
+          {(alerts.length > 0 || unitCount > 0) && (
+            <button onClick={() => setSubTab("alerts")} style={{
               padding: "5px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
               display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600,
-              background: subTab === "failed" ? "var(--error)" : "var(--error-fade)",
-              color: subTab === "failed" ? "#fff" : "var(--error)",
+              background: subTab === "alerts" ? "var(--error)" : "var(--error-fade)",
+              color: subTab === "alerts" ? "#fff" : "var(--error)",
               border: `1px solid var(--error)`,
             }}>
-              <TriangleAlert size={12} /> {t("Alerts")} {latest?.failedUnits.length}
+              <TriangleAlert size={12} /> {t("Alerts")} {alertCount > 0 ? alertCount : ""}
             </button>
           )}
           <div style={{ flex: 1 }} />
@@ -261,7 +272,7 @@ export function MonitorPanel({ connectionId }: { connectionId: string }) {
         {!waiting && subTab === "process" && <ProcessTab processes={latest?.processes ?? []} />}
         {!waiting && subTab === "disk" && <DiskTab snapshots={snapshots} intervalSecs={intervalSecs} />}
         {!waiting && subTab === "container" && <ContainerTab containers={latest?.containers ?? []} loaded={latest?.containersLoaded ?? false} denied={latest?.system.dockerDenied ?? false} />}
-        {!waiting && subTab === "failed" && <FailedTab units={latest?.failedUnits ?? []} />}
+        {!waiting && subTab === "alerts" && <AlertsTab alerts={alerts} units={latest?.failedUnits ?? []} />}
       </div>
     </div>
   );

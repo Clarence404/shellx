@@ -5,10 +5,11 @@ import { AboutPanel } from "./AboutPanel";
 import { TrustedServersPanel } from "./TrustedServersPanel";
 import { ShortcutsPanel } from "./ShortcutsPanel";
 import { LogsPanel } from "./LogsPanel";
+import { AlertsPanel } from "./AlertsPanel";
 import { AdvancedPanel } from "./AdvancedPanel";
 import { BackupPanel } from "./BackupPanel";
 
-type Section = "appearance" | "shortcuts" | "about" | "trusted-servers" | "logs" | "advanced" | "backup";
+type Section = "appearance" | "shortcuts" | "about" | "trusted-servers" | "alerts" | "logs" | "advanced" | "backup";
 
 export function SettingsView() {
   const [section, setSection] = useState<Section>("appearance");
@@ -21,6 +22,7 @@ export function SettingsView() {
       {section === "about" && <AboutPanel />}
       {section === "trusted-servers" && <TrustedServersPanel />}
       {section === "logs" && <LogsPanel />}
+      {section === "alerts" && <AlertsPanel />}
       {section === "advanced" && <AdvancedPanel />}
       {section === "backup" && <BackupPanel />}
     </div>

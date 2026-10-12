@@ -11,6 +11,8 @@ import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
 import { RemoteEditNotice } from "./components/RemoteEdit";
 import { UpdateDialog } from "./components/UpdateDialog";
+import { AlertToasts } from "./components/AlertToasts";
+import { startMonitorBridge, stopMonitorBridge } from "./state/monitorBridge";
 import { GlobalTunnelsView } from "./components/GlobalTunnelsView";
 import { PaneLayout } from "./components/PaneLayout";
 import { activitiesFor, clampActivity } from "./state/activities";
@@ -130,6 +132,9 @@ export function App() {
   // welcome banner + prompt to the mount-vs-Rust-pump race.
   useEffect(() => { installSessionStream(); }, []);
   useEffect(() => { installEditStream(); }, []);
+  // One global monitor subscriber: it keeps sampling connected hosts for
+  // threshold alerts whether or not a monitor panel is open.
+  useEffect(() => { void startMonitorBridge(); return () => stopMonitorBridge(); }, []);
 
   // Sync themeId / density to <html data-*> attributes so tokens.css can
   // pick up the correct :root[data-…] variable block. Empty string on
@@ -687,6 +692,7 @@ export function App() {
       <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />
       <RemoteEditNotice />
       <UpdateDialog />
+      <AlertToasts />
       <HostKeyDialog />
       {passphraseReq && (
         <PassphraseDialog

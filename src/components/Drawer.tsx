@@ -7,6 +7,7 @@ import { ErrorDialog } from "./ErrorDialog";
 import { HostContextMenu, type MenuItem } from "./HostContextMenu";
 import { SectionHeader } from "./SectionHeader";
 import { useHostsStore } from "../state/hosts";
+import { useAlerts, alertCountByHost } from "../state/alerts";
 import { useSessions } from "../state/sessions";
 import { useRailFiles } from "../state/railFiles";
 import { closeSession } from "../ipc/commands";
@@ -34,6 +35,10 @@ export function Drawer({ view, onNewConnection, onImportConfig, onEditHost, onCo
   const addHost = useHostsStore((s) => s.addHost);
   const updateHostById = useHostsStore((s) => s.updateHostById);
   const hostIsConnected = useSessions((s) => s.hostIsConnected);
+  // Alert badges: counted per host, summed over that host's sessions.
+  const alertsByConn = useAlerts((s) => s.byConn);
+  const allSessions = useSessions((s) => s.sessions);
+  const alertsByHost = alertCountByHost(alertsByConn, allSessions);
   const connecting = useSessions((s) => s.connecting);
   // Host of the currently active tab — its row keeps a highlight so the
   // drawer always shows which host the foreground tab belongs to.
@@ -374,6 +379,7 @@ export function Drawer({ view, onNewConnection, onImportConfig, onEditHost, onCo
                   : undefined
               }
               isConnected={connected}
+              alertCount={alertsByHost[h.id] ?? 0}
               isConnecting={!!connecting[h.id]}
               isActive={h.id === activeHostId}
               onConnect={() => onConnectHost?.(h)}

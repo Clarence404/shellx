@@ -1,3 +1,6 @@
+import type { AlertSettings } from "./alerts";
+import { DEFAULT_ALERTS } from "./alerts";
+
 export interface Settings {
   themeId: "warm-minimal" | "warm-light";
   density: "compact" | "comfortable" | "spacious";
@@ -20,6 +23,9 @@ export interface Settings {
   doubleClickEdit?: boolean;
   language: "en" | "zh";
   autoUpdateCheck: boolean;
+  /** Monitor threshold alerts. Added in v0.36 — absent from older
+   *  settings.json files, which load as DEFAULT_ALERTS (off). */
+  alerts: AlertSettings;
   advanced: AdvancedSettings;
   schemaVersion: 1;
 }
@@ -82,6 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   language: "en",
   autoUpdateCheck: true,
+  alerts: DEFAULT_ALERTS,
   advanced: DEFAULT_ADVANCED,
   schemaVersion: 1,
 };
