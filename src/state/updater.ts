@@ -21,10 +21,11 @@ interface UpdaterState {
   status: UpdateStatus;
   version: string | null;
   notes: string | null;
-  /** The "what's new" dialog is showing. It opens by itself once per version
-   *  when the silent startup check finds one (a manual "Check for updates"
-   *  click doesn't — that already put the user in Settings → About), and any
-   *  time from the titlebar's Update button. */
+  /** The update dialog is showing. It opens by itself once per version when
+   *  the silent startup check finds one, and whenever the user asks — the
+   *  titlebar button opens it before the check so the answer lands in the
+   *  dialog rather than flashing past. A manual check from Settings → About
+   *  does not open it: the answer is already on that page. */
   dialogOpen: boolean;
   /** The version the user chose to skip, if any — hides the titlebar button. */
   ignored: string | null;
@@ -35,7 +36,12 @@ interface UpdaterState {
   /** Total bytes; 0 when the server omits Content-Length. */
   total: number;
   error: string | null;
+  /** Which step failed, so the dialog says "couldn't check" rather than
+   *  "the download didn't finish" — status alone can't tell them apart. */
+  errorPhase: "check" | "download" | null;
   check(silent: boolean): Promise<void>;
+  /** Open the dialog, then check — what the titlebar button does. */
+  checkInDialog(): Promise<void>;
   downloadAndInstall(): Promise<void>;
   openDialog(): void;
   /** Closing counts as having seen this version: it won't pop up again by itself. */
@@ -48,9 +54,16 @@ let pending: Update | null = null;
 
 export const useUpdater = create<UpdaterState>((set, get) => ({
   status: "idle", version: null, notes: null, dialogOpen: false, ignored: read(IGNORED_KEY),
-  progress: 0, received: 0, total: 0, error: null,
+  progress: 0, received: 0, total: 0, error: null, errorPhase: null,
 
   openDialog() { set({ dialogOpen: true }); },
+  /** The titlebar's "check for updates": opens the dialog first so the
+   *  spinner, the "already current" answer and a found update all land in
+   *  the same place. */
+  async checkInDialog() {
+    set({ dialogOpen: true });
+    await get().check(false);
+  },
   closeDialog() {
     const v = get().version;
     if (v) write(SEEN_KEY, v);
@@ -65,13 +78,19 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
   async check(silent) {
     const s = get().status;
     if (s === "checking" || s === "downloading") return;
-    set({ status: "checking", error: null });
+    set({ status: "checking", error: null, errorPhase: null });
     try {
       const upd = await updaterCheck();
       if (upd) {
         pending = upd;
         const announce = silent && read(SEEN_KEY) !== upd.version && read(IGNORED_KEY) !== upd.version;
-        set({ status: "available", version: upd.version, notes: upd.body ?? null, dialogOpen: announce });
+        // `announce` only ever opens the dialog; it must not close one the
+        // user already has open — the titlebar button opens it first and
+        // then checks from inside it.
+        set({
+          status: "available", version: upd.version, notes: upd.body ?? null,
+          dialogOpen: announce || get().dialogOpen,
+        });
         void logPush({
           level: "info", category: "updater",
           message: `update available: ${upd.version}`,
@@ -99,7 +118,7 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
           fields: { error: String(e) },
         });
       } else {
-        set({ status: "error", error: String(e) });
+        set({ status: "error", error: String(e), errorPhase: "check" });
         void logPush({
           level: "error", category: "updater",
           message: "update check failed",
@@ -111,7 +130,7 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
 
   async downloadAndInstall() {
     if (!pending) return;
-    set({ status: "downloading", progress: 0, received: 0, total: 0, error: null });
+    set({ status: "downloading", progress: 0, received: 0, total: 0, error: null, errorPhase: null });
     const target = pending.version;
     void logPush({
       level: "info", category: "updater",
@@ -140,7 +159,7 @@ export const useUpdater = create<UpdaterState>((set, get) => ({
       });
       await relaunch();
     } catch (e) {
-      set({ status: "error", error: String(e) });
+      set({ status: "error", error: String(e), errorPhase: "download" });
       void logPush({
         level: "error", category: "updater",
         message: `update ${target} failed to install`,
