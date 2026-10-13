@@ -35,13 +35,13 @@ describe("localAddress", () => {
 });
 
 describe("sshCommand", () => {
-  it("forwards and nothing else", () => {
-    expect(sshCommand(input())).toBe("ssh -N -L 15432:db.internal:5432 ec2-user@bastion.example.com");
+  it("forwards and leaves a shell open, so the terminal does not look hung", () => {
+    expect(sshCommand(input())).toBe("ssh -L 15432:db.internal:5432 ec2-user@bastion.example.com");
   });
 
   it("spells out the bind address only when the rule binds every interface", () => {
     expect(sshCommand(input({ bindAll: true })))
-      .toBe("ssh -N -L 0.0.0.0:15432:db.internal:5432 ec2-user@bastion.example.com");
+      .toBe("ssh -L 0.0.0.0:15432:db.internal:5432 ec2-user@bastion.example.com");
   });
 
   it("leaves out -p for the default SSH port", () => {
@@ -50,7 +50,7 @@ describe("sshCommand", () => {
 
   it("names a non-default SSH port", () => {
     expect(sshCommand(input({ port: 2222 })))
-      .toBe("ssh -N -L 15432:db.internal:5432 -p 2222 ec2-user@bastion.example.com");
+      .toBe("ssh -L 15432:db.internal:5432 -p 2222 ec2-user@bastion.example.com");
   });
 
   it("treats a missing port as the default rather than emitting -p 0", () => {
@@ -59,7 +59,7 @@ describe("sshCommand", () => {
 
   it("names the host's key, so ssh does not fall back to ~/.ssh", () => {
     expect(sshCommand(input({ keyPath: "/home/me/.ssh/prod_ed25519" })))
-      .toBe("ssh -N -L 15432:db.internal:5432 -i /home/me/.ssh/prod_ed25519 ec2-user@bastion.example.com");
+      .toBe("ssh -L 15432:db.internal:5432 -i /home/me/.ssh/prod_ed25519 ec2-user@bastion.example.com");
   });
 
   it("quotes a key path with spaces in it", () => {
@@ -81,7 +81,7 @@ describe("sshCommand", () => {
 
   it("puts -i after -p, before the destination", () => {
     expect(sshCommand(input({ port: 2222, keyPath: "/k" })))
-      .toBe("ssh -N -L 15432:db.internal:5432 -p 2222 -i /k ec2-user@bastion.example.com");
+      .toBe("ssh -L 15432:db.internal:5432 -p 2222 -i /k ec2-user@bastion.example.com");
   });
 
   it("carries a long remote hostname through intact", () => {
