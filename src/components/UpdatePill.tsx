@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { CloudCheck, CloudDownload, Download } from "lucide-react";
+import { useState } from "react";
+import { CloudDownload, Download } from "lucide-react";
 import { useUpdater } from "../state/updater";
 import { useT } from "../i18n";
 
@@ -7,22 +7,14 @@ import { useT } from "../i18n";
  * The titlebar's update button, always there. While an update is waiting (or
  * downloading) it is the blue "Update" pill that opens the dialog — hidden
  * once the user skips that version. Otherwise it is a quiet icon button that
- * checks for updates on click: a found one opens the dialog, "already latest"
- * flashes a check mark.
+ * opens the update dialog and checks from inside it, so the answer — a found
+ * update, "already current", or a failed check — stays on screen instead of
+ * flashing past in the titlebar.
  */
 export function UpdatePill() {
   const t = useT();
-  const { status, version, ignored, progress, error } = useUpdater();
+  const { status, version, ignored, progress } = useUpdater();
   const [hover, setHover] = useState(false);
-  const [flash, setFlash] = useState(false);
-
-  // "Up to date" is a result, not a state to sit in: show the tick briefly.
-  useEffect(() => {
-    if (status !== "upToDate") { setFlash(false); return; }
-    setFlash(true);
-    const id = setTimeout(() => setFlash(false), 2500);
-    return () => clearTimeout(id);
-  }, [status]);
 
   const waiting = status === "available" || status === "downloading";
   if (waiting && version && ignored !== version) {
@@ -48,22 +40,13 @@ export function UpdatePill() {
   }
 
   const checking = status === "checking";
-  const onCheck = async () => {
-    await useUpdater.getState().check(false);
-    // An explicit click on a version that was skipped still shows it.
-    if (useUpdater.getState().status === "available") useUpdater.getState().openDialog();
-  };
-  const title = checking ? t("Checking…")
-    : flash ? t("Up to date")
-    : status === "error" ? `${t("Update check failed")}${error ? `: ${error}` : ""}`
-    : t("Check for updates");
 
   return (
     <button
-      onClick={() => void onCheck()}
+      onClick={() => void useUpdater.getState().checkInDialog()}
       disabled={checking}
       aria-label={t("Check for updates")}
-      title={title}
+      title={t("Check for updates")}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -71,13 +54,14 @@ export function UpdatePill() {
         height: 22, width: 26, marginRight: 4,
         border: "1px solid var(--border)",
         background: hover ? "var(--panel-2)" : "var(--panel-1)",
-        color: flash ? "var(--ok, #2fbf71)" : hover ? "var(--text-1)" : "var(--text-3)",
+        color: hover ? "var(--text-1)" : "var(--text-3)",
         borderRadius: 6, cursor: checking ? "default" : "pointer",
       }}
     >
-      {checking ? <CloudDownload size={14} style={{ animation: "shellx-dot-pulse 1.2s ease-in-out infinite" }} />
-        : flash ? <CloudCheck size={14} />
-        : <CloudDownload size={14} />}
+      <CloudDownload
+        size={14}
+        style={checking ? { animation: "shellx-dot-pulse 1.2s ease-in-out infinite" } : undefined}
+      />
     </button>
   );
 }

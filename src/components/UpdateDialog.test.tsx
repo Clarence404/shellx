@@ -24,7 +24,7 @@ beforeEach(() => {
   mockCheck.mockReset();
   useUpdater.setState({
     status: "idle", version: null, notes: null, dialogOpen: false, ignored: null,
-    progress: 0, received: 0, total: 0, error: null,
+    progress: 0, received: 0, total: 0, error: null, errorPhase: null,
   });
 });
 afterEach(cleanup);
@@ -112,7 +112,7 @@ describe("UpdateDialog", () => {
   });
 
   it("after a failed download it says so and offers Retry", () => {
-    setAvailable({ status: "error", error: "disk full" });
+    setAvailable({ status: "error", error: "disk full", errorPhase: "download" });
     render(<UpdateDialog />);
     expect(screen.getByText(/download didn't finish/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
@@ -177,13 +177,25 @@ describe("UpdatePill (titlebar button)", () => {
     expect(useUpdater.getState().dialogOpen).toBe(true);
   });
 
-  it("when already current it does not open anything", async () => {
+  it("when already current it says so in the dialog instead of flashing past", async () => {
     const user = userEvent.setup();
     mockCheck.mockResolvedValue(null);
-    render(<UpdatePill />);
+    render(<><UpdatePill /><UpdateDialog /></>);
     await user.click(screen.getByRole("button", { name: "Check for updates" }));
     expect(useUpdater.getState().status).toBe("upToDate");
-    expect(useUpdater.getState().dialogOpen).toBe(false);
+    expect(useUpdater.getState().dialogOpen).toBe(true);
+    expect(screen.getByRole("dialog")).toHaveTextContent("shellx is up to date");
+    expect(screen.getByRole("button", { name: "Check again" })).toBeInTheDocument();
+  });
+
+  it("a failed check says so, and does not claim a download went wrong", async () => {
+    const user = userEvent.setup();
+    mockCheck.mockImplementationOnce(() => Promise.reject(new Error("offline")));
+    render(<><UpdatePill /><UpdateDialog /></>);
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(/Could not check for updates/);
+    expect(dialog).not.toHaveTextContent(/download didn't finish/);
   });
 
   it("becomes the blue Update pill while one is waiting, and reopens the dialog", async () => {

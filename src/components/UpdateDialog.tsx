@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Sparkles, X } from "lucide-react";
+import { CloudDownload, Sparkles, X } from "lucide-react";
 import { useUpdater } from "../state/updater";
 import { useT, useLanguage } from "../i18n";
 import { ReleaseNotes } from "./ReleaseNotes";
@@ -22,12 +22,18 @@ function fmtBytes(b: number): string {
  */
 export function UpdateDialog() {
   const t = useT();
-  const { status, version, notes, dialogOpen, progress, received, total, error } = useUpdater();
+  const { status, version, notes, dialogOpen, progress, received, total, error, errorPhase } = useUpdater();
   const lang = useLanguage();
   // The manifest carries both languages; show the one the UI is in.
   const localized = notesForLanguage(notes, lang);
   const current = import.meta.env.PACKAGE_VERSION;
-  const open = dialogOpen && !!version && (status === "available" || status === "downloading" || status === "error");
+  // An update to act on — notes, progress, the download button.
+  const hasUpdate = !!version
+    && (status === "available" || status === "downloading" || errorPhase === "download");
+  // Opened from the titlebar, the dialog is also where the check itself
+  // happens, so "checking" and "already current" are states it renders
+  // rather than a spinner and a tick that flash past in the titlebar.
+  const open = dialogOpen && (hasUpdate || status === "checking" || status === "upToDate" || status === "error");
 
   useEffect(() => {
     if (!open) return;
@@ -67,11 +73,15 @@ export function UpdateDialog() {
         {/* header */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "16px 20px 10px" }}>
           <Sparkles size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
-          <span style={{ fontSize: 15, fontWeight: 600, color: "var(--text-1)" }}>{t("Update available")}</span>
-          <span style={{
-            fontSize: 11, fontWeight: 600, padding: "1px 8px", borderRadius: 999,
-            background: "var(--accent-fade)", color: "var(--accent)",
-          }}>v{version}</span>
+          <span style={{ fontSize: 15, fontWeight: 600, color: "var(--text-1)" }}>
+            {hasUpdate ? t("Update available") : t("Updates")}
+          </span>
+          {hasUpdate && (
+            <span style={{
+              fontSize: 11, fontWeight: 600, padding: "1px 8px", borderRadius: 999,
+              background: "var(--accent-fade)", color: "var(--accent)",
+            }}>v{version}</span>
+          )}
           <button
             onClick={close}
             aria-label={t("Close")}
@@ -83,20 +93,39 @@ export function UpdateDialog() {
           ><X size={16} /></button>
         </div>
 
-        <div style={{ padding: "0 20px 12px", fontSize: 12, color: "var(--text-2)" }}>
-          {t("Current version")} v{current} → {t("New version")} v{version}
-        </div>
+        {hasUpdate ? (
+          <>
+          <div style={{ padding: "0 20px 12px", fontSize: 12, color: "var(--text-2)" }}>
+            {t("Current version")} v{current} → {t("New version")} v{version}
+          </div>
 
-        {/* what's new */}
-        <div style={{
-          margin: "0 20px", padding: "12px 14px", overflowY: "auto", minHeight: 80,
-          border: "1px solid var(--border)", borderRadius: 8, background: "var(--panel-1)",
-          fontSize: 12, color: "var(--text-2)",
-        }}>
-          {localized
-            ? <ReleaseNotes text={localized} />
-            : <span style={{ color: "var(--text-3)" }}>{t("No release notes were published for this version.")}</span>}
-        </div>
+          {/* what's new */}
+          <div style={{
+            margin: "0 20px", padding: "12px 14px", overflowY: "auto", minHeight: 80,
+            border: "1px solid var(--border)", borderRadius: 8, background: "var(--panel-1)",
+            fontSize: 12, color: "var(--text-2)",
+          }}>
+            {localized
+              ? <ReleaseNotes text={localized} />
+              : <span style={{ color: "var(--text-3)" }}>{t("No release notes were published for this version.")}</span>}
+          </div>
+          </>
+        ) : (
+          <div style={{ padding: "0 20px 16px", fontSize: 12, color: "var(--text-2)", minHeight: 48 }}>
+            {status === "checking" && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <CloudDownload size={14} style={{ animation: "shellx-dot-pulse 1.2s ease-in-out infinite" }} />
+                {t("Checking for updates…")}
+              </span>
+            )}
+            {status === "upToDate" && `${t("shellx is up to date")} (v${current}).`}
+            {errorPhase === "check" && (
+              <span style={{ color: "var(--text-2)" }} title={error ?? undefined}>
+                {t("Could not check for updates — you can still use the download page.")}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* footer */}
         <div style={{ padding: "14px 20px 16px" }}>
@@ -126,9 +155,33 @@ export function UpdateDialog() {
                 </div>
               )}
             </>
+          ) : !hasUpdate ? (
+            // Nothing to install: the download page and another look are
+            // the only two things worth offering.
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ flex: 1 }} />
+              <a
+                {...externalLinkProps(DOWNLOAD_PAGE)}
+                style={{
+                  padding: "6px 12px", borderRadius: 5, fontSize: 12, textDecoration: "none",
+                  border: "1px solid var(--border-hi)", color: "var(--text-1)",
+                }}
+              >{t("Open download page")}</a>
+              <button
+                autoFocus
+                disabled={status === "checking"}
+                onClick={() => void useUpdater.getState().check(false)}
+                style={{
+                  padding: "6px 14px", borderRadius: 5, fontSize: 12, fontWeight: 600,
+                  border: "none", background: "var(--accent)", color: "var(--text-on-accent)",
+                  cursor: status === "checking" ? "default" : "pointer",
+                  opacity: status === "checking" ? 0.6 : 1,
+                }}
+              >{t("Check again")}</button>
+            </div>
           ) : (
             <>
-              {status === "error" && (
+              {errorPhase === "download" && (
                 <div style={{ fontSize: 11, color: "var(--text-2)", marginBottom: 10 }} title={error ?? undefined}>
                   {t("The download didn't finish — try again, or use the download page.")}
                 </div>
@@ -156,7 +209,7 @@ export function UpdateDialog() {
                     padding: "6px 14px", borderRadius: 5, fontSize: 12, fontWeight: 600,
                     border: "none", background: "var(--accent)", color: "var(--text-on-accent)", cursor: "pointer",
                   }}
-                >{status === "error" ? t("Retry") : t("Download & restart")}</button>
+                >{errorPhase === "download" ? t("Retry") : t("Download & restart")}</button>
               </div>
             </>
           )}

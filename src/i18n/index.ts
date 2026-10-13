@@ -430,6 +430,11 @@ const zh: Record<string, string> = {
   "Check for updates": "检查更新",
   "Checking…": "检查中…",
   "Up to date": "已是最新版本",
+  "Updates": "更新中心",
+  "Checking for updates…": "正在检查更新…",
+  "shellx is up to date": "shellx 已是最新版本",
+  "Could not check for updates — you can still use the download page.": "检查更新失败，你仍然可以从下载页获取。",
+  "Check again": "重新检查",
   "Retry now": "立即重试",
 
   // Monitor threshold alerts (v0.36)
