@@ -547,6 +547,9 @@ const zh: Record<string, string> = {
   "Start": "启动",
   "Stop": "停止",
   "Copy local address": "复制本地地址",
+  "right-click for more": "右键更多",
+  "Local address": "本地地址",
+  "ssh command": "ssh 命令",
   "Connect host first": "请先连接主机",
   "Connect the host first": "请先连接该主机",
   "Connect the host first (from the Hosts panel), then start the tunnel.":

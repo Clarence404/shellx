@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>复制隧道地址 / 命令 · 交互图</title>
+<style>
+:root{--bg:#eef0f4;--panel:#fff;--panel2:#f4f5f8;--border:#e3e6ec;--t1:#1f2430;--t2:#5b6272;--t3:#98a0b0;--t4:#c3c8d4;--accent:#4c7cff;--fade:rgba(76,124,255,.1);--ok:#2fbf71}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:var(--t1);padding:22px}
+.wrap{max-width:1000px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.07);overflow:hidden}
+.hd{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px}
+.grp{font-size:12px;font-weight:600;color:var(--t2);padding:14px 16px 6px;display:flex;align-items:center;gap:7px}
+.grp .d{width:6px;height:6px;border-radius:50%;background:var(--t4)}
+.grp small{font-weight:400;color:var(--t3)}
+.row{display:flex;align-items:center;gap:11px;margin:0 12px 8px;padding:11px 13px;border:1px solid var(--border);border-radius:9px}
+.av{width:28px;height:28px;border-radius:7px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.mid{flex:1;min-width:0}
+.nm{font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px}
+.pil{font-size:10px;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--panel2);color:var(--t2)}
+.addr{font-family:ui-monospace,Consolas,monospace;font-size:12px;margin-top:3px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.addr .ar{color:var(--t4)}.addr .via{color:var(--accent)}
+.acts{display:flex;gap:5px;flex-shrink:0;align-items:center}
+.ib{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:#fff;color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;padding:0;position:relative}
+.ib:hover{background:var(--panel2)}
+.ib.ok{border-color:var(--ok);color:var(--ok)}
+.menu{position:fixed;z-index:30;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.18);padding:4px;min-width:210px;display:none}
+.menu .lbl{color:var(--t3);font-size:10px;letter-spacing:.5px;text-transform:uppercase;font-weight:700;padding:5px 10px 3px}
+.menu div.it{padding:7px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:8px}
+.menu div.it:hover{background:var(--panel2)}
+.menu div.it small{margin-left:auto;color:var(--t3);font-family:ui-monospace,Consolas,monospace;font-size:10px}
+.menu .sep{height:1px;background:var(--border);margin:4px 2px}
+.out{margin-top:16px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.out h4{margin:0 0 8px;font-size:12px;color:var(--t2)}
+.out pre{margin:0;background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:11px 13px;font-family:ui-monospace,Consolas,monospace;font-size:12px;overflow-x:auto;color:var(--t1)}
+.out .cap{font-size:11px;color:var(--t3);margin-top:7px}
+.note{margin-top:16px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:15px 18px}
+.note h4{margin:0 0 8px;font-size:13px}
+.note ul{margin:0;padding-left:20px;color:var(--t2)}.note li{margin:5px 0}
+.note b{color:var(--t1)}
+.tip{font-size:12px;color:var(--t2);margin-bottom:14px}
+</style></head><body><div class="wrap">
+
+<div class="tip"><b>试一试：</b>左键点复制按钮 = 复制本地地址（和现在一样）；<b>右键</b>点复制按钮 = 菜单，可选地址或 ssh 命令。复制结果显示在下面。</div>
+
+<div class="card">
+  <div class="hd">隧道 <span class="pil">0 已开启 · 总计 5</span></div>
+  <div class="grp"><span class="d"></span>测试环境转发 <small>· 3 条隧道</small></div>
+
+  <div class="row">
+    <div class="av" style="background:#2fbf71">L</div>
+    <div class="mid"><div class="nm">Test-PG <span class="pil">已停止</span></div>
+      <div class="addr">0.0.0.0:15432 <span class="ar">→</span> <span class="via">via 测试环境转发</span> <span class="ar">→</span> acucloud-test-db.chu0q20em0u2.rds.cn-northwest-1.amazonaws.com.cn:5432</div></div>
+    <div class="acts"><button class="ib">▶</button>
+      <button class="ib" id="c1" onclick="copyAddr(0,this)" oncontextmenu="menu(event,0);return false" title="复制本地地址 · 右键更多">⧉</button>
+      <button class="ib">🗑</button></div>
+  </div>
+
+  <div class="row">
+    <div class="av" style="background:#4c7cff">L</div>
+    <div class="mid"><div class="nm">Test-Redis <span class="pil">已停止</span></div>
+      <div class="addr">0.0.0.0:16379 <span class="ar">→</span> <span class="via">via 测试环境转发</span> <span class="ar">→</span> master.acucloud-test.ta8n0i.cnw1.cache.amazonaws.com.cn:6379</div></div>
+    <div class="acts"><button class="ib">▶</button>
+      <button class="ib" onclick="copyAddr(1,this)" oncontextmenu="menu(event,1);return false" title="复制本地地址 · 右键更多">⧉</button>
+      <button class="ib">🗑</button></div>
+  </div>
+
+  <div class="grp"><span class="d"></span>生产环境转发 <small>· 2 条隧道</small></div>
+  <div class="row">
+    <div class="av" style="background:#e8a33d">L</div>
+    <div class="mid"><div class="nm">Prod-Pg <span class="pil">已停止</span></div>
+      <div class="addr">127.0.0.1:25432 <span class="ar">→</span> <span class="via">via 生产环境转发</span> <span class="ar">→</span> acucloud-prod-db.chcum1ufvdc2.us-east-1.rds.amazonaws.com:5432</div></div>
+    <div class="acts"><button class="ib">▶</button>
+      <button class="ib" onclick="copyAddr(2,this)" oncontextmenu="menu(event,2);return false" title="复制本地地址 · 右键更多">⧉</button>
+      <button class="ib">🗑</button></div>
+  </div>
+</div>
+
+<div class="out"><h4 id="outh">剪贴板（还没复制）</h4><pre id="outp">—</pre>
+  <div class="cap" id="outc"></div></div>
+
+<div class="note">
+  <h4>设计要点</h4>
+  <ul>
+    <li><b>左键不变</b> —— 仍然复制 <code>0.0.0.0:15432</code>，粘进 DataGrip / DBeaver 的主机端口框。这是最常用的，不该多一步。</li>
+    <li><b>右键出菜单</b> —— 两项：复制本地地址、复制 ssh 命令。不占标题栏空间，也不改变已有习惯。</li>
+    <li><b>ssh 命令用这条规则真实的主机信息拼</b> —— 用户名、主机、端口都来自它所属的那台主机；端口是 22 时省略 <code>-p</code>，绑定 0.0.0.0 时命令里带上 <code>0.0.0.0:</code> 前缀，和导入时能解析的格式一致。</li>
+    <li><b>复制后按钮变绿勾</b> —— 和现在一样，1.4 秒后恢复。</li>
+  </ul>
+</div>
+</div>
+
+<div class="menu" id="m">
+  <div class="lbl">复制</div>
+  <div class="it" onclick="pick('addr')">本地地址 <small id="pa"></small></div>
+  <div class="it" onclick="pick('cmd')">ssh 命令 <small>-L …</small></div>
+</div>
+
+<script>
+var RULES=[
+ {bind:'0.0.0.0',lp:15432,rh:'acucloud-test-db.chu0q20em0u2.rds.cn-northwest-1.amazonaws.com.cn',rp:5432,user:'ec2-user',host:'10.0.3.21',port:22},
+ {bind:'0.0.0.0',lp:16379,rh:'master.acucloud-test.ta8n0i.cnw1.cache.amazonaws.com.cn',rp:6379,user:'ec2-user',host:'10.0.3.21',port:22},
+ {bind:'127.0.0.1',lp:25432,rh:'acucloud-prod-db.chcum1ufvdc2.us-east-1.rds.amazonaws.com',rp:5432,user:'ubuntu',host:'bastion.prod.internal',port:2222}
+];
+var cur=0,curBtn=null;
+var $=function(i){return document.getElementById(i)};
+function addrOf(r){ return r.bind+':'+r.lp }
+function cmdOf(r){
+  var fwd=(r.bind==='0.0.0.0'?'0.0.0.0:':'')+r.lp+':'+r.rh+':'+r.rp;
+  var p=(r.port&&r.port!==22)?' -p '+r.port:'';
+  return 'ssh -N -L '+fwd+p+' '+r.user+'@'+r.host;
+}
+function show(kind,text,btn){
+  $('outh').textContent='剪贴板 · '+(kind==='addr'?'本地地址':'ssh 命令');
+  $('outp').textContent=text;
+  $('outc').textContent=kind==='cmd'?'可以直接贴进任意终端执行；也能用右上角的「导入」粘回来重建这条规则。':'粘进数据库客户端的主机/端口框。';
+  if(btn){ btn.classList.add('ok'); btn.textContent='✓';
+    setTimeout(function(){ btn.classList.remove('ok'); btn.textContent='⧉' },1400); }
+}
+function copyAddr(i,btn){ cur=i; show('addr',addrOf(RULES[i]),btn) }
+function menu(e,i){
+  cur=i; curBtn=e.currentTarget;
+  $('pa').textContent=addrOf(RULES[i]);
+  var m=$('m'); m.style.display='block';
+  m.style.left=Math.min(e.clientX,window.innerWidth-230)+'px';
+  m.style.top=e.clientY+'px';
+}
+function pick(kind){
+  $('m').style.display='none';
+  var r=RULES[cur];
+  show(kind, kind==='addr'?addrOf(r):cmdOf(r), curBtn);
+}
+document.addEventListener('click',function(e){ if(!$('m').contains(e.target)) $('m').style.display='none' });
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') $('m').style.display='none' });
+</script></body></html>

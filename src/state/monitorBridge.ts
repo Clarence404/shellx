@@ -4,12 +4,12 @@ import type { ConnectionInfo } from "../types/connection";
 import { startMonitor, stopMonitor } from "../ipc/monitor";
 import { useMonitorStore } from "./monitor";
 import { useAlerts } from "./alerts";
-import { useAlertToasts } from "./alertToasts";
+import { useToasts, TOAST_MS } from "./toasts";
 import { useSessions } from "./sessions";
 import { useSettingsStore } from "./settings";
 import { notifyOs } from "../ipc/notify";
 import type { Alert } from "../types/alerts";
-import { alertDetail, notificationTitle } from "./alertText";
+import { alertTitle, alertDetail, notificationTitle } from "./alertText";
 import { translate } from "../i18n";
 
 /** Sampling rate for a connection nobody is looking at. Slow enough to
@@ -95,7 +95,12 @@ async function announce(connId: string, fired: Alert[]): Promise<void> {
   const label = hostLabel(connId);
   const t = (key: string) => translate(useSettingsStore.getState().language, key);
   for (const a of fired) {
-    useAlertToasts.getState().show(a, label);
+    useToasts.getState().show({
+      title: `${label} · ${alertTitle(a, t)}`,
+      body: alertDetail(a, t),
+      tone: a.severity === "warn" ? "warn" : "error",
+      ttl: TOAST_MS,
+    });
     if (useSettingsStore.getState().alerts.systemNotifications) {
       await notifyOs(notificationTitle(a, label, t), alertDetail(a, t));
     }

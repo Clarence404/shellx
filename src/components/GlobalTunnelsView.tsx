@@ -15,6 +15,9 @@ import { logPush } from "../ipc/logs";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
 import type { HostInfo } from "../types/host";
 import { tunnelRowState, attemptLabel } from "../state/tunnelRowState";
+import { localAddress, sshCommand } from "../state/tunnelCommand";
+import { useToasts, SHORT_TOAST_MS } from "../state/toasts";
+import { HostContextMenu, type MenuItem } from "./HostContextMenu";
 
 /** Per-rule retry state kept in a ref. `attempt` increases per failure;
  *  `nextRetryAt` is a wall-clock ms timestamp for the countdown UI;
@@ -898,6 +901,7 @@ function TunnelCard({
   const copiedTimer = useRef<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const confirmTimer = useRef<number | null>(null);
+  const [copyMenu, setCopyMenu] = useState<{ x: number; y: number } | null>(null);
   useEffect(() => () => {
     if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
     if (confirmTimer.current !== null) window.clearTimeout(confirmTimer.current);
@@ -965,14 +969,39 @@ function TunnelCard({
     finally { setBusy(false); }
   }
 
-  function handleCopy() {
-    void navigator.clipboard.writeText(`${bind}:${rule.local_port}`);
+  /** Shared by the click (local address) and the right-click menu. The
+   *  toast shows the text itself: the clipboard is invisible, and a
+   *  command is long enough to be worth reading back before pasting it
+   *  into a shell. */
+  function copyText(text: string, what: string) {
+    void navigator.clipboard.writeText(text);
+    useToasts.getState().show({ title: `${t("Copied")} · ${what}`, body: text, mono: true, ttl: SHORT_TOAST_MS });
     setCopied(true);
     if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
     copiedTimer.current = window.setTimeout(() => {
       setCopied(false);
       copiedTimer.current = null;
     }, 1400);
+  }
+
+  const cmdInput = {
+    bindAll: rule.bind_all,
+    localPort: rule.local_port,
+    remoteHost: rule.remote_host,
+    remotePort: rule.remote_port,
+    username: host.username,
+    host: host.host,
+    port: host.port,
+    // Password auth has no key to name; publickey with no path means the
+    // agent or a default key, which ssh finds on its own.
+    keyPath: host.auth_method === "publickey" ? host.key_path : null,
+  };
+
+  /** A left click keeps doing the common thing — paste the address into
+   *  a database client. The command lives behind a right-click so the
+   *  button stays one button. */
+  function handleCopy() {
+    copyText(localAddress(cmdInput), t("Local address"));
   }
 
   async function handleConfirmDelete() {
@@ -1108,13 +1137,22 @@ function TunnelCard({
             <Play size={12} fill="currentColor" />
           </IconButton>
         )}
-        <IconButton
-          onClick={handleCopy}
-          title={copied ? t("Copied") : t("Copy local address")}
-          tone={copied ? "success" : undefined}
+        <span
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setCopyMenu({ x: e.clientX, y: e.clientY });
+          }}
+          style={{ display: "inline-flex" }}
         >
-          {copied ? <Check size={12} strokeWidth={3} /> : <Copy size={12} />}
-        </IconButton>
+          <IconButton
+            onClick={handleCopy}
+            title={copied ? t("Copied") : `${t("Copy local address")} · ${t("right-click for more")}`}
+            tone={copied ? "success" : undefined}
+          >
+            {copied ? <Check size={12} strokeWidth={3} /> : <Copy size={12} />}
+          </IconButton>
+        </span>
         {isAuthFailed && (
           <IconButton
             onClick={() => { onCancelRetry(rule.id); void onManualRetry(rule.id); }}
@@ -1163,6 +1201,32 @@ function TunnelCard({
         }}>
           {localErr || status?.error}
         </div>
+      )}
+      {copyMenu && (
+        // Rendered inside the row, so without this a click on a menu item
+        // bubbles to the row's onClick and opens the edit panel behind it.
+        <span onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.stopPropagation()}>
+        <HostContextMenu
+          x={copyMenu.x}
+          y={copyMenu.y}
+          onClose={() => setCopyMenu(null)}
+          items={[
+            { kind: "section", label: t("Copy") },
+            {
+              label: t("Local address"),
+              icon: <Copy size={12} />,
+              onClick: () => copyText(localAddress(cmdInput), t("Local address")),
+            },
+            {
+              // The same shape the Import button parses, so a command
+              // copied here can rebuild the rule on another machine.
+              label: t("ssh command"),
+              icon: <Terminal size={12} />,
+              onClick: () => copyText(sshCommand(cmdInput), t("ssh command")),
+            },
+          ] satisfies MenuItem[]}
+        />
+        </span>
       )}
     </div>
   );
