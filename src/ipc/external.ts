@@ -1,4 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { logPush } from "./logs";
 
 /**
  * Open a link in the user's own browser.
@@ -11,9 +12,17 @@ export async function openExternal(url: string): Promise<void> {
   try {
     await openUrl(url);
   } catch (e) {
-    // Nothing useful to say to the user: the link is visible, and they
-    // can copy it. Leave a trace for the log stream instead.
+    // Nothing useful to say to the user mid-click: the link is on screen
+    // and can be copied. It does belong in the log stream, though — the
+    // first version of this shipped with the opener permission granted but
+    // unscoped, so every call was denied and the button looked simply dead
+    // with nothing anywhere to say why.
     console.warn("shellx: could not open", url, e);
+    void logPush({
+      level: "error", category: "ui",
+      message: "could not open an external link",
+      fields: { url, error: String(e) },
+    });
   }
 }
 
