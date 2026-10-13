@@ -111,6 +111,18 @@ export function Titlebar({ tabs, activeTabId, onTabSelect, onTabClose, onTabsClo
         onDoubleClick={() => void win().toggleMaximize()}
         style={{ flexShrink: 0, width: 16, height: "100%" }}
       />
+      {/* A dev build keeps its own config dir (~/.shellx-dev) and can run
+          beside the installed app — this says which window is which. */}
+      {import.meta.env.DEV && (
+        <span
+          title="Development build · config in ~/.shellx-dev"
+          style={{
+            flexShrink: 0, marginRight: 6, padding: "1px 7px", borderRadius: 4,
+            fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+            background: "var(--warning, #e8a33d)", color: "#1f2430",
+          }}
+        >DEV</span>
+      )}
       <UpdatePill />
       {onOpenSnippets && (
         <PillButton
