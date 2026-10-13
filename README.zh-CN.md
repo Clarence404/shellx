@@ -4,7 +4,7 @@
 
 一个小巧、精致的终端 + 文件传输客户端 —— 跨平台（Windows / macOS / Linux），开源，基于 Tauri + Rust + React。
 
-当前版本：**v0.36.4** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
+当前版本：**v0.36.5** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
 
 ---
 
@@ -145,6 +145,11 @@ pnpm tauri:dev
 3. 弹出 ShellX 的原生窗口。改 React 文件 → HMR 热更新；改 Rust 文件 → Tauri 自动重编译并重启窗口。
 
 关掉窗口就退出开发服务器。
+
+开发构建使用独立的配置目录 `~/.shellx-dev/`（主机、设置、日志、隧道规则），标题栏会显示
+**DEV** 标记，因此可以和已安装的 ShellX 同时运行：不会共用数据库、不会互相覆盖设置，
+也不会抢同一个隧道端口。该目录初始为空，需要主机数据时用「设置 → 导入导出」搬过来。
+`SHELLX_CONFIG_DIR` 的优先级仍然最高。
 
 > **crates.io 慢 / GFW 用户**：仓库自带 `src-tauri/.cargo/config.toml` 指向 `rsproxy.cn`，不用你配置。
 

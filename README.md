@@ -4,7 +4,7 @@
 
 A tiny, pretty terminal + file-transfer client — cross-platform (Windows / macOS / Linux), open source, built on Tauri + Rust + React.
 
-Current release: **v0.36.4** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
+Current release: **v0.36.5** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
 ---
 
@@ -145,6 +145,12 @@ What happens:
 3. A native desktop window opens with the ShellX app. Edit any React file → HMR live-reloads. Edit any Rust file → Tauri rebuilds and relaunches automatically.
 
 Close the window to stop the dev server.
+
+A dev build keeps its own config in `~/.shellx-dev/` (hosts, settings, logs, tunnel
+rules) and shows a **DEV** badge in the titlebar, so it can run beside an installed
+ShellX without the two sharing a database, overwriting each other's settings or
+competing for the same tunnel ports. It starts empty — use Settings → Import &
+export to bring hosts across. `SHELLX_CONFIG_DIR` still overrides both.
 
 > **Slow crates.io / GFW users**: the repo already includes `src-tauri/.cargo/config.toml` pointing cargo at `rsproxy.cn`. No config needed.
 
