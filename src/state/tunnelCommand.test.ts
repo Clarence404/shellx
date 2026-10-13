@@ -57,6 +57,33 @@ describe("sshCommand", () => {
     expect(sshCommand(input({ port: 0 }))).not.toContain("-p");
   });
 
+  it("names the host's key, so ssh does not fall back to ~/.ssh", () => {
+    expect(sshCommand(input({ keyPath: "/home/me/.ssh/prod_ed25519" })))
+      .toBe("ssh -N -L 15432:db.internal:5432 -i /home/me/.ssh/prod_ed25519 ec2-user@bastion.example.com");
+  });
+
+  it("quotes a key path with spaces in it", () => {
+    const key = String.raw`C:\Users\First Last\.ssh\id_rsa`;
+    expect(sshCommand(input({ keyPath: key }))).toContain(`-i "${key}"`);
+  });
+
+  it("leaves a key path without spaces unquoted", () => {
+    const key = String.raw`C:\keys\id_rsa`;
+    expect(sshCommand(input({ keyPath: key }))).toContain(`-i ${key}`);
+    expect(sshCommand(input({ keyPath: key }))).not.toContain('"');
+  });
+
+  it("says nothing about keys for password auth", () => {
+    expect(sshCommand(input({ keyPath: null }))).not.toContain("-i");
+    expect(sshCommand(input({ keyPath: "   " }))).not.toContain("-i");
+    expect(sshCommand(input())).not.toContain("-i");
+  });
+
+  it("puts -i after -p, before the destination", () => {
+    expect(sshCommand(input({ port: 2222, keyPath: "/k" })))
+      .toBe("ssh -N -L 15432:db.internal:5432 -p 2222 -i /k ec2-user@bastion.example.com");
+  });
+
   it("carries a long remote hostname through intact", () => {
     const host = "acucloud-test-db.chu0q20em0u2.rds.cn-northwest-1.amazonaws.com.cn";
     expect(sshCommand(input({ remoteHost: host }))).toContain(`:${host}:`);

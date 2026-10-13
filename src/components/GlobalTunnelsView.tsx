@@ -992,6 +992,9 @@ function TunnelCard({
     username: host.username,
     host: host.host,
     port: host.port,
+    // Password auth has no key to name; publickey with no path means the
+    // agent or a default key, which ssh finds on its own.
+    keyPath: host.auth_method === "publickey" ? host.key_path : null,
   };
 
   /** A left click keeps doing the common thing — paste the address into
