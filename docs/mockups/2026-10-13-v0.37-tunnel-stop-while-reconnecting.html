@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>重连中也能停 · 交互图 (v0.37)</title>
+<style>
+:root{--bg:#eef0f4;--panel:#fff;--panel2:#f4f5f8;--border:#e3e6ec;--t1:#1f2430;--t2:#5b6272;--t3:#98a0b0;--t4:#c3c8d4;--accent:#4c7cff;--fade:rgba(76,124,255,.1);--ok:#2fbf71;--warn:#e8a33d;--warnf:rgba(232,163,61,.14);--err:#e5484d;--errf:rgba(229,72,77,.1)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:var(--t1);padding:22px}
+.wrap{max-width:1000px;margin:0 auto}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.ctl button{border:1px solid var(--border);background:#fff;border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer}
+.ctl button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.07);overflow:hidden}
+.hd{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600;font-size:14px}
+.hd .cnt{font-size:11px;font-weight:400;color:var(--t2);background:var(--panel2);border-radius:999px;padding:2px 9px}
+.grp{font-size:12px;font-weight:600;color:var(--t2);padding:14px 16px 6px;display:flex;align-items:center;gap:7px}
+.grp .d{width:6px;height:6px;border-radius:50%;background:var(--t4)}
+.grp small{font-weight:400;color:var(--t3)}
+.row{display:flex;align-items:flex-start;gap:11px;margin:0 12px 8px;padding:11px 13px;border:1px solid var(--border);border-radius:9px;background:var(--panel)}
+.row.busy{border-color:var(--warn);background:var(--warnf)}
+.av{width:28px;height:28px;border-radius:7px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;margin-top:1px}
+.mid{flex:1;min-width:0}
+.nm{font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px}
+.pil{font-size:10px;font-weight:600;padding:2px 9px;border-radius:999px;display:inline-flex;align-items:center;gap:5px}
+.pil.stop{background:var(--panel2);color:var(--t2)}
+.pil.live{background:rgba(47,191,113,.14);color:#1b7a47}
+.pil.re{background:var(--warnf);color:#8a5b12}
+.pil .dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.addr{font-family:ui-monospace,Consolas,monospace;font-size:12px;margin-top:3px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.addr .ar{color:var(--t4)}.addr .via{color:var(--accent)}
+.hint{font-size:11px;margin-top:5px;color:#8a5b12;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hint .lk{color:var(--accent);cursor:pointer;text-decoration:none;font-weight:500}
+.hint .lk:hover{text-decoration:underline}
+.err{margin:7px 0 0;background:var(--errf);border:1px solid rgba(229,72,77,.3);color:var(--err);border-radius:7px;padding:7px 10px;font-size:11px}
+.acts{display:flex;gap:5px;flex-shrink:0;align-items:center}
+.ib{width:28px;height:28px;border-radius:7px;border:1px solid var(--border);background:#fff;color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;padding:0}
+.ib.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.ib.stop{background:var(--warn);border-color:var(--warn);color:#fff}
+.ib:hover{filter:brightness(.96)}
+.note{margin-top:18px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:15px 18px}
+.note h4{margin:0 0 8px;font-size:13px}
+.note ul{margin:0;padding-left:20px;color:var(--t2)}.note li{margin:5px 0}
+.note b{color:var(--t1)}
+.old{background:var(--errf);border-color:rgba(229,72,77,.3)}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.cmp>div{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:13px 15px}
+.cmp h4{margin:0 0 9px;font-size:12px;display:flex;align-items:center;gap:7px}
+.tag{font-size:10px;font-weight:600;padding:1px 7px;border-radius:999px}
+.tag.bad{background:var(--errf);color:var(--err)}.tag.good{background:rgba(47,191,113,.14);color:#1b7a47}
+.cmp p{margin:0;font-size:12px;color:var(--t2)}
+</style></head><body><div class="wrap">
+
+<div class="ctl"><b style="margin-right:4px">模拟：</b>
+  <button id="b0" onclick="go(0)">正常运行</button>
+  <button id="b1" onclick="go(1)">对端拒绝连接，重连中</button>
+  <button id="b2" onclick="go(2)">重试次数用完</button>
+  <span id="st" style="color:var(--t2)"></span>
+</div>
+
+<div class="card">
+  <div class="hd">隧道 <span class="cnt" id="cnt">0 已开启 · 总计 5</span></div>
+  <div class="grp"><span class="d"></span>测试环境转发 <small>· 3 条隧道</small></div>
+
+  <div class="row" id="row">
+    <div class="av" style="background:#2fbf71">L</div>
+    <div class="mid">
+      <div class="nm">Test-PG <span id="pill" class="pil stop"><span class="dot"></span>已停止</span></div>
+      <div class="addr">0.0.0.0:15432 <span class="ar">→</span> <span class="via">via 测试环境转发</span> <span class="ar">→</span> acucloud-test-db.chu0q20em0u2.rds.cn-northwest-1.amazonaws.com.cn:5432</div>
+      <div class="hint" id="hint" style="display:none"></div>
+      <div class="err" id="err" style="display:none"></div>
+    </div>
+    <div class="acts" id="acts"></div>
+  </div>
+
+  <div class="row">
+    <div class="av" style="background:#4c7cff">L</div>
+    <div class="mid"><div class="nm">Test-Redis <span class="pil stop"><span class="dot"></span>已停止</span></div>
+      <div class="addr">0.0.0.0:16379 <span class="ar">→</span> <span class="via">via 测试环境转发</span> <span class="ar">→</span> master.acucloud-test.ta8n0i.cnw1.cache.amazonaws.com.cn:6379</div></div>
+    <div class="acts"><button class="ib">▶</button><button class="ib">⧉</button><button class="ib">🗑</button></div>
+  </div>
+</div>
+
+<div class="cmp">
+  <div class="old"><h4><span class="tag bad">现在</span>重连中时</h4>
+    <p>那一行按「状态是不是 active」决定显示哪个按钮。重连期间没有 active，所以显示的是 ▶ 播放——没有停止按钮。点播放会另开一条隧道，但不会取消已排好的重试。就算点到停止，它第一行就因为「没有会话」直接返回。只能删规则或等次数用完。</p></div>
+  <div><h4><span class="tag good">改后</span>重连中时</h4>
+    <p>按「有没有在忙」决定：活跃、正在连、等待重试都算忙，统一显示 ■ 停止。停止在任何状态下都取消重试定时器并落到「已停止」。倒计时旁边多一个「立即重试」，不用干等。</p></div>
+</div>
+
+<div class="note">
+  <h4>点上面的「对端拒绝连接，重连中」，然后试这一行的按钮：</h4>
+  <ul>
+    <li><b>■ 停止</b> —— 立刻取消重试，落到「已停止」，不会再自己重连。这是现在缺失的那个。</li>
+    <li><b>立即重试</b> —— 跳过倒计时马上试一次（mock 里会再失败一次，回到倒计时）。</li>
+    <li><b>第 7 次 / 共 10 次</b> —— 把重试上限写出来，让人知道它自己会停（上限在「设置 → 高级」里改，0 表示无限）。</li>
+  </ul>
+</div>
+</div>
+<script>
+var S=0,timer=null,left=56,att=7;
+var $=function(i){return document.getElementById(i)};
+function acts(busy){
+  $('acts').innerHTML = (busy
+    ? '<button class="ib stop" title="停止" onclick="stop()">■</button>'
+    : '<button class="ib pri" title="启动" onclick="go(1)">▶</button>')
+    + '<button class="ib">⧉</button><button class="ib">🗑</button>';
+}
+function tick(){
+  left--;
+  if(left<=0){ left=56; att++; if(att>10){ go(2); return; } }
+  render();
+}
+function render(){
+  var p=$('pill'),h=$('hint'),e=$('err'),r=$('row');
+  if(S===0){
+    p.className='pil live';p.innerHTML='<span class="dot"></span>已开启';
+    h.style.display='none';e.style.display='none';r.className='row';acts(true);
+    $('cnt').textContent='1 已开启 · 总计 5';$('st').textContent='';
+  } else if(S===1){
+    p.className='pil re';p.innerHTML='<span class="dot"></span>重连中…';
+    h.style.display='flex';
+    h.innerHTML='第 '+att+' 次 / 共 10 次失败 · 下次在 '+left+'s'
+      +'<a class="lk" onclick="now()">立即重试</a>';
+    e.style.display='block';e.textContent='protocol: connect: 由于目标计算机积极拒绝，无法连接。 (os error 10061)';
+    r.className='row busy';acts(true);
+    $('cnt').textContent='0 已开启 · 总计 5';$('st').textContent='停止按钮现在就在这一行右边';
+  } else {
+    p.className='pil stop';p.innerHTML='<span class="dot"></span>已停止';
+    h.style.display='flex';h.style.color='var(--t3)';
+    h.innerHTML='重试 10 次后放弃 · <a class="lk" onclick="go(1)">重新开始</a>';
+    e.style.display='block';e.textContent='protocol: connect: 由于目标计算机积极拒绝，无法连接。 (os error 10061)';
+    r.className='row';acts(false);
+    $('cnt').textContent='0 已开启 · 总计 5';$('st').textContent='次数用完后自己停下来了';
+  }
+  ['b0','b1','b2'].forEach(function(id,i){$(id).className=(i===S?'on':'')});
+}
+function clear(){ if(timer){clearInterval(timer);timer=null} }
+function go(i){ clear(); S=i; if(i===1){ att=7; left=56; $('hint').style.color='#8a5b12'; timer=setInterval(tick,1000); } render(); }
+function now(){ left=56; att++; if(att>10){ go(2); return; } render(); }
+function stop(){ clear(); S=0; render(); S=3;
+  var p=$('pill');p.className='pil stop';p.innerHTML='<span class="dot"></span>已停止';
+  $('hint').style.display='none';$('err').style.display='none';$('row').className='row';
+  acts(false);$('cnt').textContent='0 已开启 · 总计 5';
+  $('st').textContent='已停止，不会再自己重连';
+  ['b0','b1','b2'].forEach(function(id){$(id).className=''});
+}
+go(1);
+</script></body></html>
