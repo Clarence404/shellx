@@ -430,6 +430,7 @@ const zh: Record<string, string> = {
   "Check for updates": "检查更新",
   "Checking…": "检查中…",
   "Up to date": "已是最新版本",
+  "Retry now": "立即重试",
 
   // Monitor threshold alerts (v0.36)
   "Watch the hosts you are connected to and say something when a threshold is crossed.": "监控已连接的主机，指标越过阈值时提醒你。",

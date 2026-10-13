@@ -14,6 +14,7 @@ import { useSettingsStore } from "../state/settings";
 import { logPush } from "../ipc/logs";
 import type { TunnelRule, TunnelStatus } from "../types/tunnel";
 import type { HostInfo } from "../types/host";
+import { tunnelRowState, attemptLabel } from "../state/tunnelRowState";
 
 /** Per-rule retry state kept in a ref. `attempt` increases per failure;
  *  `nextRetryAt` is a wall-clock ms timestamp for the countdown UI;
@@ -938,13 +939,20 @@ function TunnelCard({
     }
   }
 
+  /** Stop means stop in every state the rule can be in. While a retry is
+   *  armed there is no session to close — cancelling the timer IS the
+   *  stop, and bailing out on a missing session id used to leave the
+   *  reconnect loop running with no way to reach it. */
   async function handleStop() {
-    if (!sessionId) return;
     // Signal the retry watcher that the imminent close is intentional
     // so it doesn't spawn a reconnect loop the moment we succeed.
     onMarkStopIntent(rule.id);
     onCancelRetry(rule.id);
     setLocalErr(null);
+    if (!sessionId) {
+      onForgetRuleSession(rule.id);
+      return;
+    }
     setBusy(true);
     try {
       await closeTunnel(sessionId, rule.id);
@@ -984,20 +992,13 @@ function TunnelCard({
     } finally { setBusy(false); }
   }
 
-  const isAuthFailed = !!retry?.authFailed;
-  // "Reconnecting" only makes sense once the tunnel has actually been
-  // active at least once — otherwise a retry armed by an initial-connect
-  // failure (autostart on a not-yet-reachable host, for example) would
-  // read as "reconnect" even though nothing has ever connected.
-  const isReconnecting = !!retry && !isAuthFailed && wasEverActive;
-  // First-time-connecting covers two overlapping cases:
-  //  · the openTunnelViaHost await (`busy`) right after the user hits Play
-  //  · a retry loop for a rule that has never reached active state yet
-  //    (i.e. the initial connect keeps failing but auto-reconnect keeps
-  //    retrying — the user hasn't "lost" a connection, they never had one)
-  const isFirstConnecting =
-    (busy && !isRunning && !isReconnecting) ||
-    (!!retry && !isAuthFailed && !wasEverActive);
+  const { isAuthFailed, isReconnecting, isFirstConnecting, isEngaged } = tunnelRowState({
+    status: status?.status,
+    hasRetry: !!retry,
+    authFailed: !!retry?.authFailed,
+    wasEverActive,
+    busy,
+  });
   const connectingClass = isReconnecting
     ? "shx-connecting-border shx-connecting-border--reconnect"
     : isFirstConnecting
@@ -1081,14 +1082,20 @@ function TunnelCard({
           <span style={{ color: "var(--text-4)" }}> → </span>
           <span style={{ color: "var(--text-2)" }}>{rule.remote_host}:{rule.remote_port}</span>
         </div>
-        {retry && <RetryHint retry={retry} wasEverActive={wasEverActive} />}
+        {retry && (
+          <RetryHint
+            retry={retry}
+            wasEverActive={wasEverActive}
+            onRetryNow={() => { onCancelRetry(rule.id); void onManualRetry(rule.id); }}
+          />
+        )}
       </div>
       <div
         onClick={(e) => e.stopPropagation()}
         onMouseLeave={disarmDelete}
         style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}
       >
-        {isRunning ? (
+        {isEngaged ? (
           <IconButton primary onClick={handleStop} disabled={busy} title={t("Stop")}>
             <Square size={12} fill="currentColor" />
           </IconButton>
@@ -1246,8 +1253,16 @@ function Dot({ color }: { color: string }) {
   return <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />;
 }
 
-function RetryHint({ retry, wasEverActive }: { retry: RetryState; wasEverActive: boolean }) {
+function RetryHint({ retry, wasEverActive, onRetryNow }: {
+  retry: RetryState;
+  wasEverActive: boolean;
+  /** Skip the countdown and dial now. */
+  onRetryNow: () => void;
+}) {
   const t = useT();
+  // Read at render: the user may change the limit while a loop is running
+  // and the hint should say what the loop will actually do.
+  const limit = useSettingsStore((s) => s.advanced.reconnectMaxAttempts);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (retry.authFailed || retry.nextRetryAt === 0) return;
@@ -1271,22 +1286,28 @@ function RetryHint({ retry, wasEverActive }: { retry: RetryState; wasEverActive:
       <div style={{ fontSize: 11, color, marginTop: 4 }}>
         {retry.attempt <= 1
           ? t("dialing…")
-          : `${t("Attempt")} #${retry.attempt} · ${t("dialing…")}`}
+          : `${attemptLabel(retry.attempt, limit, t)} · ${t("dialing…")}`}
       </div>
     );
   }
   const remainingMs = Math.max(0, retry.nextRetryAt - now);
   const remainingS = Math.ceil(remainingMs / 1000);
-  if (retry.attempt === 0) {
-    return (
-      <div style={{ fontSize: 11, color, marginTop: 4 }}>
-        {t("next in")} {remainingS}s
-      </div>
-    );
-  }
   return (
-    <div style={{ fontSize: 11, color, marginTop: 4 }}>
-      {t("Attempt")} #{retry.attempt} {t("failed")} · {t("next in")} {remainingS}s
+    <div style={{ fontSize: 11, color, marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <span>
+        {retry.attempt > 0 && `${attemptLabel(retry.attempt, limit, t)} ${t("failed")} · `}
+        {t("next in")} {remainingS}s
+      </span>
+      {/* Sitting out a minute-long backoff is the common case after the
+          far end comes back; this is the way to not wait for it. */}
+      <button
+        type="button"
+        onClick={onRetryNow}
+        style={{
+          background: "none", border: "none", padding: 0, cursor: "pointer",
+          font: "inherit", color: "var(--accent)", fontWeight: 500,
+        }}
+      >{t("Retry now")}</button>
     </div>
   );
 }
