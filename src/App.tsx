@@ -11,7 +11,7 @@ import { MonitorBoundary } from "./components/monitor/MonitorBoundary";
 import { RailFilesView } from "./components/RailFilesView";
 import { RemoteEditNotice } from "./components/RemoteEdit";
 import { UpdateDialog } from "./components/UpdateDialog";
-import { AlertToasts } from "./components/AlertToasts";
+import { Toasts } from "./components/Toasts";
 import { startMonitorBridge, stopMonitorBridge } from "./state/monitorBridge";
 import { GlobalTunnelsView } from "./components/GlobalTunnelsView";
 import { PaneLayout } from "./components/PaneLayout";
@@ -692,7 +692,7 @@ export function App() {
       <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />
       <RemoteEditNotice />
       <UpdateDialog />
-      <AlertToasts />
+      <Toasts />
       <HostKeyDialog />
       {passphraseReq && (
         <PassphraseDialog
