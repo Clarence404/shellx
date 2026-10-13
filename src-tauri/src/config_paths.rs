@@ -3,11 +3,12 @@
 //! Priority (highest wins):
 //! 1. `SHELLX_CONFIG_DIR` environment variable (user-supplied, any valid
 //!    absolute path). Useful for keeping shellx portable / testing.
-//! 2. `~/.shellx/` — a stable, easy-to-find location under the user's
+//! 2. `~/.shellx-dev/` for a debug build — see `dev_dir_name` below.
+//! 3. `~/.shellx/` — a stable, easy-to-find location under the user's
 //!    home. This is the new default as of v0.5.6; previously we used
 //!    `directories::ProjectDirs::config_dir()` which resolved to
 //!    `%APPDATA%\shellx\config\` on Windows — hard for users to find.
-//! 3. Legacy `ProjectDirs::from("", "", "shellx").config_dir()` — kept
+//! 4. Legacy `ProjectDirs::from("", "", "shellx").config_dir()` — kept
 //!    only as a last-resort fallback if `dirs::home_dir()` refuses to
 //!    resolve (very rare — Windows without USERPROFILE set).
 //!
@@ -20,22 +21,49 @@
 use directories::ProjectDirs;
 use std::path::PathBuf;
 
+/// Directory name under the home directory, by build.
+///
+/// A debug build keeps its own config so a `tauri dev` session can run
+/// beside the installed app: they would otherwise share one hosts.db
+/// (two writers, stale reads), overwrite each other's settings.json,
+/// interleave the same rotating log files, and both autostart the same
+/// tunnels onto the same local ports. The dev directory starts empty —
+/// seeding it from the real one would copy those autostart rules
+/// straight back into the port clash. Use Settings → Import & export to
+/// move hosts across when a dev session needs them.
+fn dir_name() -> &'static str {
+    if cfg!(debug_assertions) {
+        ".shellx-dev"
+    } else {
+        ".shellx"
+    }
+}
+
+/// True when this build keeps its config apart from the installed app's.
+pub fn is_dev_config() -> bool {
+    cfg!(debug_assertions) && env_override().is_none()
+}
+
 /// Resolve the config directory shellx should read + write into.
 /// Creates the directory (best-effort) before returning.
 pub fn resolve_config_dir() -> PathBuf {
     let dir = if let Some(env) = env_override() {
         env
     } else if let Some(home) = dirs::home_dir() {
-        home.join(".shellx")
+        home.join(dir_name())
     } else {
-        legacy_project_dir().unwrap_or_else(|| PathBuf::from(".shellx"))
+        legacy_project_dir().unwrap_or_else(|| PathBuf::from(dir_name()))
     };
     std::fs::create_dir_all(&dir).ok();
 
-    // One-time migration from the legacy ProjectDirs path.
-    if let Some(legacy) = legacy_project_dir() {
-        if legacy != dir {
-            migrate_from_legacy(&legacy, &dir);
+    // One-time migration from the legacy ProjectDirs path. Debug builds
+    // sit this out: the legacy files belong to the installed app, and
+    // migrating MOVES them.
+    if !cfg!(debug_assertions) {
+        if let Some(legacy) = legacy_project_dir() {
+            if legacy != dir {
+                migrate_from_legacy(&legacy, &dir);
+            }
         }
     }
 
@@ -109,6 +137,14 @@ mod tests {
 
         assert_eq!(std::fs::read(legacy.path().join("hosts.db")).unwrap(), b"legacy");
         assert_eq!(std::fs::read(new_dir.path().join("hosts.db")).unwrap(), b"new");
+    }
+
+    /// The two builds must not land on the same directory, or every
+    /// reason this split exists comes back.
+    #[test]
+    fn a_debug_build_uses_its_own_directory() {
+        assert_eq!(dir_name(), if cfg!(debug_assertions) { ".shellx-dev" } else { ".shellx" });
+        assert_ne!(".shellx", ".shellx-dev");
     }
 
     #[test]

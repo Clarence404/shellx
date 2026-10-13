@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const { openUrl } = vi.hoisted(() => ({ openUrl: vi.fn() }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl }));
+vi.mock("./logs", () => ({ logPush: vi.fn().mockResolvedValue(undefined) }));
 
 import { openExternal, externalLinkProps } from "./external";
 
