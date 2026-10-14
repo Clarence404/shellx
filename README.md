@@ -6,6 +6,12 @@ A tiny, pretty terminal + file-transfer client — cross-platform (Windows / mac
 
 Current release: **v0.36.6** — see [`docs/release-notes/`](docs/release-notes/) for what changed.
 
+<p align="center">
+  <img src="docs/images/hosts.png" alt="Saved hosts grouped in the sidebar" width="49%">
+  <img src="docs/images/tunnels.png" alt="Every saved port forward in one view" width="49%">
+</p>
+<p align="center"><sub>Saved hosts, grouped and searchable · every port forward across every host in one view</sub></p>
+
 ---
 
 ## 1. What is ShellX

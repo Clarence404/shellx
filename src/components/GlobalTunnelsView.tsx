@@ -864,7 +864,7 @@ function badgeColorFor(id: string): string {
   return BADGE_COLORS[Math.abs(h) % BADGE_COLORS.length];
 }
 
-function TunnelCard({
+export function TunnelCard({
   rule, host, sessionId, status, retry, wasEverActive,
   isDragging, isDragOver,
   onGripPointerDown, rowRef,
