@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: Clarence404.ShellX
+PackageVersion: 1.0.0
+PackageLocale: en-US
+Publisher: Clarence404
+PublisherUrl: https://github.com/Clarence404
+PublisherSupportUrl: https://github.com/Clarence404/shellx/issues
+PackageName: ShellX
+PackageUrl: https://github.com/Clarence404/shellx
+License: MIT
+LicenseUrl: https://github.com/Clarence404/shellx/blob/main/LICENSE
+Copyright: Copyright (c) 2026 Chen Han
+ShortDescription: A tiny, pretty terminal and file-transfer client built on Tauri, Rust and React.
+Description: |-
+  ShellX is a desktop SSH client with tabbed terminals, SFTP and FTP file
+  transfer, port forwarding, serial consoles, and a live monitor dashboard
+  for the hosts you connect to.
+
+  Saved hosts can be grouped and searched, port forwards are managed in one
+  view across every host, and threshold alerts can watch CPU, memory, disk,
+  swap and load while the app sits in the background.
+Tags:
+  - ssh
+  - sftp
+  - ftp
+  - terminal
+  - console
+  - serial
+  - port-forwarding
+  - tunnel
+  - file-transfer
+  - developer-tools
+ReleaseNotesUrl: https://github.com/Clarence404/shellx/releases/tag/v1.0.0
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
