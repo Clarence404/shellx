@@ -1,7 +1,13 @@
 # winget manifests
 
 Manifests for submitting ShellX to the Windows Package Manager community
-repository, so `winget install Clarence404.ShellX` works.
+repository, so `winget install shellx` works.
+
+The package identifier is `Clarence404.ShellX` — winget requires the
+`Publisher.Package` form, so it cannot simply be `shellx`. The short name
+comes from the `Moniker` field, which winget resolves as long as nothing
+else in the index answers to it (nothing does today). Both spellings
+work; the identifier is what `winget list` and upgrades report.
 
 These files are kept here because every release needs a new copy of them
 with fresh URLs and hashes; starting from the previous version is quicker
