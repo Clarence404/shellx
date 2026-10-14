@@ -489,8 +489,8 @@ export function TabBar({
 /**
  * Popover shown when the tab bar's + button is clicked. Three sections:
  *
- *   1. New local terminal — disabled, "Soon" badge. Placeholder for the
- *      future ConPTY / forkpty backend feature.
+ *   1. New local terminal — opens a shell on this machine (ConPTY on
+ *      Windows, forkpty elsewhere).
  *   2. Quick connect — up to 6 saved hosts. Single click starts a fresh
  *      connect via `onConnectHost` (defers to App's existing dedup logic).
  *   3. New SSH connection — opens the full ConnectDialog.
