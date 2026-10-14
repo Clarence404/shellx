@@ -173,7 +173,15 @@ impl HostStore {
             .map_err(|e| Error::Protocol(format!("query list: {e}")))?;
         let mut out = Vec::new();
         for r in rows {
-            out.push(r.map_err(|e| Error::Protocol(format!("row list: {e}")))?);
+            match r {
+                Ok(rec) => out.push(rec),
+                // One unreadable row must not hide every other host. An id
+                // that doesn't parse as a UUID (hand-edited database, a
+                // bundle written by something else) used to fail the whole
+                // query, and the sidebar then showed "no hosts" with nothing
+                // anywhere to say why.
+                Err(e) => eprintln!("shellx: skipping unreadable host row: {e}"),
+            }
         }
         Ok(out)
     }
@@ -355,6 +363,32 @@ mod tests {
         let listed = store.list().await.unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, inserted.id);
+    }
+
+    /// A row the mapper cannot read — here an id that is not a UUID, as a
+    /// hand-edited database or a foreign bundle could leave behind — must
+    /// cost only that row. Failing the whole query showed an empty sidebar
+    /// with no explanation anywhere.
+    #[tokio::test]
+    async fn one_unreadable_row_does_not_hide_the_others() {
+        let (store, _tmp) = temp_store().await;
+        let good = store.insert(NewHost {
+            label: "prod-1".into(), host: "10.0.0.1".into(), port: 22,
+            username: "chen".into(), notes: None, auth_method: "password".into(),
+            key_path: None, connection_mode: None, group_name: None,
+        }).await.unwrap();
+
+        {
+            let conn = store.conn.lock().await;
+            conn.execute(
+                "INSERT INTO hosts (id,label,host,port,username,notes,created_at,                 last_connected_at,sort_order,auth_method,key_path,connection_mode,                 group_name)                  VALUES ('not-a-uuid','broken','10.0.0.2',22,'x',NULL,1,NULL,0,                 'password',NULL,'terminal_only',NULL)",
+                [],
+            ).unwrap();
+        }
+
+        let listed = store.list().await.unwrap();
+        assert_eq!(listed.len(), 1, "the readable host still lists");
+        assert_eq!(listed[0].id, good.id);
     }
 
     #[tokio::test]
