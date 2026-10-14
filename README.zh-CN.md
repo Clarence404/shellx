@@ -6,6 +6,13 @@
 
 当前版本：**v0.36.6** —— 见 [`docs/release-notes/`](docs/release-notes/) 了解本版本变更。
 
+<p align="center">
+  <img src="docs/images/hosts.png" alt="侧边栏按分组展示的主机列表" width="49%">
+  <img src="docs/images/tunnels.png" alt="一个视图里的所有端口转发" width="49%">
+</p>
+<p align="center"><sub>主机列表可分组、可搜索 · 所有主机的端口转发汇总在一个视图
+</sub></p>
+
 ---
 
 ## 1. ShellX 是什么
