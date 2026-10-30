@@ -88,3 +88,51 @@ describe("TabBar context menu", () => {
     expect(openMenuOn("ubuntu").queryByText("Rename tab…")).toBeNull();
   });
 });
+
+describe("how a tab shows its connection state", () => {
+  /** The dot is the only status mark on a tab; it sits next to the title. */
+  function dotOf(title: string): HTMLElement {
+    const row = screen.getByText(title).parentElement!;
+    const dot = within(row).getAllByText("", { selector: "span" })
+      .find((el) => el.style.borderRadius === "50%");
+    if (!dot) throw new Error(`no status dot beside ${title}`);
+    return dot;
+  }
+
+  const render1 = (tab: Tab) =>
+    render(<TabBar tabs={[tab]} activeTabId={tab.id} onSelect={() => {}} onClose={() => {}} />);
+
+  it("a live session is green and not dimmed", () => {
+    render1({ id: "s1", title: "ubuntu", state: "active", kind: "ssh", hostId: "h1" });
+    const dot = dotOf("ubuntu");
+    expect(dot.style.background).toBe("var(--success)");
+    expect(dot.style.animation).toBe("");
+  });
+
+  it("a dropped session is grey and dimmed", () => {
+    render1({ id: "s1", title: "ubuntu", state: "closed", kind: "ssh", hostId: "h1" });
+    const dot = dotOf("ubuntu");
+    expect(dot.style.background).toBe("var(--text-3)");
+    expect(dot.style.opacity).toBe("0.4");
+  });
+
+  it("a redial in flight reads as connecting, not as gone", () => {
+    // The whole point of the fix: pressing reconnect has to show something.
+    render1({ id: "s1", title: "ubuntu", state: "closed", reconnecting: true, kind: "ssh", hostId: "h1" });
+    const dot = dotOf("ubuntu");
+    expect(dot.style.background).toBe("var(--accent)");
+    expect(dot.style.animation).toContain("hostrow-pulse");
+    expect(dot.style.opacity).toBe("1");
+  });
+
+  it("a reconnecting tab stays clickable, so it can be focused while it dials", () => {
+    render1({ id: "s1", title: "ubuntu", state: "closed", reconnecting: true, kind: "ssh", hostId: "h1" });
+    const row = screen.getByText("ubuntu").closest("div")!.parentElement!;
+    expect(row.style.pointerEvents).not.toBe("none");
+  });
+
+  it("the flag means nothing once the session is live again", () => {
+    render1({ id: "s1", title: "ubuntu", state: "active", reconnecting: true, kind: "ssh", hostId: "h1" });
+    expect(dotOf("ubuntu").style.background).toBe("var(--success)");
+  });
+});
