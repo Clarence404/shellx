@@ -33,6 +33,11 @@ request from your own fork.
 
 [repo]: https://github.com/microsoft/winget-pkgs
 
+## Current version
+
+`1.0.1/` is the version to submit. Earlier folders are kept so the next
+one can start from a known-good copy; winget only ever needs the newest.
+
 ## Preparing the next version
 
 Everything except the two hashes carries over. For the hashes:
