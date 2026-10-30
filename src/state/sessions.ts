@@ -154,8 +154,12 @@ export const useSessions = create<SessionsState>((set, get) => ({
       if (!focused) return { activeId: id };
       return { layout: tree.replacePane(st.layout, focused, id), activeId: id };
     }),
+  // A closed session is still in the list (its tab stays, so the terminal
+  // and its scrollback survive a drop), so "has a session" is not the same
+  // as "is connected" — counting those made the sidebar show a green dot
+  // and an online count for a host whose only tab was disconnected.
   hostIsConnected: (hostId) =>
-    get().sessions.some((s) => s.host_id === hostId),
+    get().sessions.some((s) => s.host_id === hostId && s.state !== "closed"),
   beginConnecting: (hostId) =>
     set((st) => (st.connecting[hostId] ? {} : { connecting: { ...st.connecting, [hostId]: true } })),
   endConnecting: (hostId) =>

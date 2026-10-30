@@ -69,6 +69,31 @@ describe("sessions store", () => {
     expect(useSessions.getState().hostIsConnected("h1")).toBe(true);
     expect(useSessions.getState().hostIsConnected("h2")).toBe(false);
   });
+
+  it("a dropped session does not keep its host looking online", () => {
+    // The tab survives a drop so the scrollback does, which is why the
+    // session is still listed — but the sidebar must stop calling it live.
+    const s = useSessions.getState();
+    s.addSession({ id: "1", label: "a", kind: "ssh", host_id: "h1", state: "active" });
+    useSessions.getState().markSessionClosed("1");
+    expect(useSessions.getState().hostIsConnected("h1")).toBe(false);
+  });
+
+  it("one live session is enough when the host has several tabs", () => {
+    const s = useSessions.getState();
+    s.addSession({ id: "1", label: "a", kind: "ssh", host_id: "h1", state: "active" });
+    s.addSession({ id: "2", label: "a2", kind: "ssh", host_id: "h1", state: "active" });
+    useSessions.getState().markSessionClosed("1");
+    expect(useSessions.getState().hostIsConnected("h1")).toBe(true);
+  });
+
+  it("a reconnect that lands puts the host back online", () => {
+    const s = useSessions.getState();
+    s.addSession({ id: "1", label: "a", kind: "ssh", host_id: "h1", state: "active" });
+    useSessions.getState().markSessionClosed("1");
+    useSessions.getState().markSessionActive("1");
+    expect(useSessions.getState().hostIsConnected("h1")).toBe(true);
+  });
 });
 
 describe("tunnelStatuses", () => {

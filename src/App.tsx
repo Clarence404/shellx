@@ -53,6 +53,9 @@ import type { ActivityKind } from "./types/connection";
 
 export function App() {
   const sessions = useSessions((s) => s.sessions);
+  // Sessions with a redial in flight — the tab shows these as connecting
+  // rather than closed.
+  const reconnectingIds = useSessions((s) => s.reconnecting);
   const activeId = useSessions((s) => s.activeId);
   const setActive = useSessions((s) => s.setActive);
   const addSession = useSessions((s) => s.addSession);
@@ -545,6 +548,7 @@ export function App() {
 
   const tabs = sessions.map((s) => ({
     id: s.id, title: s.label, state: s.state, kind: s.kind, hostId: s.host_id,
+    reconnecting: !!reconnectingIds[s.id],
   }));
 
   async function handleNewLocalTerminal() {

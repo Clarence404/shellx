@@ -14,6 +14,10 @@ export type Tab = {
   id: string;
   title: string;
   state?: "active" | "closed";
+  /** A reconnect is in flight for this session — it is closed, but on its
+   *  way back. Without this the tab stays greyed out through the whole
+   *  redial and nothing acknowledges the click that started it. */
+  reconnecting?: boolean;
   kind?: "ssh" | "local" | "serial";
   /** Saved-host id, when the session came from one. Lets the context menu
    *  offer "duplicate" and "copy address" without asking the parent. */
@@ -278,6 +282,9 @@ export function TabBar({
         {tabs.map((t) => {
           const focused = t.id === activeTabId;
           const onScreen = shownIds.has(t.id);
+          const connecting = t.state === "closed" && !!t.reconnecting;
+          // Only a session with nothing in flight reads as gone.
+          const dead = t.state === "closed" && !connecting;
           return (
           <div key={t.id} role="tab" aria-selected={focused}
             data-shown={onScreen ? "true" : undefined}
@@ -313,10 +320,10 @@ export function TabBar({
               display: "flex", alignItems: "center", gap: 8,
               cursor: "pointer", flexShrink: 0,
               whiteSpace: "nowrap", userSelect: "none",
-              opacity: t.state === "closed" ? 0.4 : 1,
-              filter: t.state === "closed" ? "grayscale(0.6)" : "none",
+              opacity: dead ? 0.4 : 1,
+              filter: dead ? "grayscale(0.6)" : "none",
               transition: "opacity 300ms, filter 300ms",
-              pointerEvents: t.state === "closed" ? "none" : "auto",
+              pointerEvents: dead ? "none" : "auto",
             }}>
             {onScreen && paneOrder.length > 1 && (
               <PaneBadge position={paneOrder.indexOf(t.id) + 1} focused={focused} />
@@ -324,9 +331,12 @@ export function TabBar({
             <span style={{
               width: 7, height: 7, borderRadius: "50%", flexShrink: 0,
               // Green = live session, regardless of kind (ssh / local);
-              // grey = closed. Connection state reads at a glance.
-              background: t.state === "closed" ? "var(--text-3)" : "var(--success)",
-              opacity: t.state === "closed" ? 0.4 : 1,
+              // accent + pulse = redialling; grey = closed. Connection
+              // state reads at a glance.
+              background: connecting ? "var(--accent)"
+                : t.state === "closed" ? "var(--text-3)" : "var(--success)",
+              opacity: dead ? 0.4 : 1,
+              animation: connecting ? "hostrow-pulse 900ms ease-in-out infinite" : undefined,
             }} />
             {/* Cap tab width so one long host label can't monopolize the
                 strip; full name lives in the tooltip. The × never shrinks.
